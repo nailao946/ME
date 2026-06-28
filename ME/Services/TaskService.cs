@@ -332,5 +332,68 @@ namespace ME.Services
 
             return result;
         }
+
+        /// <summary>
+        /// Determines if a task should display as completed on a given date.
+        /// Handles all task types including combined recurring+quantitative.
+        /// </summary>
+        public bool IsTaskCompletedForDisplay(TaskItem task, DateTime? date = null)
+        {
+            var checkDate = date ?? DateTime.Today;
+
+            // Quantitative tasks (including combined recurring+quantitative)
+            if (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0)
+            {
+                double current = task.QuantitativeCurrent ?? 0;
+                if (current >= task.QuantitativeTarget.Value) return true;
+                double dailyMin = task.QuantitativeDailyMin ?? 0;
+                if (dailyMin > 0 && current >= dailyMin) return true;
+                return false;
+            }
+
+            // Recurring-only tasks
+            if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+            {
+                if (task.RecurringPattern == RecurringPattern.Custom && task.RecurringTargetCount.HasValue && task.RecurringTargetCount > 1)
+                    return GetCustomRecurringCountOnDate(task.Id, checkDate) >= task.RecurringTargetCount.Value;
+                return IsRecurringTaskCompletedOnDate(task, checkDate);
+            }
+
+            // One-off and other tasks
+            return task.IsCompleted;
+        }
+
+        /// <summary>
+        /// Records completion for a combined recurring+quantitative task when daily min is met.
+        /// Updates the recurring completion store so CalendarView/DashboardView can see it.
+        /// </summary>
+        public void RecordCombinedTaskCompletion(TaskItem task, DateTime date)
+        {
+            if (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)
+            {
+                var dateStr = date.Date.ToString("yyyy-MM-dd");
+                var existing = _completionRepo.GetByTaskAndDate(task.Id, dateStr);
+                if (existing == null)
+                {
+                    var record = new TaskCompletionRecord
+                    {
+                        TaskId = task.Id,
+                        Date = dateStr
+                    };
+                    _completionRepo.Insert(record);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Removes the completion record for a combined recurring+quantitative task on a given date.
+        /// </summary>
+        public void RemoveCombinedTaskCompletion(TaskItem task, DateTime date)
+        {
+            if (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)
+            {
+                _completionRepo.DeleteByTaskAndDate(task.Id, date.Date.ToString("yyyy-MM-dd"));
+            }
+        }
     }
 }

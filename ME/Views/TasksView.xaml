@@ -33,7 +33,7 @@
             </DockPanel>
         </Border>
 
-        <!-- Row 1: Today Goals (left) + Timer+Stats (right, horizontal layout) -->
+        <!-- Row 1: Today Goals (left) + Timer+Stats (right, compact, no ring) -->
         <Grid Grid.Row="1" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1*" />
@@ -53,92 +53,59 @@
                 </DockPanel>
             </Border>
 
-            <!-- Timer + Stats (right, horizontal compact layout) -->
-            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12,8,12,8">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+            <!-- Timer + Stats (right, compact horizontal, no ring) -->
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12,6,12,6">
+                <StackPanel>
+                    <!-- Row 1: Timer controls -->
+                    <DockPanel Margin="0,0,0,4">
+                        <TextBlock Text="⏱ 计时" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <Border x:Name="MiniRunningDot" Width="6" Height="6" CornerRadius="3"
+                                Background="Gray" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBlock x:Name="MiniRunningTag" Text="" FontSize="10"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="MiniTimerText" Text="00:00:00" FontSize="18" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="MiniTimerStatus" Text="" FontSize="10"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button x:Name="MiniTimerToggleBtn" DockPanel.Dock="Right" Content="开始"
+                                Click="MiniTimerToggle_Click" FontSize="10" Padding="10,3"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+                        <ComboBox x:Name="MiniTagComboBox" DockPanel.Dock="Right"
+                                  Style="{StaticResource MacComboBoxStyle}"
+                                  DisplayMemberPath="Name" SelectedValuePath="Id"
+                                  FontSize="10" Height="24" Width="110" Margin="0,0,6,0"
+                                  VerticalAlignment="Center" />
+                    </DockPanel>
 
-                    <!-- Timer ring (compact) -->
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <Grid Width="90" Height="90" Margin="0,0,0,4">
-                            <Ellipse Width="70" Height="70" Stroke="{DynamicResource BackgroundBrush}" StrokeThickness="5" />
-                            <Ellipse x:Name="MiniTimerRing" Width="70" Height="70" Stroke="{DynamicResource PrimaryBrush}"
-                                     StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                     RenderTransformOrigin="0.5,0.5" Opacity="0.3">
-                                <Ellipse.StrokeDashArray>
-                                    <DoubleCollection>102.1 102.1</DoubleCollection>
-                                </Ellipse.StrokeDashArray>
-                                <Ellipse.RenderTransform>
-                                    <RotateTransform Angle="-90" />
-                                </Ellipse.RenderTransform>
-                            </Ellipse>
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <TextBlock x:Name="MiniTimerText" Text="00:00:00" FontSize="18" FontWeight="Bold"
-                                           Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" />
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,0">
-                                    <Border x:Name="MiniRunningDot" Width="5" Height="5" CornerRadius="2.5"
-                                            Background="Gray" VerticalAlignment="Center" Margin="0,0,3,0" />
-                                    <TextBlock x:Name="MiniRunningTag" Text="" FontSize="9"
-                                               Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </StackPanel>
-                        </Grid>
-                        <!-- Quick controls -->
-                        <DockPanel>
-                            <Button x:Name="MiniTimerToggleBtn" DockPanel.Dock="Right" Content="开始"
-                                    Click="MiniTimerToggle_Click" FontSize="10" Padding="10,3"
-                                    Style="{StaticResource PrimaryButtonStyle}" />
-                            <ComboBox x:Name="MiniTagComboBox" Style="{StaticResource MacComboBoxStyle}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Id"
-                                      FontSize="10" Height="24" Margin="0,0,6,0"
-                                      VerticalAlignment="Center" />
-                        </DockPanel>
-                    </StackPanel>
-
-                    <!-- Stats section (right of ring) -->
-                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                        <!-- Header with timer status -->
-                        <DockPanel Margin="0,0,0,4">
-                            <TextBlock Text="⏱ 计时器" FontSize="12" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="MiniTimerStatus" Text="" FontSize="10" HorizontalAlignment="Right"
-                                       Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" />
-                        </DockPanel>
-
-                        <!-- Today total time -->
-                        <Border Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,5" Margin="0,0,0,4">
+                    <!-- Row 2: Stats (single horizontal line) -->
+                    <DockPanel>
+                        <Border Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,3" Margin="0,0,6,0" Height="22">
                             <DockPanel>
-                                <TextBlock Text="今日统计" FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}" />
-                                <TextBlock x:Name="MiniTotalTime" Text="" FontSize="11" FontWeight="Bold"
-                                           Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Right" />
+                                <TextBlock Text="今日统计" FontSize="10"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock x:Name="MiniTotalTime" Text="" FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
                             </DockPanel>
                         </Border>
-
-                        <!-- Tag time breakdown -->
-                        <Border Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,4" Margin="0,0,0,4">
-                            <StackPanel x:Name="MiniStatsPanel" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <TextBlock Text="暂无数据" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                                      Margin="0,0,6,0" Height="22">
+                            <StackPanel x:Name="MiniStatsPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="暂无数据" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" />
                             </StackPanel>
-                        </Border>
-
-                        <!-- Task completion summary -->
+                        </ScrollViewer>
                         <Border x:Name="MiniTaskSummary" Visibility="Collapsed"
-                                Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,4">
+                                Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,3" Height="22">
                             <DockPanel>
-                                <TextBlock Text="今日完成" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"
-                                           VerticalAlignment="Center" />
-                                <TextBlock x:Name="MiniCompletedCount" Text="0/0" FontSize="11" FontWeight="Bold"
+                                <TextBlock Text="完成" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock x:Name="MiniCompletedCount" Text="0/0" FontSize="10" FontWeight="Bold"
                                            Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" />
                             </DockPanel>
                         </Border>
-                    </StackPanel>
-                </Grid>
+                    </DockPanel>
+                </StackPanel>
             </Border>
         </Grid>
 

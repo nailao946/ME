@@ -6,7 +6,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Shapes;
 using ME.Core;
 using ME.Data;
 using ME.Models;
@@ -72,11 +71,8 @@ namespace ME.Views
                     var color = (Color)ColorConverter.ConvertFromString(tagColor);
                     MiniRunningDot.Background = new SolidColorBrush(color);
                     MiniTimerText.Foreground = new SolidColorBrush(color);
-                    MiniTimerRing.Stroke = new SolidColorBrush(color);
                 }
                 catch { }
-                // Animate ring based on seconds progress
-                UpdateTimerRing(timeStr);
             });
         }
 
@@ -94,8 +90,6 @@ namespace ME.Views
                     MiniTimerToggleBtn.Content = "开始";
                     MiniTimerToggleBtn.Style = (Style)FindResource("PrimaryButtonStyle");
                     MiniTimerStatus.Text = "";
-                    MiniTimerRing.Opacity = 0.3;
-                    MiniTimerRing.StrokeDashOffset = 102.1;
                     LoadMiniStats();
                     LoadMiniTaskSummary();
                 }
@@ -104,7 +98,6 @@ namespace ME.Views
                     MiniTimerToggleBtn.Content = "停止";
                     MiniTimerToggleBtn.Style = (Style)FindResource("DangerButtonStyle");
                     MiniTimerStatus.Text = "计时中";
-                    MiniTimerRing.Opacity = 1;
                     if (MiniTagComboBox.Items.Count > 0)
                     {
                         foreach (var item in MiniTagComboBox.Items)
@@ -237,18 +230,6 @@ namespace ME.Views
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 };
                 slide.BeginAnimation(TranslateTransform.YProperty, slideAnim);
-            }
-        }
-
-        private void UpdateTimerRing(string timeStr)
-        {
-            // Parse HH:mm:ss and animate ring based on seconds progress within the minute
-            var parts = timeStr.Split(':');
-            if (parts.Length == 3 && int.TryParse(parts[2], out int sec))
-            {
-                var progress = sec / 60.0;
-                var offset = 102.1 * (1 - progress);
-                MiniTimerRing.StrokeDashOffset = offset;
             }
         }
 
@@ -1247,6 +1228,26 @@ namespace ME.Views
         }
 
         // ============ TODAY GOALS ============
+        private bool IsTaskDisplayCompleted(TaskItem task, DateTime date)
+        {
+            var ts = new TaskService();
+            if (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0)
+            {
+                double current = task.QuantitativeCurrent ?? 0;
+                if (current >= task.QuantitativeTarget.Value) return true;
+                double dailyMin = task.QuantitativeDailyMin ?? 0;
+                if (dailyMin > 0 && current >= dailyMin) return true;
+                return false;
+            }
+            if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+            {
+                if (task.RecurringPattern == RecurringPattern.Custom && task.RecurringTargetCount.HasValue && task.RecurringTargetCount > 1)
+                    return ts.GetCustomRecurringCountOnDate(task.Id, date) >= task.RecurringTargetCount.Value;
+                return ts.IsRecurringTaskCompletedOnDate(task, date);
+            }
+            return task.IsCompleted;
+        }
+
         private void LoadTodayGoals(Dictionary<int, List<TaskItem>> subtasksMap, Dictionary<int, string> tagColorMap)
         {
             var goalRepo = new GoalRepository();
@@ -1309,18 +1310,19 @@ namespace ME.Views
                         var taskPanel = new StackPanel { Margin = new Thickness(16, 0, 0, 4) };
 
                         // Task row
+                        bool taskDone = IsTaskDisplayCompleted(task, DateTime.Today);
                         var taskRow = new StackPanel { Orientation = Orientation.Horizontal };
                         taskRow.Children.Add(new TextBlock
                         {
-                            Text = task.IsCompleted ? "✓ " : "○ ",
+                            Text = taskDone ? "✓ " : "○ ",
                             FontSize = 11,
-                            Foreground = task.IsCompleted ? (SolidColorBrush)FindResource("PrimaryBrush") : (SolidColorBrush)FindResource("SecondaryTextBrush")
+                            Foreground = taskDone ? (SolidColorBrush)FindResource("PrimaryBrush") : (SolidColorBrush)FindResource("SecondaryTextBrush")
                         });
                         taskRow.Children.Add(new TextBlock
                         {
                             Text = task.Title, FontSize = 11,
-                            Foreground = task.IsCompleted ? (SolidColorBrush)FindResource("SecondaryTextBrush") : (SolidColorBrush)FindResource("TextBrush"),
-                            TextDecorations = task.IsCompleted ? TextDecorations.Strikethrough : null
+                            Foreground = taskDone ? (SolidColorBrush)FindResource("SecondaryTextBrush") : (SolidColorBrush)FindResource("TextBrush"),
+                            TextDecorations = taskDone ? TextDecorations.Strikethrough : null
                         });
                         taskPanel.Children.Add(taskRow);
 
@@ -1329,18 +1331,19 @@ namespace ME.Views
                         {
                             foreach (var sub in subtasksMap[task.Id])
                             {
+                                bool subDone = IsTaskDisplayCompleted(sub, DateTime.Today);
                                 var subRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 2, 0, 0) };
                                 subRow.Children.Add(new TextBlock
                                 {
-                                    Text = sub.IsCompleted ? "✓ " : "○ ",
+                                    Text = subDone ? "✓ " : "○ ",
                                     FontSize = 10,
-                                    Foreground = sub.IsCompleted ? (SolidColorBrush)FindResource("PrimaryBrush") : (SolidColorBrush)FindResource("SecondaryTextBrush")
+                                    Foreground = subDone ? (SolidColorBrush)FindResource("PrimaryBrush") : (SolidColorBrush)FindResource("SecondaryTextBrush")
                                 });
                                 subRow.Children.Add(new TextBlock
                                 {
                                     Text = sub.Title, FontSize = 10,
-                                    Foreground = sub.IsCompleted ? (SolidColorBrush)FindResource("SecondaryTextBrush") : (SolidColorBrush)FindResource("TextBrush"),
-                                    TextDecorations = sub.IsCompleted ? TextDecorations.Strikethrough : null
+                                    Foreground = subDone ? (SolidColorBrush)FindResource("SecondaryTextBrush") : (SolidColorBrush)FindResource("TextBrush"),
+                                    TextDecorations = subDone ? TextDecorations.Strikethrough : null
                                 });
                                 taskPanel.Children.Add(subRow);
                             }
@@ -1421,6 +1424,12 @@ namespace ME.Views
                         // Combined: don't fully complete on daily min alone - let it reappear tomorrow
                         task.IsCompleted = false;
                         task.CompletedAt = null;
+                        var ts = new TaskService();
+                        double dailyMin = task.QuantitativeDailyMin ?? 0;
+                        if (dailyMin > 0 && (task.QuantitativeCurrent ?? 0) >= dailyMin)
+                            ts.RecordCombinedTaskCompletion(task, _selectedDate);
+                        else
+                            ts.RemoveCombinedTaskCompletion(task, _selectedDate);
                     }
                     else
                     {

@@ -568,9 +568,10 @@ namespace ME.Views
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
 
             // Checkbox
+            bool displayDone = _taskService.IsTaskCompletedForDisplay(task, DateTime.Today);
             var cb = new CheckBox
             {
-                IsChecked = task.IsCompleted,
+                IsChecked = displayDone,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 Tag = task.Id
@@ -584,11 +585,11 @@ namespace ME.Views
             {
                 Text = task.Title,
                 FontSize = 13,
-                Foreground = task.IsCompleted ? secondaryBrush : textBrush,
+                Foreground = displayDone ? secondaryBrush : textBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
-            if (task.IsCompleted)
+            if (displayDone)
                 title.TextDecorations.Add(TextDecorations.Strikethrough[0]);
             Grid.SetColumn(title, 1);
 
@@ -685,6 +686,8 @@ namespace ME.Views
                         {
                             task.IsCompleted = false;
                             task.CompletedAt = null;
+                            // Record recurring completion so other views see today's progress
+                            _taskService.RecordCombinedTaskCompletion(task, DateTime.Today);
                         }
                         else if (!isCombined && task.QuantitativeDailyMin.HasValue && (task.QuantitativeCurrent ?? 0) >= task.QuantitativeDailyMin.Value)
                         {
@@ -715,11 +718,15 @@ namespace ME.Views
                         task.QuantitativeCurrent = Math.Max(0, (task.QuantitativeCurrent ?? 0) - 1);
                         task.IsCompleted = false;
                         task.CompletedAt = null;
+                        if (task.RecurringPattern.HasValue)
+                            _taskService.RemoveCombinedTaskCompletion(task, DateTime.Today);
                     }
                     else
                     {
                         task.IsCompleted = false;
                         task.CompletedAt = null;
+                        if (task.Type == TaskType.Recurring)
+                            _taskService.RemoveCompletion(task.Id, DateTime.Today);
                     }
                 }
 

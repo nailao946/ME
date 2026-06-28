@@ -981,6 +981,12 @@ namespace ME.Views
                         {
                             task.IsCompleted = false;
                             task.CompletedAt = null;
+                            var ts2 = new TaskService();
+                            double dailyMin = task.QuantitativeDailyMin ?? 0;
+                            if (dailyMin > 0 && (task.QuantitativeCurrent ?? 0) >= dailyMin)
+                                ts2.RecordCombinedTaskCompletion(task, DateTime.Today);
+                            else
+                                ts2.RemoveCombinedTaskCompletion(task, DateTime.Today);
                         }
                         else
                         {

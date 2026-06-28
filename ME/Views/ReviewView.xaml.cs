@@ -10,6 +10,7 @@ using System.Windows.Shapes;
 using ME.Data;
 using ME.Models;
 using ME.Core;
+using ME.Services;
 
 namespace ME.Views
 {
@@ -292,6 +293,8 @@ namespace ME.Views
                     var goalColor = GetGoalDisplayColor(goal, allTags);
                     var goalItem = CreateGoalTreeItem(goal, goalColor);
 
+                    var reviewTs = new TaskService();
+
                     foreach (var childGoal in allGoals)
                     {
                         if (childGoal.ParentId == goal.Id)
@@ -301,7 +304,7 @@ namespace ME.Views
 
                             foreach (var task in allTasks)
                             {
-                                if (task.GoalId == childGoal.Id && !task.IsDeleted && !task.IsCompleted)
+                                if (task.GoalId == childGoal.Id && !task.IsDeleted && !reviewTs.IsTaskCompletedForDisplay(task))
                                 {
                                     childItem.Items.Add(new TreeViewItem
                                     {
@@ -319,7 +322,8 @@ namespace ME.Views
                     {
                         if (task.GoalId == goal.Id && !task.IsDeleted)
                         {
-                            var status = task.IsCompleted ? "✓" : "○";
+                            var done = reviewTs.IsTaskCompletedForDisplay(task);
+                            var status = done ? "✓" : "○";
                             goalItem.Items.Add(new TreeViewItem
                             {
                                 Header = $"{status} {task.Title}",

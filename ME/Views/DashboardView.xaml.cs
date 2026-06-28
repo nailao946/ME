@@ -325,7 +325,7 @@ namespace ME.Views
                         shouldShow = date >= freshTask.StartDate.Value.Date && date <= freshTask.EndDate.Value.Date;
                     else if (freshTask.StartDate.HasValue)
                         shouldShow = date == freshTask.StartDate.Value.Date;
-                    if (shouldShow && date == DateTime.Today && freshTask.QuantitativeCurrent > 0)
+                    if (shouldShow && date == DateTime.Today && taskService.IsTaskCompletedForDisplay(freshTask, date))
                         isCompleted = true;
                 }
                 else if (freshTask.Type == TaskType.Recurring && freshTask.RecurringPattern.HasValue)
@@ -348,7 +348,7 @@ namespace ME.Views
                 {
                     if (freshTask.StartDate.HasValue && freshTask.EndDate.HasValue)
                         shouldShow = curDate >= freshTask.StartDate.Value.Date && curDate <= freshTask.EndDate.Value.Date;
-                    if (shouldShow && curDate == DateTime.Today && freshTask.QuantitativeCurrent > 0) isCompleted = true;
+                    if (shouldShow && curDate == DateTime.Today && taskService.IsTaskCompletedForDisplay(freshTask, curDate)) isCompleted = true;
                 }
                 else if (freshTask.Type == TaskType.Recurring && freshTask.RecurringPattern.HasValue)
                 {
@@ -429,7 +429,7 @@ namespace ME.Views
                             shouldShow = date >= freshTask.StartDate.Value.Date && date <= freshTask.EndDate.Value.Date;
                         else if (freshTask.StartDate.HasValue)
                             shouldShow = date == freshTask.StartDate.Value.Date;
-                        if (shouldShow && isToday && freshTask.QuantitativeCurrent > 0) isCompleted = true;
+                        if (shouldShow && isToday && taskService.IsTaskCompletedForDisplay(freshTask, date)) isCompleted = true;
                     }
                     else if (freshTask.Type == TaskType.Recurring && freshTask.RecurringPattern.HasValue)
                     {

@@ -95,11 +95,11 @@ namespace ME.Views
                     bool showOnThisDate = false;
                     bool isCompletedOnDate = false;
 
-                    if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+                    if ((task.Type == TaskType.Recurring || (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)) && task.RecurringPattern.HasValue)
                     {
                         showOnThisDate = taskService.ShouldShowRecurringTaskOnDate(task, date);
                         if (showOnThisDate)
-                            isCompletedOnDate = taskService.IsRecurringTaskCompletedOnDate(task, date);
+                            isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
                     }
                     else
                     {
@@ -107,7 +107,7 @@ namespace ME.Views
                             showOnThisDate = task.StartDate.Value.Date <= date.Date && task.EndDate.Value.Date >= date.Date;
                         else if (!task.StartDate.HasValue && task.CreatedAt.Date == date.Date)
                             showOnThisDate = true;
-                        isCompletedOnDate = task.IsCompleted;
+                        isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
                     }
 
                     if (showOnThisDate)
@@ -305,11 +305,11 @@ namespace ME.Views
                 bool show = false;
                 bool isCompletedOnDate = false;
 
-                if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+                if ((task.Type == TaskType.Recurring || (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)) && task.RecurringPattern.HasValue)
                 {
                     show = taskService.ShouldShowRecurringTaskOnDate(task, date);
                     if (show)
-                        isCompletedOnDate = taskService.IsRecurringTaskCompletedOnDate(task, date);
+                        isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
                 }
                 else
                 {
@@ -317,7 +317,7 @@ namespace ME.Views
                         show = task.StartDate.Value.Date <= date.Date && task.EndDate.Value.Date >= date.Date;
                     else if (!task.StartDate.HasValue && task.CreatedAt.Date == date.Date)
                         show = true;
-                    isCompletedOnDate = task.IsCompleted;
+                    isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
                 }
 
                 if (!show) continue;
