@@ -457,7 +457,7 @@ namespace ME.Views
             }
             else if (_statsMode == "week")
             {
-                var startOfWeek = now.Date.AddDays(-(int)now.DayOfWeek);
+                var startOfWeek = TaskService.GetWeekStartForDate(now);
                 records = _recordRepo.GetRecordsByDateRange(startOfWeek.ToString("yyyy-MM-dd"), now.ToString("yyyy-MM-dd"));
             }
             else if (_statsMode == "month")

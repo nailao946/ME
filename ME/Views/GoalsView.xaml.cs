@@ -391,25 +391,8 @@ namespace ME.Views
 
         private bool IsTaskCompletedForDisplay(TaskItem task)
         {
-            if (task.Type == TaskType.Recurring)
-            {
-                var ts = new TaskService();
-                if (task.RecurringPattern == RecurringPattern.Custom && task.RecurringTargetCount.HasValue && task.RecurringTargetCount > 1)
-                {
-                    var count = ts.GetCustomRecurringCountOnDate(task.Id, DateTime.Today);
-                    return count >= task.RecurringTargetCount.Value;
-                }
-                return ts.IsRecurringTaskCompletedOnDate(task, DateTime.Today);
-            }
-            if (task.Type == TaskType.Quantitative)
-            {
-                if (task.QuantitativeDailyMin.HasValue)
-                    return (task.QuantitativeCurrent ?? 0) >= task.QuantitativeDailyMin.Value;
-                if (task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0)
-                    return (task.QuantitativeCurrent ?? 0) >= task.QuantitativeTarget.Value;
-                return task.IsCompleted;
-            }
-            return task.IsCompleted;
+            var ts = new TaskService();
+            return ts.IsTaskCompletedForDisplay(task, DateTime.Today);
         }
 
         private Border CreateGoalSubtaskCard(TaskItem task, string tagColor, List<TaskItem> allGoalTasks = null)

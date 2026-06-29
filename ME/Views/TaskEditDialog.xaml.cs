@@ -192,6 +192,80 @@ namespace ME.Views
                     QuantUnitBox.Text = existingTask.QuantitativeUnit ?? "";
                     QuantDailyMinBox.Text = (existingTask.QuantitativeDailyMin ?? 0).ToString();
                     QuantModeCombo.SelectedIndex = existingTask.QuantitativeMode == QuantitativeMode.Accumulate ? 0 : 1;
+
+                    // Also load recurring section for combined tasks
+                    if (existingTask.RecurringPattern.HasValue)
+                    {
+                        TaskTypeCombo.SelectedIndex = 1;
+                        var pattern = existingTask.RecurringPattern.Value;
+                        switch (pattern)
+                        {
+                            case RecurringPattern.Daily:
+                                RepeatModeCombo.SelectedIndex = 1;
+                                break;
+                            case RecurringPattern.Weekday:
+                                RepeatModeCombo.SelectedIndex = 2;
+                                break;
+                            case RecurringPattern.Weekend:
+                                RepeatModeCombo.SelectedIndex = 3;
+                                break;
+                            case RecurringPattern.Weekly:
+                                RepeatModeCombo.SelectedIndex = 4;
+                                if (!string.IsNullOrEmpty(existingTask.RecurringDaysOfWeek))
+                                {
+                                    var days = existingTask.RecurringDaysOfWeek.Split(',');
+                                    foreach (var day in days)
+                                    {
+                                        if (int.TryParse(day, out int d))
+                                        {
+                                            foreach (ListBoxItem item in WeekDayListBox.Items)
+                                            {
+                                                if (item.Tag.ToString() == d.ToString())
+                                                {
+                                                    item.IsSelected = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            case RecurringPattern.Monthly:
+                                RepeatModeCombo.SelectedIndex = 5;
+                                if (existingTask.IsLastDayOfMonth)
+                                {
+                                    foreach (ListBoxItem item in MonthDayListBox.Items)
+                                    {
+                                        if (item.Tag.ToString() == "32")
+                                        {
+                                            item.IsSelected = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                else if (existingTask.RecurringDayOfMonth.HasValue)
+                                {
+                                    foreach (ListBoxItem item in MonthDayListBox.Items)
+                                    {
+                                        if (item.Tag.ToString() == existingTask.RecurringDayOfMonth.Value.ToString())
+                                        {
+                                            item.IsSelected = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                break;
+                            case RecurringPattern.Interval:
+                                RepeatModeCombo.SelectedIndex = 6;
+                                IntervalDaysBox.Text = (existingTask.RecurringInterval ?? 1).ToString();
+                                break;
+                            case RecurringPattern.Custom:
+                                RepeatModeCombo.SelectedIndex = 7;
+                                CustomTimesPerDayBox.Text = (existingTask.RecurringTimesPerDay ?? 1).ToString();
+                                CustomDaysPerWeekBox.Text = (existingTask.RecurringTimesPerWeek ?? 7).ToString();
+                                break;
+                        }
+                    }
                 }
 
                 // Show CountTowardsParent toggle for subtasks
@@ -386,7 +460,7 @@ namespace ME.Views
                 else
                     ResultTask.QuantitativeDailyMin = null;
 
-                // Initialize QuantitativeCurrent from start value if not already set
+                // Show initial progress (display only; completion record tracks daily check-in)
                 if (ResultTask.QuantitativeCurrent == null || ResultTask.QuantitativeCurrent < (ResultTask.QuantitativeStart ?? 0))
                     ResultTask.QuantitativeCurrent = ResultTask.QuantitativeStart;
             }

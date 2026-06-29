@@ -240,56 +240,32 @@ namespace ME.Views
                 var taskRepo = new TaskRepository();
                 var taskService = new TaskService();
                 var allTasks = taskRepo.GetAllTasks();
-                var todayTasks = allTasks.Where(t =>
-                {
-                    if (t.IsDeleted) return false;
-                    if (t.ParentTaskId.HasValue) return false;
-                    if (t.StartDate.HasValue && t.StartDate.Value > _selectedDate) return false;
-                    if (t.EndDate.HasValue && t.EndDate.Value < _selectedDate) return false;
-                    return true;
-                }).ToList();
 
                 int completed = 0;
-                int total = todayTasks.Count;
-                foreach (var task in todayTasks)
+                int total = 0;
+                foreach (var task in allTasks)
                 {
-                    if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+                    if (task.IsDeleted) continue;
+                    if (task.ParentTaskId.HasValue) continue;
+
+                    bool isRecurringOrCombined = (task.Type == TaskType.Recurring || (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue))
+                        && task.RecurringPattern.HasValue;
+
+                    if (isRecurringOrCombined)
                     {
-                        if (task.RecurringPattern == RecurringPattern.Custom && task.RecurringTargetCount.HasValue && task.RecurringTargetCount > 1)
-                        {
-                            int count = taskService.GetCustomRecurringCountOnDate(task.Id, _selectedDate);
-                            if (count >= task.RecurringTargetCount.Value) completed++;
-                        }
-                        else
-                        {
-                            if (taskService.IsRecurringTaskCompletedOnDate(task, _selectedDate))
-                                completed++;
-                        }
-                    }
-                    else if (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0)
-                    {
-                        // Quantitative: check if daily target reached OR overall target reached
-                        double dailyMin = task.QuantitativeDailyMin ?? 0;
-                        double current = task.QuantitativeCurrent ?? 0;
-                        if (dailyMin > 0)
-                        {
-                            // Has daily target: check if today's increment meets daily min
-                            // For simplicity, use overall progress vs daily min
-                            if (current >= task.QuantitativeTarget.Value)
-                                completed++;
-                            else if (dailyMin > 0 && current >= dailyMin)
-                                completed++;
-                        }
-                        else
-                        {
-                            if (task.IsCompleted || current >= task.QuantitativeTarget.Value)
-                                completed++;
-                        }
+                        if (!taskService.ShouldShowRecurringTaskOnDate(task, _selectedDate))
+                            continue;
                     }
                     else
                     {
-                        if (task.IsCompleted) completed++;
+                        if (task.StartDate.HasValue && task.StartDate.Value > _selectedDate) continue;
+                        if (task.EndDate.HasValue && task.EndDate.Value < _selectedDate) continue;
+                        if (!task.StartDate.HasValue && !task.EndDate.HasValue && task.CreatedAt.Date != _selectedDate.Date) continue;
                     }
+
+                    total++;
+                    if (taskService.IsTaskCompletedForDisplay(task, _selectedDate))
+                        completed++;
                 }
 
                 if (total > 0)
@@ -544,10 +520,8 @@ namespace ME.Views
                         bool isCompletedOnDate;
                         if (isCombined)
                         {
-                            // Combined: check if daily min is met today, or total is fully completed
-                            double dailyMin = task.QuantitativeDailyMin ?? 0;
-                            double current = task.QuantitativeCurrent ?? 0;
-                            isCompletedOnDate = (dailyMin > 0 && current >= dailyMin) || task.IsCompleted;
+                            // Combined: use shared display-completion check (completion record for today)
+                            isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, _selectedDate);
                         }
                         else
                         {

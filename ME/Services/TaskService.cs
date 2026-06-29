@@ -87,7 +87,9 @@ namespace ME.Services
 
         public bool ShouldShowRecurringTaskOnDate(TaskItem task, DateTime date)
         {
-            if (task.Type != TaskType.Recurring || !task.RecurringPattern.HasValue)
+            if (task.Type != TaskType.Recurring && task.Type != TaskType.Quantitative)
+                return false;
+            if (!task.RecurringPattern.HasValue)
                 return false;
 
             // Check if task is within its date range
@@ -340,12 +342,21 @@ namespace ME.Services
         public bool IsTaskCompletedForDisplay(TaskItem task, DateTime? date = null)
         {
             var checkDate = date ?? DateTime.Today;
+            var dateStr = checkDate.ToString("yyyy-MM-dd");
 
             // Quantitative tasks (including combined recurring+quantitative)
             if (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0)
             {
                 double current = task.QuantitativeCurrent ?? 0;
+
+                // Full target reached → always completed
                 if (current >= task.QuantitativeTarget.Value) return true;
+
+                // Combined recurring+quantitative: only count actual + clicks via completion record
+                if (task.RecurringPattern.HasValue)
+                    return _completionRepo.IsCompletedOnDate(task.Id, dateStr);
+
+                // Non-recurring quantitative: check daily min
                 double dailyMin = task.QuantitativeDailyMin ?? 0;
                 if (dailyMin > 0 && current >= dailyMin) return true;
                 return false;
@@ -394,6 +405,20 @@ namespace ME.Services
             {
                 _completionRepo.DeleteByTaskAndDate(task.Id, date.Date.ToString("yyyy-MM-dd"));
             }
+        }
+
+        /// <summary>
+        /// Returns the start-of-week date respecting the WeekStartDay setting.
+        /// </summary>
+        public static DateTime GetWeekStartForDate(DateTime date)
+        {
+            var settingsRepo = new SettingsRepository();
+            bool mondayFirst = settingsRepo.GetValue(SettingsKeys.WeekStartDay, "1") == "1";
+
+            if (mondayFirst)
+                return date.Date.AddDays(-((int)date.DayOfWeek + 6) % 7);
+            else
+                return date.Date.AddDays(-(int)date.DayOfWeek);
         }
     }
 }

@@ -109,14 +109,7 @@ namespace ME.Views
                     startDate = now.Date;
                     break;
                 case ReviewPeriod.Week:
-                    {
-                        var wsSetting = new SettingsRepository().GetValue(SettingsKeys.WeekStartDay, "1");
-                        bool mondayFirst = wsSetting == "1";
-                        if (mondayFirst)
-                            startDate = now.Date.AddDays(-((int)now.DayOfWeek + 6) % 7);
-                        else
-                            startDate = now.Date.AddDays(-(int)now.DayOfWeek);
-                    }
+                    startDate = TaskService.GetWeekStartForDate(now);
                     break;
                 case ReviewPeriod.Month:
                     startDate = new DateTime(now.Year, now.Month, 1);
@@ -125,13 +118,7 @@ namespace ME.Views
                     startDate = now.Date.AddYears(-1);
                     break;
                 default:
-                    {
-                        var wsSetting2 = new SettingsRepository().GetValue(SettingsKeys.WeekStartDay, "1");
-                        if (wsSetting2 == "1")
-                            startDate = now.Date.AddDays(-((int)now.DayOfWeek + 6) % 7);
-                        else
-                            startDate = now.Date.AddDays(-(int)now.DayOfWeek);
-                    }
+                    startDate = TaskService.GetWeekStartForDate(now);
                     break;
             }
             var startStr = startDate.ToString("yyyy-MM-dd");
