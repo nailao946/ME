@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
@@ -36,6 +38,15 @@ namespace ME.Views
         private ExpandDir _expandDir = ExpandDir.RightDown;
         private double _pillLeft, _pillTop;
 
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TOOLWINDOW = 0x80;
+        private const int WS_EX_APPWINDOW = 0x40000;
+
         public FloatingWindow()
         {
             InitializeComponent();
@@ -43,6 +54,14 @@ namespace ME.Views
             _settingsRepo = new SettingsRepository();
             _taskRepo = new TaskRepository();
             _taskService = new TaskService();
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)

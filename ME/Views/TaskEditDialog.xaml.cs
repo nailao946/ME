@@ -192,6 +192,8 @@ namespace ME.Views
                     QuantUnitBox.Text = existingTask.QuantitativeUnit ?? "";
                     QuantDailyMinBox.Text = (existingTask.QuantitativeDailyMin ?? 0).ToString();
                     QuantModeCombo.SelectedIndex = existingTask.QuantitativeMode == QuantitativeMode.Accumulate ? 0 : 1;
+                    // Preserve actual current progress from stored task
+                    ResultTask = existingTask;
 
                     // Also load recurring section for combined tasks
                     if (existingTask.RecurringPattern.HasValue)

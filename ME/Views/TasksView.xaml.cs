@@ -702,7 +702,8 @@ namespace ME.Views
                     foreach (var sub in subtasks)
                     {
                         // Subtask uses parent task's tag color
-                        subtaskPanel.Children.Add(CreateSubtaskCard(sub, tagColor));
+                        var subCard = CreateSubtaskCard(sub, tagColor, subtasks, subtaskPanel);
+                        subtaskPanel.Children.Add(subCard);
                     }
                     subtaskExpander.Content = subtaskPanel;
                     wrapper.Children.Add(subtaskExpander);
@@ -918,7 +919,7 @@ namespace ME.Views
             return card;
         }
 
-        private Border CreateSubtaskCard(TaskItem task, string tagColor)
+        private Border CreateSubtaskCard(TaskItem task, string tagColor, List<TaskItem> subtaskList = null, StackPanel subtaskPanel = null)
         {
             var card = new Border
             {
@@ -1052,6 +1053,13 @@ namespace ME.Views
             grid.Children.Add(btnPanel);
 
             card.Child = grid;
+
+            if (subtaskList != null && subtaskPanel != null)
+            {
+                card.Cursor = Cursors.SizeAll;
+                SetupSubtaskDragDrop(card, task, subtaskList, subtaskPanel);
+            }
+
             return card;
         }
 
@@ -1185,6 +1193,137 @@ namespace ME.Views
                         for (int i = 0; i < _dragSourceList.Count; i++)
                         {
                             _dragSourceList[i].Priority = _dragSourceList.Count - i;
+                            repo.UpdateTask(_dragSourceList[i]);
+                        }
+                        LoadData();
+                    }
+                    else
+                    {
+                        _placeholderBorder = null;
+                    }
+                }
+                _isDragging = false;
+                _draggedBorder = null;
+                _dragPanel = null;
+                _dragMainPanel = null;
+            };
+        }
+
+        // ============ SUBTASK DRAG AND DROP ============
+        private void SetupSubtaskDragDrop(Border card, TaskItem task, List<TaskItem> subtaskList, StackPanel subtaskPanel)
+        {
+            card.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                var source = e.OriginalSource as DependencyObject;
+                while (source != null)
+                {
+                    if (source is Button || source is Border b && b.Cursor == Cursors.Hand)
+                        return;
+                    source = VisualTreeHelper.GetParent(source);
+                }
+                _dragStart = e.GetPosition(null);
+                _draggedBorder = card;
+                _dragSourceList = subtaskList;
+                _dragSourceIndex = subtaskList.IndexOf(task);
+                _dragPanel = subtaskPanel;
+                _dragMainPanel = subtaskPanel;
+            };
+
+            card.PreviewMouseMove += (s, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || _draggedBorder == null) return;
+                var pos = e.GetPosition(null);
+                var diff = pos - _dragStart;
+
+                if (!_isDragging && Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+                {
+                    _isDragging = true;
+                    _draggedBorder.Opacity = 0.5;
+                    _draggedBorder.Effect = new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        BlurRadius = 10, ShadowDepth = 2, Opacity = 0.3, Color = Colors.Black
+                    };
+                    Mouse.Capture(_draggedBorder);
+
+                    _placeholderBorder = new Border
+                    {
+                        Style = (Style)FindResource("CardStyle"),
+                        Height = _draggedBorder.ActualHeight, Opacity = 0.3,
+                        Margin = new Thickness(0, 0, 0, 6),
+                        Background = (SolidColorBrush)FindResource("PrimaryBrush"),
+                        IsHitTestVisible = false
+                    };
+                    if (_dragMainPanel != null)
+                    {
+                        int srcIdx = _dragMainPanel.Children.IndexOf(_draggedBorder);
+                        if (srcIdx >= 0)
+                            _dragMainPanel.Children.Insert(srcIdx + 1, _placeholderBorder);
+                    }
+                }
+
+                if (_isDragging && _dragMainPanel != null)
+                {
+                    bool hadPlaceholder = _dragMainPanel.Children.Contains(_placeholderBorder);
+                    if (hadPlaceholder) _dragMainPanel.Children.Remove(_placeholderBorder);
+
+                    var mousePos = e.GetPosition(_dragMainPanel);
+                    int dropIndex = 0;
+                    for (int i = 0; i < _dragMainPanel.Children.Count; i++)
+                    {
+                        var child = _dragMainPanel.Children[i] as FrameworkElement;
+                        if (child == null) continue;
+                        var childPos = child.TransformToAncestor(_dragMainPanel).Transform(new Point(0, 0));
+                        if (mousePos.Y < childPos.Y + child.ActualHeight / 2)
+                        {
+                            dropIndex = i;
+                            break;
+                        }
+                        dropIndex = i + 1;
+                    }
+
+                    int insertIndex = Math.Min(dropIndex, _dragMainPanel.Children.Count);
+                    if (insertIndex >= 0)
+                        _dragMainPanel.Children.Insert(insertIndex, _placeholderBorder);
+                }
+            };
+
+            card.PreviewMouseLeftButtonUp += (s, e) =>
+            {
+                if (_isDragging && _draggedBorder != null)
+                {
+                    _draggedBorder.Opacity = 1.0;
+                    _draggedBorder.Effect = null;
+                    Mouse.Capture(null);
+
+                    if (_placeholderBorder != null && _dragMainPanel != null && _dragMainPanel.Children.Contains(_placeholderBorder))
+                        _dragMainPanel.Children.Remove(_placeholderBorder);
+
+                    var mousePos = e.GetPosition(_dragMainPanel);
+                    int dropIndex = 0;
+                    for (int i = 0; i < _dragMainPanel.Children.Count; i++)
+                    {
+                        var child = _dragMainPanel.Children[i] as FrameworkElement;
+                        if (child == null) continue;
+                        var childPos = child.TransformToAncestor(_dragMainPanel).Transform(new Point(0, 0));
+                        if (mousePos.Y < childPos.Y + child.ActualHeight / 2)
+                        {
+                            dropIndex = i;
+                            break;
+                        }
+                        dropIndex = i + 1;
+                    }
+
+                    if (dropIndex != _dragSourceIndex)
+                    {
+                        var item = _dragSourceList[_dragSourceIndex];
+                        _dragSourceList.RemoveAt(_dragSourceIndex);
+                        if (dropIndex > _dragSourceIndex) dropIndex--;
+                        _dragSourceList.Insert(dropIndex, item);
+
+                        var repo = new TaskRepository();
+                        for (int i = 0; i < _dragSourceList.Count; i++)
+                        {
+                            _dragSourceList[i].SortOrder = i;
                             repo.UpdateTask(_dragSourceList[i]);
                         }
                         LoadData();
