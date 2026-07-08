@@ -591,27 +591,29 @@ namespace ME.Views
                     {
                         BlurRadius = 10, ShadowDepth = 2, Opacity = 0.3, Color = Colors.Black
                     };
-                    Mouse.Capture(_subDraggedBorder);
 
                     _subPlaceholderBorder = new Border
                     {
                         Style = (Style)FindResource("CardStyle"),
-                        Height = _subDraggedBorder.ActualHeight, Opacity = 0.3,
+                        Height = Math.Max(_subDraggedBorder.ActualHeight, 10), Opacity = 0.3,
                         Margin = new Thickness(0, 0, 0, 6),
                         Background = (SolidColorBrush)FindResource("PrimaryBrush"),
                         IsHitTestVisible = false
                     };
+
+                    Mouse.Capture(_subDraggedBorder);
+
                     if (_subDragPanel != null)
                     {
                         int srcIdx = _subDragPanel.Children.IndexOf(_subDraggedBorder);
-                        if (srcIdx >= 0)
+                        if (srcIdx >= 0 && _subPlaceholderBorder != null)
                             _subDragPanel.Children.Insert(srcIdx + 1, _subPlaceholderBorder);
                     }
                 }
 
                 if (_isDragging && _subDragPanel != null)
                 {
-                    bool hadPlaceholder = _subDragPanel.Children.Contains(_subPlaceholderBorder);
+                    bool hadPlaceholder = _subPlaceholderBorder != null && _subDragPanel.Children.Contains(_subPlaceholderBorder);
                     if (hadPlaceholder) _subDragPanel.Children.Remove(_subPlaceholderBorder);
 
                     var mousePos = e.GetPosition(_subDragPanel);
@@ -630,7 +632,7 @@ namespace ME.Views
                     }
 
                     int insertIndex = Math.Min(dropIndex, _subDragPanel.Children.Count);
-                    if (insertIndex >= 0)
+                    if (insertIndex >= 0 && _subPlaceholderBorder != null)
                         _subDragPanel.Children.Insert(insertIndex, _subPlaceholderBorder);
                 }
             };

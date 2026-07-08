@@ -473,6 +473,14 @@ namespace ME.Views
             Dispatcher.BeginInvoke(new Action(() => UpdateDisplay(isRunning)));
         }
 
+        private void ExpPauseBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.IsPaused)
+                SharedTimerService.ResumeCurrent();
+            else
+                SharedTimerService.PauseCurrent();
+        }
+
         private void OnPausedStateChanged(bool isPaused)
         {
             Dispatcher.BeginInvoke(new Action(() =>
@@ -481,6 +489,8 @@ namespace ME.Views
                 {
                     TagNameText.Text = "暂停中";
                     ExpTagNameText.Text = "暂停中";
+                    ExpPauseBtn.Content = "▶";
+                    ExpPauseBtn.ToolTip = "继续";
                 }
                 else if (SharedTimerService.IsRunning)
                 {
@@ -488,6 +498,8 @@ namespace ME.Views
                     var name = tag?.Name ?? "计时中";
                     TagNameText.Text = name;
                     ExpTagNameText.Text = name;
+                    ExpPauseBtn.Content = "⏸";
+                    ExpPauseBtn.ToolTip = "暂停";
                 }
             }));
         }
@@ -506,6 +518,9 @@ namespace ME.Views
                 TimerText.Text = "00:00:00";
                 ExpTimerText.Text = "00:00:00";
                 SetTagDotColor(color);
+                ExpPauseBtn.Visibility = Visibility.Visible;
+                ExpPauseBtn.Content = "⏸";
+                ExpPauseBtn.ToolTip = "暂停";
             }
             else
             {
@@ -514,6 +529,7 @@ namespace ME.Views
                 TimerText.Text = "00:00:00";
                 ExpTimerText.Text = "00:00:00";
                 SetTagDotColor("#808080");
+                ExpPauseBtn.Visibility = Visibility.Collapsed;
             }
             if (_isExpanded) LoadTaskList();
             UpdateTagChipStates();

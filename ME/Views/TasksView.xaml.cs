@@ -1195,27 +1195,29 @@ namespace ME.Views
                     {
                         BlurRadius = 10, ShadowDepth = 2, Opacity = 0.3, Color = Colors.Black
                     };
-                    Mouse.Capture(_draggedBorder);
 
                     _placeholderBorder = new Border
                     {
                         Style = (Style)FindResource("CardStyle"),
-                        Height = _draggedBorder.ActualHeight, Opacity = 0.3,
+                        Height = Math.Max(_draggedBorder.ActualHeight, 10), Opacity = 0.3,
                         Margin = new Thickness(0, 0, 0, 12),
                         Background = (SolidColorBrush)FindResource("PrimaryBrush"),
                         IsHitTestVisible = false
                     };
+
+                    Mouse.Capture(_draggedBorder);
+
                     if (_dragMainPanel != null && _dragPanel != null)
                     {
                         int srcIdx = _dragMainPanel.Children.IndexOf(_dragPanel);
-                        if (srcIdx >= 0)
+                        if (srcIdx >= 0 && _placeholderBorder != null)
                             _dragMainPanel.Children.Insert(srcIdx + 1, _placeholderBorder);
                     }
                 }
 
                 if (_isDragging && _dragMainPanel != null)
                 {
-                    bool hadPlaceholder = _dragMainPanel.Children.Contains(_placeholderBorder);
+                    bool hadPlaceholder = _placeholderBorder != null && _dragMainPanel.Children.Contains(_placeholderBorder);
                     if (hadPlaceholder) _dragMainPanel.Children.Remove(_placeholderBorder);
 
                     var mousePos = e.GetPosition(_dragMainPanel);
@@ -1235,7 +1237,7 @@ namespace ME.Views
                     }
 
                     int insertIndex = Math.Min(dropIndex, _dragMainPanel.Children.Count);
-                    if (insertIndex >= 0)
+                    if (insertIndex >= 0 && _placeholderBorder != null)
                         _dragMainPanel.Children.Insert(insertIndex, _placeholderBorder);
                 }
             };
@@ -1328,27 +1330,29 @@ namespace ME.Views
                     {
                         BlurRadius = 10, ShadowDepth = 2, Opacity = 0.3, Color = Colors.Black
                     };
-                    Mouse.Capture(_draggedBorder);
 
                     _placeholderBorder = new Border
                     {
                         Style = (Style)FindResource("CardStyle"),
-                        Height = _draggedBorder.ActualHeight, Opacity = 0.3,
+                        Height = Math.Max(_draggedBorder.ActualHeight, 10), Opacity = 0.3,
                         Margin = new Thickness(0, 0, 0, 6),
                         Background = (SolidColorBrush)FindResource("PrimaryBrush"),
                         IsHitTestVisible = false
                     };
+
+                    Mouse.Capture(_draggedBorder);
+
                     if (_dragMainPanel != null)
                     {
                         int srcIdx = _dragMainPanel.Children.IndexOf(_draggedBorder);
-                        if (srcIdx >= 0)
+                        if (srcIdx >= 0 && _placeholderBorder != null)
                             _dragMainPanel.Children.Insert(srcIdx + 1, _placeholderBorder);
                     }
                 }
 
                 if (_isDragging && _dragMainPanel != null)
                 {
-                    bool hadPlaceholder = _dragMainPanel.Children.Contains(_placeholderBorder);
+                    bool hadPlaceholder = _placeholderBorder != null && _dragMainPanel.Children.Contains(_placeholderBorder);
                     if (hadPlaceholder) _dragMainPanel.Children.Remove(_placeholderBorder);
 
                     var mousePos = e.GetPosition(_dragMainPanel);
@@ -1367,7 +1371,7 @@ namespace ME.Views
                     }
 
                     int insertIndex = Math.Min(dropIndex, _dragMainPanel.Children.Count);
-                    if (insertIndex >= 0)
+                    if (insertIndex >= 0 && _placeholderBorder != null)
                         _dragMainPanel.Children.Insert(insertIndex, _placeholderBorder);
                 }
             };

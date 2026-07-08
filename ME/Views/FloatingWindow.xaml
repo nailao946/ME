@@ -82,7 +82,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Header: timer with collapse arrow -->
+                    <!-- Header: timer with pause + collapse arrow -->
                     <Border Grid.Row="0" Padding="16,12" Cursor="Hand"
                             MouseLeftButtonDown="Header_MouseLeftButtonDown"
                             MouseRightButtonDown="Window_MouseRightButtonDown">
@@ -90,6 +90,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
@@ -106,8 +107,15 @@
                                            FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" />
                             </StackPanel>
 
+                            <!-- Pause/Resume button -->
+                            <Button x:Name="ExpPauseBtn" Grid.Column="2" Content="⏸"
+                                    Click="ExpPauseBtn_Click" FontSize="11" Padding="4,2"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    VerticalAlignment="Center" Visibility="Collapsed"
+                                    ToolTip="暂停" />
+
                             <!-- Collapse arrow -->
-                            <TextBlock x:Name="CollapseArrow" Grid.Column="2" Text="▴"
+                            <TextBlock x:Name="CollapseArrow" Grid.Column="3" Text="▴"
                                        FontSize="16" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="8,0,0,0" />
                         </Grid>

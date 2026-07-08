@@ -12,6 +12,9 @@
                 <ui:XamlControlsResources />
                 <ResourceDictionary Source="Resources/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <Style TargetType="Control">
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            </Style>
             <converters:GoalTagColorConverter x:Key="GoalTagColorConverter" />
             <converters:QuantitativeProgressConverter x:Key="QuantitativeProgressConverter" />
         </ResourceDictionary>
