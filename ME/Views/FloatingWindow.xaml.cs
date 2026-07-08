@@ -68,6 +68,7 @@ namespace ME.Views
         {
             SharedTimerService.TimerUpdated += OnTimerUpdated;
             SharedTimerService.RunningStateChanged += OnRunningStateChanged;
+            SharedTimerService.PausedStateChanged += OnPausedStateChanged;
             ThemeService.ThemeChanged += OnThemeChanged;
 
             // Restore position
@@ -98,6 +99,7 @@ namespace ME.Views
             }
             SharedTimerService.TimerUpdated -= OnTimerUpdated;
             SharedTimerService.RunningStateChanged -= OnRunningStateChanged;
+            SharedTimerService.PausedStateChanged -= OnPausedStateChanged;
             ThemeService.ThemeChanged -= OnThemeChanged;
             SavePosition();
         }
@@ -381,10 +383,10 @@ namespace ME.Views
             menu.Resources[typeof(MenuItem)] = menuItemStyle;
 
             var tags = _tagRepo.GetAllTags();
-            var runningTagId = SharedTimerService.IsRunning ? SharedTimerService.SelectedTagId : -1;
+            var runningTagId = (SharedTimerService.IsRunning || SharedTimerService.IsPaused) ? SharedTimerService.SelectedTagId : -1;
 
             // ── Stop current (main menu, not submenu) ──
-            if (SharedTimerService.IsRunning)
+            if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
             {
                 var currentTag = _tagRepo.GetTagById(runningTagId);
                 var stopItem = new MenuItem
@@ -406,7 +408,7 @@ namespace ME.Views
                 try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
                 catch { tagColor = Color.FromRgb(128, 128, 128); }
 
-                var isRunning = SharedTimerService.IsRunning && runningTagId == tag.Id;
+                var isRunning = (SharedTimerService.IsRunning || SharedTimerService.IsPaused) && runningTagId == tag.Id;
                 var item = new MenuItem
                 {
                     Header = (isRunning ? "● " : "") + tag.Name,
@@ -470,6 +472,27 @@ namespace ME.Views
         {
             Dispatcher.BeginInvoke(new Action(() => UpdateDisplay(isRunning)));
         }
+
+        private void OnPausedStateChanged(bool isPaused)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (isPaused)
+                {
+                    TagNameText.Text = "暂停中";
+                    ExpTagNameText.Text = "暂停中";
+                }
+                else if (SharedTimerService.IsRunning)
+                {
+                    var tag = _tagRepo.GetTagById(SharedTimerService.SelectedTagId);
+                    var name = tag?.Name ?? "计时中";
+                    TagNameText.Text = name;
+                    ExpTagNameText.Text = name;
+                }
+            }));
+        }
+
+
 
         private void UpdateDisplay(bool isRunning)
         {

@@ -384,7 +384,7 @@ namespace ME.Views
                 editItem.Click += (s, ev) => EditTag(tag);
                 menu.Items.Add(editItem);
 
-                if (!tag.IsDefault)
+                if (!tag.IsDefault && !tag.IsPreset)
                 {
                     var deleteItem = new MenuItem
                     {
