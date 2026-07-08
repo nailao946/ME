@@ -49,11 +49,13 @@ namespace ME.Views
             // Subscribe to timer updates for mini timer display
             SharedTimerService.TimerUpdated += OnMiniTimerUpdated;
             SharedTimerService.RunningStateChanged += OnMiniRunningChanged;
+            SharedTimerService.PausedStateChanged += OnMiniPausedChanged;
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) =>
             {
                 SharedTimerService.TimerUpdated -= OnMiniTimerUpdated;
                 SharedTimerService.RunningStateChanged -= OnMiniRunningChanged;
+                SharedTimerService.PausedStateChanged -= OnMiniPausedChanged;
                 ThemeService.ThemeChanged -= OnThemeChanged;
             };
         }
@@ -90,6 +92,8 @@ namespace ME.Views
                     MiniTimerToggleBtn.Content = "开始";
                     MiniTimerToggleBtn.Style = (Style)FindResource("PrimaryButtonStyle");
                     MiniTimerStatus.Text = "";
+                    MiniTimerPauseBtn.Visibility = Visibility.Collapsed;
+                    MiniPomodoroBtn.Style = (Style)FindResource("SecondaryButtonStyle");
                     LoadMiniStats();
                     LoadMiniTaskSummary();
                 }
@@ -97,7 +101,11 @@ namespace ME.Views
                 {
                     MiniTimerToggleBtn.Content = "停止";
                     MiniTimerToggleBtn.Style = (Style)FindResource("DangerButtonStyle");
-                    MiniTimerStatus.Text = "计时中";
+                    MiniTimerStatus.Text = SharedTimerService.Timer.IsPomodoroMode ? "🍅 工作中" : "计时中";
+                    MiniTimerPauseBtn.Visibility = Visibility.Visible;
+                    MiniTimerPauseBtn.Content = "⏸";
+                    if (SharedTimerService.Timer.IsPomodoroMode)
+                        MiniPomodoroBtn.Style = (Style)FindResource("PrimaryButtonStyle");
                     if (MiniTagComboBox.Items.Count > 0)
                     {
                         foreach (var item in MiniTagComboBox.Items)
@@ -136,9 +144,29 @@ namespace ME.Views
             }
         }
 
+        private void OnMiniPausedChanged(bool isPaused)
+        {
+            if (!this.IsVisible) return;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (isPaused)
+                {
+                    MiniTimerStatus.Text = "暂停中";
+                    MiniTimerPauseBtn.Content = "▶";
+                    MiniTimerPauseBtn.ToolTip = "继续";
+                }
+                else if (SharedTimerService.IsRunning)
+                {
+                    MiniTimerStatus.Text = "计时中";
+                    MiniTimerPauseBtn.Content = "⏸";
+                    MiniTimerPauseBtn.ToolTip = "暂停";
+                }
+            });
+        }
+
         private void MiniTimerToggle_Click(object sender, RoutedEventArgs e)
         {
-            if (SharedTimerService.IsRunning)
+            if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
             {
                 SharedTimerService.StopCurrent();
             }
@@ -147,6 +175,40 @@ namespace ME.Views
                 if (MiniTagComboBox.SelectedItem is TimeTag tag)
                 {
                     SharedTimerService.StartWithTag(tag.Id);
+                }
+            }
+        }
+
+        private void MiniTimerPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.IsPaused)
+                SharedTimerService.ResumeCurrent();
+            else
+                SharedTimerService.PauseCurrent();
+        }
+
+        private void MiniPomodoro_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.Timer.IsPomodoroMode)
+            {
+                SharedTimerService.Timer.IsPomodoroMode = false;
+                SharedTimerService.Timer.SetMode(TimeTimerMode.CountUp);
+                MiniPomodoroBtn.Style = (Style)FindResource("SecondaryButtonStyle");
+                if (SharedTimerService.IsRunning)
+                    SharedTimerService.StopCurrent();
+            }
+            else
+            {
+                if (MiniTagComboBox.SelectedItem is TimeTag tag)
+                {
+                    SharedTimerService.StopCurrent();
+                    SharedTimerService.Timer.StartPomodoro();
+                    SharedTimerService.Timer.IsPomodoroMode = true;
+                    MiniPomodoroBtn.Style = (Style)FindResource("PrimaryButtonStyle");
+                    var timeStr = $"{SharedTimerService.Timer.Current.Minutes:D2}:{SharedTimerService.Timer.Current.Seconds:D2}";
+                    MiniTimerText.Text = timeStr;
+                    MiniTimerStatus.Text = "🍅 工作中";
+                    MiniTimerPauseBtn.Visibility = Visibility.Visible;
                 }
             }
         }

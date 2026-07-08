@@ -16,11 +16,13 @@ namespace ME.Services
 
         public static event Action<string, string, string> TimerUpdated;
         public static event Action<bool> RunningStateChanged;
+        public static event Action<bool> PausedStateChanged;
 
         public static TimeTimerService Timer => _timer;
         public static int SelectedTagId => _selectedTagId;
         public static TimeRecord CurrentRecord => _currentRecord;
         public static bool IsRunning => _timer.State == TimeTimerState.Running;
+        public static bool IsPaused => _timer.State == TimeTimerState.Paused;
 
         static SharedTimerService()
         {
@@ -91,10 +93,30 @@ namespace ME.Services
                 _currentRecord = null;
             }
             _selectedTagId = 0;
+            if (_timer.State == TimeTimerState.Paused)
+                PausedStateChanged?.Invoke(false);
             _timer.Stop();
             _timer.Reset();
             _timer.IsPomodoroMode = false;
             RunningStateChanged?.Invoke(false);
+        }
+
+        public static void PauseCurrent()
+        {
+            if (_timer.State == TimeTimerState.Running)
+            {
+                _timer.Pause();
+                PausedStateChanged?.Invoke(true);
+            }
+        }
+
+        public static void ResumeCurrent()
+        {
+            if (_timer.State == TimeTimerState.Paused)
+            {
+                _timer.Resume();
+                PausedStateChanged?.Invoke(false);
+            }
         }
 
         public static void CheckRunningState()
