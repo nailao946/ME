@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,8 @@ namespace ME.Data
         };
 
         private static readonly string DataPath;
+
+        private static readonly ConcurrentDictionary<string, (object data, DateTime timestamp)> _cache = new();
 
         static JsonStore()
         {
@@ -36,10 +39,35 @@ namespace ME.Data
             return string.IsNullOrEmpty(json) ? new List<T>() : JsonSerializer.Deserialize<List<T>>(json, _options) ?? new List<T>();
         }
 
+        public static List<T> LoadWithCache<T>(string fileName, int cacheSeconds = 2) where T : new()
+        {
+            if (_cache.TryGetValue(fileName, out var entry))
+            {
+                if (DateTime.UtcNow - entry.timestamp < TimeSpan.FromSeconds(cacheSeconds))
+                {
+                    return (List<T>)entry.data;
+                }
+            }
+            var data = Load<T>(fileName);
+            _cache[fileName] = (data, DateTime.UtcNow);
+            return data;
+        }
+
+        public static void InvalidateCache(string fileName)
+        {
+            _cache.TryRemove(fileName, out _);
+        }
+
+        public static void InvalidateAllCache()
+        {
+            _cache.Clear();
+        }
+
         public static void Save<T>(string fileName, List<T> data)
         {
             var json = JsonSerializer.Serialize(data, _options);
             File.WriteAllText(GetFilePath(fileName), json);
+            InvalidateCache(fileName);
         }
 
         public static void Backup(string backupPath)

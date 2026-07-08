@@ -23,7 +23,6 @@ namespace ME
         private CalendarView _calendarView;
         private DashboardView _dashboardView;
         private ReviewView _reviewView;
-        private RecycleBinView _recycleBinView;
         private SettingsView _settingsView;
         private TimeTrackView _timeTrackView;
         private UserControl _currentView;

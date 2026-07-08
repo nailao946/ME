@@ -12,6 +12,8 @@ using ME.Data;
 using ME.Models;
 using ME.Services;
 
+using Forms = System.Windows.Forms;
+
 namespace ME.Views
 {
     public partial class SettingsView : System.Windows.Controls.UserControl
@@ -218,6 +220,16 @@ namespace ME.Views
                     break;
                 }
             }
+
+            // Pomodoro auto start
+            PomodoroAutoStartToggle.IsChecked = _settingsRepo.GetValue(SettingsKeys.PomodoroAutoStart, "False") == "True";
+
+            // Stats tag selection
+            BuildStatsTagsPanel();
+
+            // Last sync time
+            var lastSync = SyncService.GetLastSyncTime();
+            LastSyncTimeText.Text = lastSync.HasValue ? $"上次同步: {lastSync:yyyy-MM-dd HH:mm:ss}" : "未同步";
         }
 
         private void WeekStart_Changed(object sender, SelectionChangedEventArgs e)
@@ -301,6 +313,88 @@ namespace ME.Views
         private void FocusSound_Changed(object sender, RoutedEventArgs e)
         {
             _settingsRepo.SetValue(SettingsKeys.FocusSoundEnabled, (FocusSoundToggle.IsChecked == true).ToString());
+        }
+
+        private void PomodoroAutoStart_Changed(object sender, RoutedEventArgs e)
+        {
+            _settingsRepo.SetValue(SettingsKeys.PomodoroAutoStart, (PomodoroAutoStartToggle.IsChecked == true).ToString());
+        }
+
+        private void BuildStatsTagsPanel()
+        {
+            StatsTagsPanel.Children.Clear();
+            var tagRepo = new TimeTagRepository();
+            var tags = tagRepo.GetAllTags();
+            var includedIds = TimeStatsHelper.GetIncludedTagIds();
+
+            foreach (var tag in tags)
+            {
+                var cb = new CheckBox
+                {
+                    Content = tag.Name,
+                    IsChecked = includedIds.Count == 0 || includedIds.Contains(tag.Id),
+                    Tag = tag.Id,
+                    Margin = new Thickness(0, 0, 12, 6),
+                    Foreground = (SolidColorBrush)FindResource("TextBrush"),
+                };
+                if (!string.IsNullOrEmpty(tag.Color))
+                {
+                    try
+                    {
+                        cb.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(tag.Color));
+                    }
+                    catch { }
+                }
+                cb.Checked += StatsTag_Changed;
+                cb.Unchecked += StatsTag_Changed;
+                StatsTagsPanel.Children.Add(cb);
+            }
+        }
+
+        private void StatsTag_Changed(object sender, RoutedEventArgs e)
+        {
+            var selectedIds = new List<int>();
+            foreach (var child in StatsTagsPanel.Children)
+            {
+                if (child is CheckBox cb && cb.IsChecked == true && cb.Tag is int id)
+                {
+                    selectedIds.Add(id);
+                }
+            }
+            _settingsRepo.SetValue(SettingsKeys.StatsIncludedTags, string.Join(",", selectedIds));
+        }
+
+        private void StatsTags_SelectAll(object sender, RoutedEventArgs e)
+        {
+            foreach (var child in StatsTagsPanel.Children)
+            {
+                if (child is CheckBox cb)
+                    cb.IsChecked = true;
+            }
+        }
+
+        private void StatsTags_DeselectAll(object sender, RoutedEventArgs e)
+        {
+            foreach (var child in StatsTagsPanel.Children)
+            {
+                if (child is CheckBox cb)
+                    cb.IsChecked = false;
+            }
+        }
+
+        private void ExportSyncData_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Forms.SaveFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json",
+                FileName = $"me_export_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            };
+            if (dlg.ShowDialog() == Forms.DialogResult.OK)
+            {
+                var json = SyncService.ExportAllAsJson();
+                File.WriteAllText(dlg.FileName, json);
+                ConfirmDialog.Show(Window.GetWindow(this), "提示", $"数据已导出到:\n{dlg.FileName}", "确定");
+            }
         }
 
         private void BackupMode_Changed(object sender, RoutedEventArgs e)

@@ -21,7 +21,6 @@ namespace ME.Services
         public TimeSpan Elapsed => _elapsed;
 
         public event Action<TimeSpan> Tick;
-        public event Action Completed;
 
         public void Start(TimerMode mode, TimeSpan? countdownDuration = null)
         {

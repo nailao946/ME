@@ -117,6 +117,39 @@
                 </StackPanel>
             </Border>
 
+            <!-- Focus Timer Settings -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="专注设置" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <CheckBox x:Name="PomodoroAutoStartToggle" Checked="PomodoroAutoStart_Changed" Unchecked="PomodoroAutoStart_Changed"
+                                  VerticalAlignment="Center" />
+                        <TextBlock Text="番茄钟自动开始" Foreground="{DynamicResource TextBrush}" FontSize="13"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock Text="番茄钟/专注计时结束后自动开始下一个" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="24,0,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Stats Settings -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="统计设置" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
+                    <TextBlock Text="选择要纳入统计的时间标签" FontSize="12"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="全选" Click="StatsTags_SelectAll"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="12,4" Margin="0,0,8,0" />
+                        <Button Content="取消全选" Click="StatsTags_DeselectAll"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="12,4" />
+                    </StackPanel>
+                    <WrapPanel x:Name="StatsTagsPanel" />
+                </StackPanel>
+            </Border>
+
             <!-- Data Backup -->
             <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
                 <StackPanel>
@@ -164,6 +197,26 @@
                                 Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
                     </StackPanel>
                     <TextBlock x:Name="LastBackupText" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Cloud Sync -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="云同步" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="同步状态:" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="LastSyncTimeText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" Text="未同步" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="导出数据" Click="ExportSyncData_Click"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
+                    </StackPanel>
+                    <TextBlock Text="数据格式兼容Web版目标地图" FontSize="11"
                                Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
                 </StackPanel>
             </Border>

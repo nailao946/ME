@@ -16,7 +16,6 @@ namespace ME.Views
         public ObservableCollection<TaskItem> Subtasks { get; } = new ObservableCollection<TaskItem>();
         private int? _selectedTagId;
         private List<GoalTag> _allTags;
-        private bool _isEditMode;
         private int _editGoalId;
 
         public GoalEditDialog()
@@ -32,7 +31,6 @@ namespace ME.Views
         {
             if (existingGoal != null)
             {
-                _isEditMode = true;
                 _editGoalId = existingGoal.Id;
                 DialogTitle.Text = "编辑目标";
                 GoalNameBox.Text = existingGoal.Name;
