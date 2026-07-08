@@ -18,6 +18,7 @@ namespace ME.Views
     {
         private GoalsViewModel _vm;
         private int? _filterTagId;
+        private bool _eventsWired;
 
         // Drag state
         private bool _isDragging;
@@ -28,6 +29,13 @@ namespace ME.Views
         private StackPanel _dragPanel;
         private StackPanel _dragMainPanel;
         private Border _placeholderBorder;
+
+        // Subtask drag state
+        private int _subDragSourceIndex;
+        private List<TaskItem> _subDragSourceList;
+        private Border _subDraggedBorder;
+        private StackPanel _subDragPanel;
+        private Border _subPlaceholderBorder;
 
         public GoalsView()
         {
@@ -40,6 +48,155 @@ namespace ME.Views
             EventAggregator.Instance.Subscribe<string>(OnTaskCompleted);
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) => ThemeService.ThemeChanged -= OnThemeChanged;
+            this.Loaded += (s, e) =>
+            {
+                if (!_eventsWired)
+                {
+                    SharedTimerService.TimerUpdated += OnSharedTimerUpdated;
+                    SharedTimerService.RunningStateChanged += OnSharedRunningStateChanged;
+                    SharedTimerService.PausedStateChanged += OnSharedPausedChanged;
+                    SharedTimerService.PomodoroPhaseChanged += OnPomodoroPhaseChanged;
+
+                    LoadTimerTags();
+                    SharedTimerService.CheckRunningState();
+
+                    _eventsWired = true;
+                }
+            };
+            this.Unloaded += (s, e) =>
+            {
+                if (_eventsWired)
+                {
+                    SharedTimerService.TimerUpdated -= OnSharedTimerUpdated;
+                    SharedTimerService.RunningStateChanged -= OnSharedRunningStateChanged;
+                    SharedTimerService.PausedStateChanged -= OnSharedPausedChanged;
+                    SharedTimerService.PomodoroPhaseChanged -= OnPomodoroPhaseChanged;
+                    _eventsWired = false;
+                }
+            };
+        }
+
+        private void LoadTimerTags()
+        {
+            var tagRepo = new TimeTagRepository();
+            var tags = tagRepo.GetAllTags();
+            GoalTagComboBox.ItemsSource = tags;
+            GoalTagComboBox.SelectedValue = SharedTimerService.SelectedTagId > 0 ? SharedTimerService.SelectedTagId : (tags.FirstOrDefault()?.Id ?? 0);
+        }
+
+        // ========== SHARED TIMER HANDLERS ==========
+        private void OnSharedTimerUpdated(string time, string tagName, string tagColor)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                GoalTimerText.Text = time;
+                if (SharedTimerService.IsRunning)
+                {
+                    GoalTimerText.Foreground = new SolidColorBrush(
+                        (Color)ColorConverter.ConvertFromString(tagColor));
+                    GoalRunningTag.Text = tagName;
+                    GoalRunningDot.Background = new SolidColorBrush(
+                        (Color)ColorConverter.ConvertFromString(tagColor));
+                }
+            });
+        }
+
+        private void OnSharedRunningStateChanged(bool isRunning)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!this.IsVisible) return;
+                if (isRunning)
+                {
+                    GoalTimerPauseBtn.Visibility = Visibility.Visible;
+                    GoalTimerPauseBtn.Content = "⏸";
+                    GoalTimerPauseBtn.ToolTip = "暂停";
+                    GoalTimerToggleBtn.Content = "停止";
+                    GoalTimerToggleBtn.Style = (Style)FindResource("DangerButtonStyle");
+                }
+                else
+                {
+                    GoalTimerPauseBtn.Visibility = Visibility.Collapsed;
+                    GoalTimerText.Text = "00:00:00";
+                    GoalTimerText.ClearValue(TextBlock.ForegroundProperty);
+                    GoalRunningTag.Text = "";
+                    GoalRunningDot.Background = Brushes.Gray;
+                    GoalTimerToggleBtn.Content = "开始";
+                    GoalTimerToggleBtn.Style = (Style)FindResource("PrimaryButtonStyle");
+                }
+            });
+        }
+
+        private void OnSharedPausedChanged(bool isPaused)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (isPaused)
+                {
+                    GoalTimerPauseBtn.Content = "▶";
+                    GoalTimerPauseBtn.ToolTip = "继续";
+                    GoalTimerStatus.Text = "暂停中";
+                }
+                else if (SharedTimerService.IsRunning)
+                {
+                    GoalTimerPauseBtn.Content = "⏸";
+                    GoalTimerPauseBtn.ToolTip = "暂停";
+                    GoalTimerStatus.Text = "";
+                }
+            });
+        }
+
+        private void OnPomodoroPhaseChanged(PomodoroPhase phase, int pomodoroNumber)
+        {
+            // ignore; button style updated via RunningStateChanged
+        }
+
+        private void GoalTimerToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
+            {
+                SharedTimerService.StopCurrent();
+                GoalTimerStatus.Text = "";
+                return;
+            }
+
+            int tagId = GoalTagComboBox.SelectedValue is int id ? id : 0;
+            if (tagId <= 0)
+            {
+                GoalTimerText.Text = "请选择标签";
+                return;
+            }
+            SharedTimerService.StartWithTag(tagId);
+        }
+
+        private void GoalTimerPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.IsPaused)
+                SharedTimerService.ResumeCurrent();
+            else
+                SharedTimerService.PauseCurrent();
+        }
+
+        private void GoalPomodoro_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.Timer.IsPomodoroMode)
+            {
+                SharedTimerService.Timer.IsPomodoroMode = false;
+                SharedTimerService.Timer.SetMode(TimeTimerMode.CountUp);
+                if (SharedTimerService.IsRunning)
+                    SharedTimerService.StopCurrent();
+            }
+            else
+            {
+                if (GoalTagComboBox.SelectedItem is TimeTag tag)
+                {
+                    SharedTimerService.StopCurrent();
+                    SharedTimerService.Timer.StartPomodoro();
+                    SharedTimerService.Timer.IsPomodoroMode = true;
+                    var timeStr = $"{SharedTimerService.Timer.Current.Minutes:D2}:{SharedTimerService.Timer.Current.Seconds:D2}";
+                    GoalTimerText.Text = timeStr;
+                }
+            }
         }
 
         private void OnTagChanged(string message)
@@ -356,7 +513,10 @@ namespace ME.Views
                     var activePanel = new StackPanel();
                     foreach (var sub in activeTasks)
                     {
-                        activePanel.Children.Add(CreateGoalSubtaskCard(sub, goal.TagColor, goal.Subtasks));
+                        var subCard = CreateGoalSubtaskCard(sub, goal.TagColor, goal.Subtasks);
+                        if (!sub.ParentTaskId.HasValue)
+                            AttachSubtaskDragDrop(subCard, sub, goal.Subtasks, activePanel);
+                        activePanel.Children.Add(subCard);
                     }
                     activeExpander.Content = activePanel;
                     wrapper.Children.Add(activeExpander);
@@ -379,7 +539,10 @@ namespace ME.Views
                     var donePanel = new StackPanel();
                     foreach (var sub in completedTasks)
                     {
-                        donePanel.Children.Add(CreateGoalSubtaskCard(sub, goal.TagColor, goal.Subtasks));
+                        var subCard = CreateGoalSubtaskCard(sub, goal.TagColor, goal.Subtasks);
+                        if (!sub.ParentTaskId.HasValue)
+                            AttachSubtaskDragDrop(subCard, sub, goal.Subtasks, donePanel);
+                        donePanel.Children.Add(subCard);
                     }
                     doneExpander.Content = donePanel;
                     wrapper.Children.Add(doneExpander);
@@ -393,6 +556,135 @@ namespace ME.Views
         {
             var ts = new TaskService();
             return ts.IsTaskCompletedForDisplay(task, DateTime.Today);
+        }
+
+        private void AttachSubtaskDragDrop(Border card, TaskItem task, List<TaskItem> siblingList, StackPanel parentPanel)
+        {
+            card.Cursor = Cursors.SizeAll;
+
+            card.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                var source = e.OriginalSource as DependencyObject;
+                while (source != null)
+                {
+                    if (source is Button) return;
+                    source = VisualTreeHelper.GetParent(source);
+                }
+                _dragStart = e.GetPosition(null);
+                _subDraggedBorder = card;
+                _subDragSourceList = siblingList;
+                _subDragSourceIndex = siblingList.IndexOf(task);
+                _subDragPanel = parentPanel;
+            };
+
+            card.PreviewMouseMove += (s, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || _subDraggedBorder == null) return;
+                var pos = e.GetPosition(null);
+                var diff = pos - _dragStart;
+
+                if (!_isDragging && Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+                {
+                    _isDragging = true;
+                    _subDraggedBorder.Opacity = 0.5;
+                    _subDraggedBorder.Effect = new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        BlurRadius = 10, ShadowDepth = 2, Opacity = 0.3, Color = Colors.Black
+                    };
+                    Mouse.Capture(_subDraggedBorder);
+
+                    _subPlaceholderBorder = new Border
+                    {
+                        Style = (Style)FindResource("CardStyle"),
+                        Height = _subDraggedBorder.ActualHeight, Opacity = 0.3,
+                        Margin = new Thickness(0, 0, 0, 6),
+                        Background = (SolidColorBrush)FindResource("PrimaryBrush"),
+                        IsHitTestVisible = false
+                    };
+                    if (_subDragPanel != null)
+                    {
+                        int srcIdx = _subDragPanel.Children.IndexOf(_subDraggedBorder);
+                        if (srcIdx >= 0)
+                            _subDragPanel.Children.Insert(srcIdx + 1, _subPlaceholderBorder);
+                    }
+                }
+
+                if (_isDragging && _subDragPanel != null)
+                {
+                    bool hadPlaceholder = _subDragPanel.Children.Contains(_subPlaceholderBorder);
+                    if (hadPlaceholder) _subDragPanel.Children.Remove(_subPlaceholderBorder);
+
+                    var mousePos = e.GetPosition(_subDragPanel);
+                    int dropIndex = 0;
+                    for (int i = 0; i < _subDragPanel.Children.Count; i++)
+                    {
+                        var child = _subDragPanel.Children[i] as FrameworkElement;
+                        if (child == null) continue;
+                        var childPos = child.TransformToAncestor(_subDragPanel).Transform(new Point(0, 0));
+                        if (mousePos.Y < childPos.Y + child.ActualHeight / 2)
+                        {
+                            dropIndex = i;
+                            break;
+                        }
+                        dropIndex = i + 1;
+                    }
+
+                    int insertIndex = Math.Min(dropIndex, _subDragPanel.Children.Count);
+                    if (insertIndex >= 0)
+                        _subDragPanel.Children.Insert(insertIndex, _subPlaceholderBorder);
+                }
+            };
+
+            card.PreviewMouseLeftButtonUp += (s, e) =>
+            {
+                if (_isDragging && _subDraggedBorder != null)
+                {
+                    _subDraggedBorder.Opacity = 1.0;
+                    _subDraggedBorder.Effect = null;
+                    Mouse.Capture(null);
+
+                    if (_subPlaceholderBorder != null && _subDragPanel != null && _subDragPanel.Children.Contains(_subPlaceholderBorder))
+                        _subDragPanel.Children.Remove(_subPlaceholderBorder);
+
+                    var mousePos = e.GetPosition(_subDragPanel);
+                    int dropIndex = 0;
+                    for (int i = 0; i < _subDragPanel.Children.Count; i++)
+                    {
+                        var child = _subDragPanel.Children[i] as FrameworkElement;
+                        if (child == null) continue;
+                        var childPos = child.TransformToAncestor(_subDragPanel).Transform(new Point(0, 0));
+                        if (mousePos.Y < childPos.Y + child.ActualHeight / 2)
+                        {
+                            dropIndex = i;
+                            break;
+                        }
+                        dropIndex = i + 1;
+                    }
+
+                    if (dropIndex != _subDragSourceIndex)
+                    {
+                        var item = _subDragSourceList[_subDragSourceIndex];
+                        _subDragSourceList.RemoveAt(_subDragSourceIndex);
+                        if (dropIndex > _subDragSourceIndex) dropIndex--;
+                        _subDragSourceList.Insert(dropIndex, item);
+
+                        var repo = new TaskRepository();
+                        for (int i = 0; i < _subDragSourceList.Count; i++)
+                        {
+                            _subDragSourceList[i].SortOrder = i;
+                            repo.UpdateTask(_subDragSourceList[i]);
+                        }
+                        LoadGoalsWithSections();
+                    }
+                    else
+                    {
+                        _subPlaceholderBorder = null;
+                    }
+                }
+                _isDragging = false;
+                _subDraggedBorder = null;
+                _subDragPanel = null;
+            };
         }
 
         private Border CreateGoalSubtaskCard(TaskItem task, string tagColor, List<TaskItem> allGoalTasks = null)

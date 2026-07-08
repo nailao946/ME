@@ -11,7 +11,8 @@
         SizeToContent="WidthAndHeight"
         Left="100" Top="100"
         Loaded="Window_Loaded"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        Focusable="False">
     <Window.Resources>
         <!-- Collapse/expand animation duration -->
         <Duration x:Key="AnimDuration">0:0:0.25</Duration>
@@ -19,12 +20,13 @@
 
     <Border x:Name="MainBorder" CornerRadius="24" ClipToBounds="True"
             Background="{DynamicResource CardBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            Focusable="False">
         <Border.Effect>
             <DropShadowEffect BlurRadius="8" Opacity="0.15" ShadowDepth="2" />
         </Border.Effect>
 
-        <Grid x:Name="ContentRoot">
+        <Grid x:Name="ContentRoot" Focusable="False">
             <Grid.RenderTransform>
                 <ScaleTransform x:Name="ContentScale" ScaleX="1" ScaleY="1"
                                 CenterX="0" CenterY="0" />

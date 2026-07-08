@@ -9,11 +9,12 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,16">
+        <DockPanel Grid.Row="0" Margin="0,0,0,8">
             <Button Content="+ 新建目标" Click="AddGoal_Click"
                     Style="{StaticResource PrimaryButtonStyle}" Padding="20,10"
                     DockPanel.Dock="Right" />
@@ -27,7 +28,37 @@
             </ScrollViewer>
         </DockPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <!-- Timer bar -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12,6" Margin="0,0,0,12">
+            <DockPanel>
+                <TextBlock Text="⏱ 计时" FontSize="12" FontWeight="Bold"
+                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <Border x:Name="GoalRunningDot" Width="6" Height="6" CornerRadius="3"
+                        Background="Gray" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBlock x:Name="GoalRunningTag" Text="" FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="GoalTimerText" Text="00:00:00" FontSize="18" FontWeight="Bold"
+                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="GoalTimerStatus" Text="" FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <Button x:Name="GoalTimerPauseBtn" Content="⏸" Click="GoalTimerPause_Click"
+                        FontSize="10" Padding="6,3" Margin="0,0,4,0" Visibility="Collapsed"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="GoalPomodoroBtn" DockPanel.Dock="Right" Content="🍅"
+                        Click="GoalPomodoro_Click" FontSize="10" Padding="6,3" Margin="0,0,4,0"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+                <Button x:Name="GoalTimerToggleBtn" DockPanel.Dock="Right" Content="开始"
+                        Click="GoalTimerToggle_Click" FontSize="10" Padding="10,3"
+                        Style="{StaticResource PrimaryButtonStyle}" />
+                <ComboBox x:Name="GoalTagComboBox" DockPanel.Dock="Right"
+                          Style="{StaticResource MacComboBoxStyle}"
+                          DisplayMemberPath="Name" SelectedValuePath="Id"
+                          FontSize="10" Height="24" Width="110" Margin="0,0,6,0"
+                          VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <StackPanel x:Name="GoalsPanel" />
             </StackPanel>

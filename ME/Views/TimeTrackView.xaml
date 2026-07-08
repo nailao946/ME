@@ -47,10 +47,14 @@
                                          Visibility="Collapsed" />
                         </StackPanel>
 
-                        <!-- Bottom: Pomodoro + minutes input -->
+                        <!-- Bottom: Timer controls + Pomodoro + minutes input -->
                         <DockPanel Grid.Row="2">
+                            <Button x:Name="TimerPauseBtn" DockPanel.Dock="Left" Content="⏸"
+                                    Click="TimerPause_Click" FontSize="11" Padding="6,4"
+                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
+                                    Visibility="Collapsed" ToolTip="暂停" />
                             <Button x:Name="PomodoroToggleBtn" DockPanel.Dock="Left" Content="🍅 番茄钟"
-                                    Click="PomodoroToggle_Click" FontSize="11" Padding="10,4"
+                                    Click="PomodoroToggle_Click" FontSize="11" Padding="10,4" Margin="4,0,0,0"
                                     Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center" />
                             <Button x:Name="PomodoroSettingsBtn" DockPanel.Dock="Left" Content="⚙"
                                     Click="PomodoroSettings_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"

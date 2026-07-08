@@ -625,7 +625,8 @@ namespace ME.Views
                             QuantitativeMode = task.QuantitativeMode, QuantitativeStart = task.QuantitativeStart,
                             QuantitativeTarget = task.QuantitativeTarget, QuantitativeCurrent = task.QuantitativeCurrent,
                             QuantitativeUnit = task.QuantitativeUnit, QuantitativeDailyMin = task.QuantitativeDailyMin,
-                            CountTowardsParent = task.CountTowardsParent
+                            CountTowardsParent = task.CountTowardsParent,
+                            SortOrder = task.SortOrder
                         };
 
                         if (task.ParentTaskId.HasValue)
@@ -677,7 +678,11 @@ namespace ME.Views
                 }
             }
 
-            mainTasks.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+            mainTasks.Sort((a, b) =>
+            {
+                var cmp = b.Priority.CompareTo(a.Priority);
+                return cmp != 0 ? cmp : a.SortOrder.CompareTo(b.SortOrder);
+            });
 
             // Build task sections: active + completed
             TasksPanel.Children.Clear();
@@ -766,7 +771,7 @@ namespace ME.Views
                 // Subtasks (matching GoalsView tree structure)
                 if (subtasksMap.ContainsKey(task.Id))
                 {
-                    var subtasks = subtasksMap[task.Id];
+                    var subtasks = subtasksMap[task.Id].OrderBy(s => s.SortOrder).ToList();
                     var subtaskExpander = new Expander
                     {
                         IsExpanded = true,

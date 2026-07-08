@@ -52,6 +52,7 @@ namespace ME.Views
                 {
                     SharedTimerService.TimerUpdated += OnSharedTimerUpdated;
                     SharedTimerService.RunningStateChanged += OnSharedRunningStateChanged;
+                    SharedTimerService.PausedStateChanged += OnSharedPausedChanged;
                     SharedTimerService.PomodoroPhaseChanged += OnPomodoroPhaseChanged;
                     ThemeService.ThemeChanged += OnThemeChanged;
                     _eventsWired = true;
@@ -132,8 +133,15 @@ namespace ME.Views
         {
             Dispatcher.BeginInvoke(() =>
             {
-                if (!isRunning)
+                if (isRunning)
                 {
+                    TimerPauseBtn.Visibility = Visibility.Visible;
+                    TimerPauseBtn.Content = "⏸";
+                    TimerPauseBtn.ToolTip = "暂停";
+                }
+                else
+                {
+                    TimerPauseBtn.Visibility = Visibility.Collapsed;
                     TimerText.Text = _timer.Mode == TimeTimerMode.CountDown
                         ? $"{_timer.FocusMinutes:D2}:00"
                         : "00:00:00";
@@ -144,6 +152,31 @@ namespace ME.Views
                     DrawGanttChart();
                 }
             });
+        }
+
+        private void OnSharedPausedChanged(bool isPaused)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (isPaused)
+                {
+                    TimerPauseBtn.Content = "▶";
+                    TimerPauseBtn.ToolTip = "继续";
+                }
+                else if (SharedTimerService.IsRunning)
+                {
+                    TimerPauseBtn.Content = "⏸";
+                    TimerPauseBtn.ToolTip = "暂停";
+                }
+            });
+        }
+
+        private void TimerPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (SharedTimerService.IsPaused)
+                SharedTimerService.ResumeCurrent();
+            else
+                SharedTimerService.PauseCurrent();
         }
 
         private void OnThemeChanged(string theme)
@@ -488,27 +521,27 @@ namespace ME.Views
         private void LoadStats()
         {
             TodayStatsPanel.Children.Clear();
-            var now = DateTime.Now;
+            var selectedDate = _selectedDate;
             List<TimeRecord> records;
 
             if (_statsMode == "day")
             {
-                records = _recordRepo.GetRecordsByDate(now.ToString("yyyy-MM-dd"));
+                records = _recordRepo.GetRecordsByDate(selectedDate.ToString("yyyy-MM-dd"));
             }
             else if (_statsMode == "week")
             {
-                var startOfWeek = TaskService.GetWeekStartForDate(now);
-                records = _recordRepo.GetRecordsByDateRange(startOfWeek.ToString("yyyy-MM-dd"), now.ToString("yyyy-MM-dd"));
+                var startOfWeek = TaskService.GetWeekStartForDate(selectedDate);
+                records = _recordRepo.GetRecordsByDateRange(startOfWeek.ToString("yyyy-MM-dd"), selectedDate.ToString("yyyy-MM-dd"));
             }
             else if (_statsMode == "month")
             {
-                var startOfMonth = new DateTime(now.Year, now.Month, 1);
-                records = _recordRepo.GetRecordsByDateRange(startOfMonth.ToString("yyyy-MM-dd"), now.ToString("yyyy-MM-dd"));
+                var startOfMonth = new DateTime(selectedDate.Year, selectedDate.Month, 1);
+                records = _recordRepo.GetRecordsByDateRange(startOfMonth.ToString("yyyy-MM-dd"), selectedDate.ToString("yyyy-MM-dd"));
             }
             else
             {
-                var startOfYear = new DateTime(now.Year, 1, 1);
-                records = _recordRepo.GetRecordsByDateRange(startOfYear.ToString("yyyy-MM-dd"), now.ToString("yyyy-MM-dd"));
+                var startOfYear = new DateTime(selectedDate.Year, 1, 1);
+                records = _recordRepo.GetRecordsByDateRange(startOfYear.ToString("yyyy-MM-dd"), selectedDate.ToString("yyyy-MM-dd"));
             }
 
             var tagTimes = new Dictionary<int, TimeSpan>();
@@ -994,6 +1027,8 @@ namespace ME.Views
                     GenerateCalendar();
                     LoadRecords();
                     DrawGanttChart();
+                    LoadStats();
+                    DrawPieCharts();
                 };
 
                 cell.Children.Add(dayBtn);
@@ -1073,8 +1108,8 @@ namespace ME.Views
 
         private Dictionary<int, TimeSpan> GetTagTimesForPeriod(int days)
         {
-            var start = DateTime.Now.Date.AddDays(days);
-            var records = _recordRepo.GetRecordsByDateRange(start.ToString("yyyy-MM-dd"), DateTime.Now.ToString("yyyy-MM-dd"));
+            var start = _selectedDate.Date.AddDays(days);
+            var records = _recordRepo.GetRecordsByDateRange(start.ToString("yyyy-MM-dd"), _selectedDate.ToString("yyyy-MM-dd"));
             var tagTimes = new Dictionary<int, TimeSpan>();
             foreach (var r in records)
             {
@@ -1193,12 +1228,16 @@ namespace ME.Views
         {
             _currentMonth = _currentMonth.AddMonths(-1);
             GenerateCalendar();
+            LoadStats();
+            DrawPieCharts();
         }
 
         private void NextMonth_Click(object sender, RoutedEventArgs e)
         {
             _currentMonth = _currentMonth.AddMonths(1);
             GenerateCalendar();
+            LoadStats();
+            DrawPieCharts();
         }
 
         // ========== GANTT BAR CLICK ==========

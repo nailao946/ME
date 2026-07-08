@@ -12,14 +12,14 @@ namespace ME.Data
         public List<TaskItem> GetAllTasks(bool includeDeleted = false)
         {
             var tasks = JsonStore.Load<TaskItem>(FileName);
-            return includeDeleted ? tasks : tasks.Where(t => !t.IsDeleted).OrderByDescending(t => t.Priority).ThenByDescending(t => t.CreatedAt).ToList();
+            return includeDeleted ? tasks : tasks.Where(t => !t.IsDeleted).OrderByDescending(t => t.Priority).ThenBy(t => t.SortOrder).ToList();
         }
 
         public List<TaskItem> GetTasksByGoalId(int goalId)
         {
             return JsonStore.Load<TaskItem>(FileName)
                 .Where(t => !t.IsDeleted && t.GoalId == goalId)
-                .OrderByDescending(t => t.Priority).ToList();
+                .OrderByDescending(t => t.Priority).ThenBy(t => t.SortOrder).ToList();
         }
 
         public List<TaskItem> GetTasksByType(TaskType type)
@@ -38,7 +38,7 @@ namespace ME.Data
                     (t.Type == TaskType.Quantitative && t.RecurringPattern.HasValue) ||
                     (t.StartDate.HasValue && t.StartDate.Value.Date <= today) ||
                     (t.EndDate.HasValue && t.EndDate.Value.Date >= today)))
-                .OrderByDescending(t => t.Priority).ToList();
+                .OrderByDescending(t => t.Priority).ThenBy(t => t.SortOrder).ToList();
         }
 
         public TaskItem GetTaskById(int id)
