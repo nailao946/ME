@@ -506,7 +506,8 @@ namespace ME
 
         private void Window_Deactivated(object sender, EventArgs e)
         {
-            WindowBorder.BorderBrush = System.Windows.Media.Brushes.Transparent;
+            WindowBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(60, 128, 128, 128));
         }
 
         protected override void OnClosed(EventArgs e)

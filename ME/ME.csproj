@@ -9,6 +9,7 @@
     <AssemblyName>ME</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
+    <DisableHardwareAcceleration>true</DisableHardwareAcceleration>
     <ApplicationIcon>hobby_working_dailyroutine_life_time_management_icon_142245.ico</ApplicationIcon>
     <StartupObject>ME.App</StartupObject>
     <Authors>JOE</Authors>
