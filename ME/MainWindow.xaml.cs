@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -121,19 +122,9 @@ namespace ME
             }
             else
             {
-                var transform = WindowBorder.RenderTransform as ScaleTransform;
-                if (transform == null)
-                {
-                    transform = new ScaleTransform(1, 1, 0.5, 0.5);
-                    WindowBorder.RenderTransform = transform;
-                }
                 var fadeAnim = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
-                var scaleX = new DoubleAnimation(1, 0.92, TimeSpan.FromMilliseconds(200));
-                var scaleY = new DoubleAnimation(1, 0.92, TimeSpan.FromMilliseconds(200));
                 fadeAnim.Completed += (s2, e2) => Application.Current.Shutdown();
                 BeginAnimation(OpacityProperty, fadeAnim);
-                transform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
-                transform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
             }
         }
 
@@ -142,17 +133,57 @@ namespace ME
             MaximizeBtn.Content = WindowState == WindowState.Maximized ? "❐" : "□";
         }
 
-        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        // ========== MANUAL WINDOW RESIZE (AllowsTransparency) ==========
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+        private const uint WM_NCLBUTTONDOWN = 0xA1;
+        private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+
+        private void ResizeBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            var pos = e.GetPosition(this);
             var w = ActualWidth;
             var h = ActualHeight;
-            if (w > 0 && h > 0)
+            const int edge = 8;
+            int ht = 0;
+            if (pos.X < edge) ht = pos.Y < edge ? HTTOPLEFT : pos.Y > h - edge ? HTBOTTOMLEFT : HTLEFT;
+            else if (pos.X > w - edge) ht = pos.Y < edge ? HTTOPRIGHT : pos.Y > h - edge ? HTBOTTOMRIGHT : HTRIGHT;
+            else if (pos.Y < edge) ht = HTTOP;
+            else if (pos.Y > h - edge) ht = HTBOTTOM;
+            if (ht != 0)
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                SendMessage(hwnd, WM_NCLBUTTONDOWN, (IntPtr)ht, IntPtr.Zero);
+                e.Handled = true;
+            }
+        }
+
+        private void Window_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (WindowState == WindowState.Maximized) return;
+            var pos = e.GetPosition(this);
+            var w = ActualWidth;
+            var h = ActualHeight;
+            const int edge = 8;
+            if (pos.X < edge) Cursor = pos.Y < edge ? Cursors.SizeNWSE : pos.Y > h - edge ? Cursors.SizeNESW : Cursors.SizeWE;
+            else if (pos.X > w - edge) Cursor = pos.Y < edge ? Cursors.SizeNESW : pos.Y > h - edge ? Cursors.SizeNWSE : Cursors.SizeWE;
+            else if (pos.Y < edge) Cursor = Cursors.SizeNS;
+            else if (pos.Y > h - edge) Cursor = Cursors.SizeNS;
+            else Cursor = Cursors.Arrow;
+        }
+
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            var bw = WindowBorder.ActualWidth;
+            var bh = WindowBorder.ActualHeight;
+            if (bw > 0 && bh > 0)
             {
                 var radius = WindowState == WindowState.Maximized ? 0.0 : 12.0;
-                WindowClip.Rect = new Rect(0, 0, w, h);
+                WindowClip.Rect = new Rect(0, 0, bw, bh);
                 WindowClip.RadiusX = radius;
                 WindowClip.RadiusY = radius;
                 WindowBorder.CornerRadius = new CornerRadius(radius);
+                WindowBorder.Margin = WindowState == WindowState.Maximized ? new Thickness(0) : new Thickness(8);
             }
         }
 
@@ -501,13 +532,15 @@ namespace ME
 
         private void Window_Activated(object sender, EventArgs e)
         {
-            ApplyWindowBorderColor();
+            if (WindowBorder != null)
+                ApplyWindowBorderColor();
         }
 
         private void Window_Deactivated(object sender, EventArgs e)
         {
-            WindowBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromArgb(60, 128, 128, 128));
+            if (WindowBorder != null)
+                WindowBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(60, 128, 128, 128));
         }
 
         protected override void OnClosed(EventArgs e)

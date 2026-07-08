@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Reflection;
 using Microsoft.Win32;
 using ME.Data;
 using ME.Models;
@@ -44,6 +45,13 @@ namespace ME.Views
         private void SettingsView_Loaded(object sender, RoutedEventArgs e)
         {
             LoadSettings();
+            try
+            {
+                var ver = Assembly.GetExecutingAssembly().GetName().Version;
+                if (ver != null)
+                    VersionText.Text = $"版本 {ver.Major}.{ver.Minor}.{ver.Build}";
+            }
+            catch { }
         }
 
         private void BuildColorBalls()
