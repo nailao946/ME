@@ -34,6 +34,20 @@ namespace ME.Views
 
             Result = existing ?? new TimeTag();
 
+            if (_isPreset)
+            {
+                var note = new TextBlock
+                {
+                    Text = "预设标签不可编辑名称",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(255, 149, 0)),
+                    Margin = new Thickness(0, -8, 0, 14)
+                };
+                var parent = (Panel)NameBox.Parent;
+                var idx = parent.Children.IndexOf(NameBox);
+                parent.Children.Insert(idx + 1, note);
+            }
+
             BuildColorPalette();
         }
 
@@ -47,7 +61,6 @@ namespace ME.Views
                     Height = 28,
                     Margin = new Thickness(3),
                     CornerRadius = new CornerRadius(14),
-                    Cursor = Cursors.Hand,
                     BorderThickness = new Thickness(2),
                     Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color))
                 };
@@ -57,8 +70,17 @@ namespace ME.Views
                     border.BorderBrush = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00));
                 }
 
-                var c = color;
-                border.MouseLeftButtonDown += (s, e) => SelectColor(c);
+                if (_isPreset)
+                {
+                    border.Cursor = Cursors.Arrow;
+                    border.Opacity = 0.6;
+                }
+                else
+                {
+                    border.Cursor = Cursors.Hand;
+                    var c = color;
+                    border.MouseLeftButtonDown += (s, e) => SelectColor(c);
+                }
                 ColorPalette.Items.Add(border);
             }
         }
@@ -108,10 +130,12 @@ namespace ME.Views
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            var name = NameBox.Text.Trim();
-            if (string.IsNullOrEmpty(name)) name = "未命名标签";
-
-            Result.Name = name;
+            if (!_isPreset)
+            {
+                var name = NameBox.Text.Trim();
+                if (string.IsNullOrEmpty(name)) name = "未命名标签";
+                Result.Name = name;
+            }
             Result.Color = _selectedColor;
             Result.Notes = NotesBox.Text.Trim();
             DialogResult = true;

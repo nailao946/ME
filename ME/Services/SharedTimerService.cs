@@ -17,6 +17,7 @@ namespace ME.Services
         public static event Action<string, string, string> TimerUpdated;
         public static event Action<bool> RunningStateChanged;
         public static event Action<bool> PausedStateChanged;
+        public static event Action<PomodoroPhase, int> PomodoroPhaseChanged;
 
         public static TimeTimerService Timer => _timer;
         public static int SelectedTagId => _selectedTagId;
@@ -33,6 +34,16 @@ namespace ME.Services
             _currentRecord = null;
 
             _timer.Tick += OnTick;
+
+            _timer.PomodoroPhaseCompleted += () =>
+            {
+                SoundService.PlayCompletionSound();
+            };
+
+            _timer.PomodoroPhaseChanged += (phase, pomodoroNumber) =>
+            {
+                PomodoroPhaseChanged?.Invoke(phase, pomodoroNumber);
+            };
         }
 
         private static void OnTick(TimeSpan time)

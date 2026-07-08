@@ -50,12 +50,14 @@ namespace ME.Views
             SharedTimerService.TimerUpdated += OnMiniTimerUpdated;
             SharedTimerService.RunningStateChanged += OnMiniRunningChanged;
             SharedTimerService.PausedStateChanged += OnMiniPausedChanged;
+            SharedTimerService.PomodoroPhaseChanged += OnPomodoroPhaseChanged;
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) =>
             {
                 SharedTimerService.TimerUpdated -= OnMiniTimerUpdated;
                 SharedTimerService.RunningStateChanged -= OnMiniRunningChanged;
                 SharedTimerService.PausedStateChanged -= OnMiniPausedChanged;
+                SharedTimerService.PomodoroPhaseChanged -= OnPomodoroPhaseChanged;
                 ThemeService.ThemeChanged -= OnThemeChanged;
             };
         }
@@ -142,6 +144,22 @@ namespace ME.Views
                     }
                 }
             }
+        }
+
+        private void OnPomodoroPhaseChanged(PomodoroPhase phase, int pomodoroNumber)
+        {
+            if (!this.IsVisible) return;
+            Dispatcher.BeginInvoke(() =>
+            {
+                var phaseText = phase switch
+                {
+                    PomodoroPhase.Work => $"🍅 第{pomodoroNumber}个番茄 · 工作中",
+                    PomodoroPhase.ShortBreak => "🍅 短休息中",
+                    PomodoroPhase.LongBreak => "🍅 长休息中",
+                    _ => "🍅 番茄钟"
+                };
+                MiniTimerStatus.Text = phaseText;
+            });
         }
 
         private void OnMiniPausedChanged(bool isPaused)

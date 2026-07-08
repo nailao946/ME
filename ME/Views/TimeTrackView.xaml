@@ -56,6 +56,14 @@
                                     Click="PomodoroSettings_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"
                                     Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
                                     ToolTip="番茄钟设置" Visibility="Collapsed" />
+                            <Button x:Name="PomodoroSkipBtn" DockPanel.Dock="Left" Content="⏭ 跳过休息"
+                                    Click="PomodoroSkip_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"
+                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
+                                    Visibility="Collapsed" />
+                            <Button x:Name="PomodoroEndBtn" DockPanel.Dock="Left" Content="✕ 结束番茄"
+                                    Click="PomodoroEnd_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"
+                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
+                                    Visibility="Collapsed" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                 <TextBlock Text="分钟:" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
                                            VerticalAlignment="Center" Margin="0,0,4,0" />

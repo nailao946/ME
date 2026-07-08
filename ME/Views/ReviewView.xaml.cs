@@ -21,7 +21,21 @@ namespace ME.Views
         private readonly TaskCompletionRepository _completionRepo;
         private readonly TimeRecordRepository _timeRecordRepo;
         private readonly TimeTagRepository _timeTagRepo;
-        private SortedDictionary<string, DailyData> _lastDailyData = new SortedDictionary<string, DailyData>();
+        private HashSet<int> _selectedTagIds = new HashSet<int>();
+        private ReviewPeriod _statsPeriod = ReviewPeriod.Week;
+        private bool _tagsInited = false;
+
+        private static readonly Color[] LineChartColors = new[]
+        {
+            Color.FromRgb(0, 122, 255),
+            Color.FromRgb(52, 199, 89),
+            Color.FromRgb(255, 149, 0),
+            Color.FromRgb(175, 82, 222),
+            Color.FromRgb(255, 45, 85),
+            Color.FromRgb(90, 200, 250),
+            Color.FromRgb(255, 204, 0),
+            Color.FromRgb(88, 86, 214),
+        };
         private bool _hasAnimated = false;
 
         public ReviewView()
@@ -41,7 +55,7 @@ namespace ME.Views
             };
             this.SizeChanged += (s, e) =>
             {
-                if (this.IsVisible) DrawLineChart(_lastDailyData);
+                if (this.IsVisible) LoadTimeStats();
             };
             EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
             LoadData();
@@ -240,12 +254,9 @@ namespace ME.Views
             // Time allocation
             BuildTimeAllocation(timeRecords);
 
-            // Chart
-            _lastDailyData = dailyData;
-            DrawLineChart(dailyData);
-
-            // Goal progress
-            BuildGoalProgress(goalRepo);
+            // Time stats
+            if (!_tagsInited) InitTagSelection();
+            LoadTimeStats();
         }
 
         private int DaysBetween(DateTime a, DateTime b) => Math.Max(0, (int)(b.Date - a.Date).TotalDays);
@@ -406,9 +417,11 @@ namespace ME.Views
             TimeAllocPanel.Children.Clear();
             var tags = _timeTagRepo.GetAllTags();
 
+            var idleTagId = tags.FirstOrDefault(t => t.IsDefault)?.Id;
             var tagTimes = new Dictionary<int, double>();
             foreach (var r in records)
             {
+                if (r.TagId == idleTagId) continue;
                 if (!tagTimes.ContainsKey(r.TagId)) tagTimes[r.TagId] = 0;
                 tagTimes[r.TagId] += r.Duration.TotalMinutes;
             }
@@ -513,61 +526,250 @@ namespace ME.Views
             }
         }
 
-        private void DrawLineChart(SortedDictionary<string, DailyData> dailyData)
+        private void StatsPeriodBtn_Click(object sender, RoutedEventArgs e)
         {
-            ChartCanvas.Children.Clear();
-            if (dailyData.Count == 0) return;
+            if (sender is Button btn && btn.Tag is string period)
+            {
+                switch (period)
+                {
+                    case "Today": _statsPeriod = ReviewPeriod.Today; break;
+                    case "Week": _statsPeriod = ReviewPeriod.Week; break;
+                    case "Month": _statsPeriod = ReviewPeriod.Month; break;
+                    case "All": _statsPeriod = ReviewPeriod.All; break;
+                }
+                UpdateStatsPeriodButtons();
+                LoadTimeStats();
+            }
+        }
 
-            var canvasWidth = ChartCanvas.ActualWidth > 0 ? ChartCanvas.ActualWidth : ChartGrid.ActualWidth;
+        private void UpdateStatsPeriodButtons()
+        {
+            StatsTodayBtn.Style = (Style)FindResource(_statsPeriod == ReviewPeriod.Today ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            StatsWeeklyBtn.Style = (Style)FindResource(_statsPeriod == ReviewPeriod.Week ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            StatsMonthlyBtn.Style = (Style)FindResource(_statsPeriod == ReviewPeriod.Month ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            StatsAllBtn.Style = (Style)FindResource(_statsPeriod == ReviewPeriod.All ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+        }
+
+        private void InitTagSelection()
+        {
+            _selectedTagIds.Clear();
+            var allTags = _timeTagRepo.GetAllTags();
+            _tagsInited = true;
+            foreach (var tag in allTags)
+            {
+                if (!tag.IsDefault)
+                    _selectedTagIds.Add(tag.Id);
+            }
+        }
+
+        private void TagChip_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Border border && border.Tag is int tagId)
+            {
+                if (_selectedTagIds.Contains(tagId))
+                    _selectedTagIds.Remove(tagId);
+                else
+                    _selectedTagIds.Add(tagId);
+                LoadTimeStats();
+            }
+        }
+
+        private void LoadTimeStats()
+        {
+            if (StatsChartCanvas == null) return;
+
+            var now = DateTime.Now;
+            DateTime startDate;
+            switch (_statsPeriod)
+            {
+                case ReviewPeriod.Today: startDate = now.Date; break;
+                case ReviewPeriod.Week: startDate = TaskService.GetWeekStartForDate(now); break;
+                case ReviewPeriod.Month: startDate = new DateTime(now.Year, now.Month, 1); break;
+                case ReviewPeriod.All: startDate = now.Date.AddYears(-1); break;
+                default: startDate = TaskService.GetWeekStartForDate(now); break;
+            }
+            var startStr = startDate.ToString("yyyy-MM-dd");
+            var endStr = now.ToString("yyyy-MM-dd");
+            var totalDays = Math.Max(1, (int)(now.Date - startDate.Date).TotalDays + 1);
+
+            var allTags = _timeTagRepo.GetAllTags();
+            var records = _timeRecordRepo.GetRecordsByDateRange(startStr, endStr);
+
+            var dateKeys = new List<(string display, string full)>();
+            for (var d = startDate; d <= now; d = d.AddDays(1))
+                dateKeys.Add((d.ToString("MM/dd"), d.ToString("yyyy-MM-dd")));
+
+            var tagData = new Dictionary<int, List<(string date, TimeSpan dur)>>();
+            foreach (var tag in allTags)
+            {
+                if (!_selectedTagIds.Contains(tag.Id)) continue;
+                var dailyList = new List<(string date, TimeSpan dur)>();
+                foreach (var (displayKey, fullKey) in dateKeys)
+                {
+                    var total = TimeSpan.Zero;
+                    foreach (var r in records)
+                    {
+                        if (r.TagId == tag.Id && r.Date == fullKey)
+                            total += r.Duration;
+                    }
+                    dailyList.Add((displayKey, total));
+                }
+                tagData[tag.Id] = dailyList;
+            }
+
+            BuildTagChips(allTags);
+            BuildTimeStatsChart(tagData, allTags);
+            BuildStatsSummary(tagData, allTags, totalDays);
+        }
+
+        private void BuildTagChips(List<TimeTag> allTags)
+        {
+            TagSelectorPanel.Children.Clear();
+            foreach (var tag in allTags)
+            {
+                if (tag.IsDefault) continue;
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
+                catch { tagColor = Color.FromRgb(128, 128, 128); }
+                var isSelected = _selectedTagIds.Contains(tag.Id);
+
+                var chip = new Border
+                {
+                    Tag = tag.Id,
+                    CornerRadius = new CornerRadius(12),
+                    Background = isSelected ? new SolidColorBrush(tagColor) : new SolidColorBrush(Color.FromArgb(30, tagColor.R, tagColor.G, tagColor.B)),
+                    BorderBrush = new SolidColorBrush(tagColor),
+                    BorderThickness = new Thickness(1.5),
+                    Padding = new Thickness(10, 4, 10, 4),
+                    Margin = new Thickness(0, 0, 6, 6),
+                    Cursor = System.Windows.Input.Cursors.Hand
+                };
+                var tb = new TextBlock
+                {
+                    Text = tag.Name,
+                    FontSize = 12,
+                    Foreground = isSelected ? Brushes.White : new SolidColorBrush(tagColor)
+                };
+                chip.Child = tb;
+                chip.MouseLeftButtonDown += TagChip_Click;
+                TagSelectorPanel.Children.Add(chip);
+            }
+        }
+
+        private void BuildTimeStatsChart(Dictionary<int, List<(string date, TimeSpan dur)>> tagData, List<TimeTag> allTags)
+        {
+            StatsChartCanvas.Children.Clear();
+            var canvasWidth = StatsChartCanvas.ActualWidth > 0 ? StatsChartCanvas.ActualWidth : StatsChartGrid.ActualWidth;
             if (canvasWidth < 10) canvasWidth = 600;
-            var canvasHeight = ChartCanvas.ActualHeight > 0 ? ChartCanvas.ActualHeight : 180;
+            var canvasHeight = StatsChartCanvas.ActualHeight > 0 ? StatsChartCanvas.ActualHeight : 200;
 
-            int maxVal = 1;
-            foreach (var kv in dailyData)
-                if (kv.Value.Completed > maxVal) maxVal = kv.Value.Completed;
+            if (tagData.Count == 0)
+            {
+                StatsChartCanvas.Children.Add(new TextBlock
+                {
+                    Text = "请选择标签查看时间统计",
+                    FontSize = 13,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                Canvas.SetLeft(StatsChartCanvas.Children[StatsChartCanvas.Children.Count - 1], canvasWidth / 2 - 80);
+                Canvas.SetTop(StatsChartCanvas.Children[StatsChartCanvas.Children.Count - 1], canvasHeight / 2 - 10);
+                return;
+            }
 
-            var padding = 40;
+            var firstEntry = tagData.First().Value;
+            if (firstEntry.Count == 0) return;
+
+            int maxMinutes = 1;
+            foreach (var kv in tagData)
+            {
+                foreach (var (_, dur) in kv.Value)
+                {
+                    var mins = (int)dur.TotalMinutes;
+                    if (mins > maxMinutes) maxMinutes = mins;
+                }
+            }
+            maxMinutes = ((maxMinutes + 9) / 10) * 10;
+            if (maxMinutes == 0) maxMinutes = 10;
+
+            var padding = 45;
             var chartWidth = canvasWidth - padding * 2;
             var chartHeight = canvasHeight - padding * 2;
 
-            var points = new List<Point>();
-            var entries = new List<KeyValuePair<string, DailyData>>(dailyData);
-            var step = entries.Count > 1 ? chartWidth / (entries.Count - 1) : chartWidth;
+            int colorIdx = 0;
+            var tagLines = new Dictionary<int, List<Point>>();
 
-            for (int i = 0; i < entries.Count; i++)
+            foreach (var kv in tagData)
             {
-                var x = padding + i * step;
-                var y = padding + chartHeight - (entries[i].Value.Completed / (double)maxVal * chartHeight);
-                points.Add(new Point(x, y));
+                var tag = allTags.FirstOrDefault(t => t.Id == kv.Key);
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
+                catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
 
-                var dateLabel = new TextBlock
-                {
-                    Text = entries[i].Key,
-                    FontSize = 9,
-                    Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush")
-                };
-                Canvas.SetLeft(dateLabel, x - 15);
-                Canvas.SetTop(dateLabel, canvasHeight - 18);
-                ChartCanvas.Children.Add(dateLabel);
+                var points = new List<Point>();
+                var step = kv.Value.Count > 1 ? chartWidth / (double)(kv.Value.Count - 1) : chartWidth / 2.0;
 
-                if (entries[i].Value.Completed > 0)
+                for (int i = 0; i < kv.Value.Count; i++)
                 {
-                    var valueLabel = new TextBlock
+                    var x = padding + i * step;
+                    var mins = (int)kv.Value[i].dur.TotalMinutes;
+                    var y = padding + chartHeight - (mins / (double)maxMinutes * chartHeight);
+                    points.Add(new Point(x, y));
+
+                    var dot = new Ellipse
                     {
-                        Text = entries[i].Value.Completed.ToString(),
-                        FontSize = 9,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = (SolidColorBrush)FindResource("PrimaryBrush")
+                        Width = 5,
+                        Height = 5,
+                        Fill = new SolidColorBrush(tagColor),
+                        Stroke = (Brush)FindResource("CardBrush"),
+                        StrokeThickness = 1,
+                        Tag = $"{tag?.Name}: {mins}m"
                     };
-                    Canvas.SetLeft(valueLabel, x - 5);
-                    Canvas.SetTop(valueLabel, y - 16);
-                    ChartCanvas.Children.Add(valueLabel);
+                    dot.ToolTip = $"{kv.Value[i].date}\n{tag?.Name}: {mins}分钟";
+                    Canvas.SetLeft(dot, x - 2.5);
+                    Canvas.SetTop(dot, y - 2.5);
+                    StatsChartCanvas.Children.Add(dot);
                 }
+
+                if (points.Count > 1)
+                {
+                    var lineFigure = new PathFigure { StartPoint = points[0] };
+                    for (int i = 1; i < points.Count; i++)
+                        lineFigure.Segments.Add(new LineSegment(points[i], true));
+                    var lineGeometry = new PathGeometry();
+                    lineGeometry.Figures.Add(lineFigure);
+                    StatsChartCanvas.Children.Add(new Path
+                    {
+                        Data = lineGeometry,
+                        Stroke = new SolidColorBrush(tagColor),
+                        StrokeThickness = 2,
+                        Fill = Brushes.Transparent,
+                        StrokeStartLineCap = PenLineCap.Round,
+                        StrokeEndLineCap = PenLineCap.Round,
+                        StrokeLineJoin = PenLineJoin.Round
+                    });
+                }
+
+                tagLines[kv.Key] = points;
+                colorIdx++;
             }
 
+            // Grid lines and Y-axis labels
             for (int i = 0; i <= 4; i++)
             {
                 var y = padding + i * chartHeight / 4;
+                var labelVal = (int)(maxMinutes * (1 - i / 4.0));
+                var label = new TextBlock
+                {
+                    Text = $"{labelVal}m",
+                    FontSize = 9,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush")
+                };
+                Canvas.SetLeft(label, 2);
+                Canvas.SetTop(label, y - 7);
+                StatsChartCanvas.Children.Add(label);
+
                 var line = new Line
                 {
                     X1 = padding, Y1 = y, X2 = canvasWidth - padding, Y2 = y,
@@ -575,87 +777,179 @@ namespace ME.Views
                     StrokeThickness = 0.5,
                     StrokeDashArray = new DoubleCollection { 4, 2 }
                 };
-                ChartCanvas.Children.Add(line);
+                StatsChartCanvas.Children.Add(line);
             }
 
-            if (points.Count > 1)
+            // X-axis labels
+            if (firstEntry.Count > 0)
             {
-                var areaFigure = new PathFigure { StartPoint = new Point(points[0].X, padding + chartHeight) };
-                foreach (var p in points) areaFigure.Segments.Add(new LineSegment(p, true));
-                areaFigure.Segments.Add(new LineSegment(new Point(points[points.Count - 1].X, padding + chartHeight), true));
-                areaFigure.IsClosed = true;
-                var areaGeometry = new PathGeometry();
-                areaGeometry.Figures.Add(areaFigure);
-                ChartCanvas.Children.Add(new Path
+                var step = firstEntry.Count > 1 ? chartWidth / (double)(firstEntry.Count - 1) : chartWidth / 2.0;
+                for (int i = 0; i < firstEntry.Count; i++)
                 {
-                    Data = areaGeometry,
-                    Fill = new SolidColorBrush(Color.FromArgb(30, 0, 122, 255)),
-                    Stroke = Brushes.Transparent
+                    var x = padding + i * step;
+                    var label = new TextBlock
+                    {
+                        Text = firstEntry[i].date,
+                        FontSize = 9,
+                        Foreground = (Brush)FindResource("SecondaryTextBrush")
+                    };
+                    Canvas.SetLeft(label, x - 15);
+                    Canvas.SetTop(label, canvasHeight - 18);
+                    StatsChartCanvas.Children.Add(label);
+                }
+            }
+
+            // Legend
+            colorIdx = 0;
+            var legendX = padding;
+            foreach (var kv in tagData)
+            {
+                var tag = allTags.FirstOrDefault(t => t.Id == kv.Key);
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
+                catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+
+                var legendItem = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 16, 0) };
+                legendItem.Children.Add(new Border
+                {
+                    Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
+                    Background = new SolidColorBrush(tagColor),
+                    Margin = new Thickness(0, 0, 4, 0),
+                    VerticalAlignment = VerticalAlignment.Center
                 });
-            }
-
-            if (points.Count > 1)
-            {
-                var lineFigure = new PathFigure { StartPoint = points[0] };
-                for (int i = 1; i < points.Count; i++) lineFigure.Segments.Add(new LineSegment(points[i], true));
-                var lineGeometry = new PathGeometry();
-                lineGeometry.Figures.Add(lineFigure);
-                ChartCanvas.Children.Add(new Path
+                legendItem.Children.Add(new TextBlock
                 {
-                    Data = lineGeometry,
-                    Stroke = (SolidColorBrush)FindResource("PrimaryBrush"),
-                    StrokeThickness = 2,
-                    Fill = Brushes.Transparent,
-                    StrokeStartLineCap = PenLineCap.Round,
-                    StrokeEndLineCap = PenLineCap.Round,
-                    StrokeLineJoin = PenLineJoin.Round
+                    Text = tag?.Name ?? "未标记",
+                    FontSize = 10,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
                 });
-            }
-
-            foreach (var p in points)
-            {
-                var dot = new Ellipse
-                {
-                    Width = 6, Height = 6,
-                    Fill = (SolidColorBrush)FindResource("PrimaryBrush"),
-                    Stroke = (Brush)FindResource("CardBrush"),
-                    StrokeThickness = 1.5
-                };
-                Canvas.SetLeft(dot, p.X - 3);
-                Canvas.SetTop(dot, p.Y - 3);
-                ChartCanvas.Children.Add(dot);
+                Canvas.SetLeft(legendItem, legendX);
+                Canvas.SetTop(legendItem, canvasHeight - 2);
+                StatsChartCanvas.Children.Add(legendItem);
+                legendX += 120;
+                colorIdx++;
             }
         }
 
-        private void BuildGoalProgress(GoalRepository goalRepo)
+        private void BuildStatsSummary(Dictionary<int, List<(string date, TimeSpan dur)>> tagData, List<TimeTag> allTags, int days)
         {
-            var allGoals = goalRepo.GetAllGoals();
-            var goalList = new List<GoalDisplay>();
-            var colors = new[]
+            StatsSummaryPanel.Children.Clear();
+
+            if (tagData.Count == 0)
             {
-                Color.FromRgb(0, 122, 255),
-                Color.FromRgb(52, 199, 89),
-                Color.FromRgb(255, 149, 0),
-                Color.FromRgb(175, 82, 222),
-                Color.FromRgb(255, 59, 48)
-            };
-            int colorIdx = 0;
-            foreach (var goal in allGoals)
-            {
-                if (!goal.IsDeleted && !goal.IsArchived)
+                StatsSummaryPanel.Children.Add(new TextBlock
                 {
-                    var color = colors[colorIdx % colors.Length];
-                    goalList.Add(new GoalDisplay
-                    {
-                        Name = goal.Name,
-                        Progress = goal.Progress,
-                        ProgressText = $"{goal.Progress:F0}%",
-                        ColorBrush = new SolidColorBrush(color)
-                    });
-                    colorIdx++;
-                }
+                    Text = "暂无数据",
+                    FontSize = 11,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 4, 0, 0)
+                });
+                return;
             }
-            GoalProgressList.ItemsSource = goalList;
+
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            header.Children.Add(new TextBlock
+            {
+                Text = "标签",
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("SecondaryTextBrush")
+            });
+            var totalHdr = new TextBlock
+            {
+                Text = "总计",
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                TextAlignment = TextAlignment.Right
+            };
+            Grid.SetColumn(totalHdr, 1);
+            header.Children.Add(totalHdr);
+            var avgHdr = new TextBlock
+            {
+                Text = "日均",
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                TextAlignment = TextAlignment.Right
+            };
+            Grid.SetColumn(avgHdr, 2);
+            header.Children.Add(avgHdr);
+            StatsSummaryPanel.Children.Add(header);
+            var sep = new Border
+            {
+                Height = 1,
+                Background = (Brush)FindResource("BorderBrush"),
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            StatsSummaryPanel.Children.Add(sep);
+
+            int colorIdx = 0;
+            foreach (var kv in tagData)
+            {
+                var tag = allTags.FirstOrDefault(t => t.Id == kv.Key);
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
+                catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+
+                var totalMin = kv.Value.Sum(d => (int)d.dur.TotalMinutes);
+                var avgMin = days > 0 ? totalMin / days : 0;
+
+                var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+
+                var dotRow = new StackPanel { Orientation = Orientation.Horizontal };
+                dotRow.Children.Add(new Border
+                {
+                    Width = 6, Height = 6, CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(tagColor),
+                    Margin = new Thickness(0, 0, 5, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                dotRow.Children.Add(new TextBlock
+                {
+                    Text = tag?.Name ?? "未标记",
+                    FontSize = 11,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                row.Children.Add(dotRow);
+
+                var totalStr = totalMin >= 60 ? $"{totalMin / 60}h{totalMin % 60:D2}m" : $"{totalMin}m";
+                var totalTb = new TextBlock
+                {
+                    Text = totalStr,
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(tagColor),
+                    TextAlignment = TextAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(totalTb, 1);
+                row.Children.Add(totalTb);
+
+                var avgStr = avgMin >= 60 ? $"{avgMin / 60}h{avgMin % 60:D2}m" : $"{avgMin}m";
+                var avgTb = new TextBlock
+                {
+                    Text = avgStr,
+                    FontSize = 11,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                    TextAlignment = TextAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(avgTb, 2);
+                row.Children.Add(avgTb);
+
+                StatsSummaryPanel.Children.Add(row);
+                colorIdx++;
+            }
         }
 
         private class DailyData
@@ -663,13 +957,5 @@ namespace ME.Views
             public string Date { get; set; }
             public int Completed { get; set; }
         }
-    }
-
-    public class GoalDisplay
-    {
-        public string Name { get; set; }
-        public double Progress { get; set; }
-        public string ProgressText { get; set; }
-        public Brush ColorBrush { get; set; }
     }
 }

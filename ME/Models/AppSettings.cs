@@ -21,6 +21,8 @@ namespace ME.Models
         public const string TrayBalloonEnabled = "TrayBalloonEnabled";
         public const string FloatingWindowEnabled = "FloatingWindowEnabled";
         public const string WeekStartDay = "WeekStartDay";
+        public const string StatsIncludedTags = "StatsIncludedTags";
+        public const string PomodoroAutoStart = "PomodoroAutoStart";
     }
 
     public enum AppTheme

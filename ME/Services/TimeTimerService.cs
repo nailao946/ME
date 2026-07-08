@@ -33,6 +33,7 @@ namespace ME.Services
         public event Action<TimeSpan> Tick;
         public event Action CountdownFinished;
         public event Action PomodoroPhaseCompleted;
+        public event Action<PomodoroPhase, int> PomodoroPhaseChanged;
 
         public TimeTimerMode Mode { get; private set; } = TimeTimerMode.CountUp;
         public TimeTimerState State { get; private set; } = TimeTimerState.Stopped;
@@ -52,6 +53,7 @@ namespace ME.Services
         {
             _timer = new Timer(1000);
             _timer.Elapsed += OnTimerElapsed;
+            PomodoroPhaseCompleted += InternalOnPomodoroPhaseCompleted;
         }
 
         public void SetMode(TimeTimerMode mode)
@@ -133,6 +135,7 @@ namespace ME.Services
             Current = _countdownTarget;
             State = TimeTimerState.Stopped;
             Tick?.Invoke(Current);
+            PomodoroPhaseChanged?.Invoke(CurrentPhase, CurrentPomodoro);
         }
 
         public void SetPhase(PomodoroPhase phase)
@@ -144,6 +147,7 @@ namespace ME.Services
             State = TimeTimerState.Stopped;
             _timer.Stop();
             Tick?.Invoke(Current);
+            PomodoroPhaseChanged?.Invoke(CurrentPhase, CurrentPomodoro);
         }
 
         private int GetCurrentPhaseMinutes()
@@ -217,6 +221,16 @@ namespace ME.Services
             Current = _countdownTarget;
             State = TimeTimerState.Stopped;
             Tick?.Invoke(Current);
+            PomodoroPhaseChanged?.Invoke(CurrentPhase, CurrentPomodoro);
+        }
+
+        private void InternalOnPomodoroPhaseCompleted()
+        {
+            AdvancePomodoroPhase();
+            if (ShouldAutoStart())
+            {
+                Start();
+            }
         }
 
         public bool ShouldAutoStart()

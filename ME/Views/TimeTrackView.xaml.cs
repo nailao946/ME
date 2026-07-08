@@ -52,6 +52,7 @@ namespace ME.Views
                 {
                     SharedTimerService.TimerUpdated += OnSharedTimerUpdated;
                     SharedTimerService.RunningStateChanged += OnSharedRunningStateChanged;
+                    SharedTimerService.PomodoroPhaseChanged += OnPomodoroPhaseChanged;
                     ThemeService.ThemeChanged += OnThemeChanged;
                     _eventsWired = true;
                 }
@@ -61,6 +62,7 @@ namespace ME.Views
             {
                 SharedTimerService.TimerUpdated -= OnSharedTimerUpdated;
                 SharedTimerService.RunningStateChanged -= OnSharedRunningStateChanged;
+                SharedTimerService.PomodoroPhaseChanged -= OnPomodoroPhaseChanged;
                 ThemeService.ThemeChanged -= OnThemeChanged;
                 _eventsWired = false;
                 _clockTimer?.Stop();
@@ -189,6 +191,8 @@ namespace ME.Views
                 PomodoroSettingsBtn.Visibility = Visibility.Visible;
                 PomodoroPhaseText.Visibility = Visibility.Visible;
                 PomodoroProgress.Visibility = Visibility.Visible;
+                PomodoroEndBtn.Visibility = Visibility.Visible;
+                PomodoroSkipBtn.Visibility = Visibility.Collapsed;
                 UpdatePomodoroPhaseText();
                 TimerText.Text = $"{_timer.FocusMinutes:D2}:00";
             }
@@ -200,6 +204,8 @@ namespace ME.Views
                 PomodoroSettingsBtn.Visibility = Visibility.Collapsed;
                 PomodoroPhaseText.Visibility = Visibility.Collapsed;
                 PomodoroProgress.Visibility = Visibility.Collapsed;
+                PomodoroSkipBtn.Visibility = Visibility.Collapsed;
+                PomodoroEndBtn.Visibility = Visibility.Collapsed;
                 TimerText.Text = "00:00:00";
             }
         }
@@ -229,6 +235,40 @@ namespace ME.Views
             var progress = total > 0 ? ((total - current) / total) * 100 : 0;
             PomodoroProgress.Value = Math.Max(0, Math.Min(100, progress));
             UpdatePomodoroPhaseText();
+        }
+
+        private void OnPomodoroPhaseChanged(PomodoroPhase phase, int pomodoroNumber)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                UpdatePomodoroPhaseText();
+                PomodoroProgress.Value = 0;
+                PomodoroSkipBtn.Visibility = phase != PomodoroPhase.Work ? Visibility.Visible : Visibility.Collapsed;
+            });
+        }
+
+        private void PomodoroSkip_Click(object sender, RoutedEventArgs e)
+        {
+            _timer.AdvancePomodoroPhase();
+            if (_timer.ShouldAutoStart())
+            {
+                _timer.Start();
+            }
+        }
+
+        private void PomodoroEnd_Click(object sender, RoutedEventArgs e)
+        {
+            _timer.IsPomodoroMode = false;
+            _timer.Stop();
+            _timer.SetMode(TimeTimerMode.CountUp);
+            _isPomodoroMode = false;
+            PomodoroToggleBtn.Content = "🍅 番茄钟";
+            PomodoroSettingsBtn.Visibility = Visibility.Collapsed;
+            PomodoroPhaseText.Visibility = Visibility.Collapsed;
+            PomodoroProgress.Visibility = Visibility.Collapsed;
+            PomodoroSkipBtn.Visibility = Visibility.Collapsed;
+            PomodoroEndBtn.Visibility = Visibility.Collapsed;
+            TimerText.Text = "00:00:00";
         }
 
         // ========== TAGS (TOGGLE: click selected = stop) ==========
@@ -479,6 +519,17 @@ namespace ME.Views
                     tagTimes[r.TagId] = TimeSpan.Zero;
                 tagTimes[r.TagId] += dur;
             }
+
+            var includedTagIds = TimeStatsHelper.GetIncludedTagIds();
+            var filteredTagTimes = new Dictionary<int, TimeSpan>();
+            foreach (var kvp in tagTimes)
+            {
+                var tag = _allTags.FirstOrDefault(t => t.Id == kvp.Key);
+                if (tag == null || tag.IsDefault) continue;
+                if (includedTagIds.Count > 0 && !includedTagIds.Contains(kvp.Key)) continue;
+                filteredTagTimes[kvp.Key] = kvp.Value;
+            }
+            tagTimes = filteredTagTimes;
 
             var totalTime = tagTimes.Values.Aggregate(TimeSpan.Zero, (a, b) => a + b);
             var totalText = new TextBlock
@@ -1031,7 +1082,17 @@ namespace ME.Views
                 if (!tagTimes.ContainsKey(r.TagId)) tagTimes[r.TagId] = TimeSpan.Zero;
                 tagTimes[r.TagId] += dur;
             }
-            return tagTimes;
+
+            var includedTagIds = TimeStatsHelper.GetIncludedTagIds();
+            var filtered = new Dictionary<int, TimeSpan>();
+            foreach (var kvp in tagTimes)
+            {
+                var tag = _allTags.FirstOrDefault(t => t.Id == kvp.Key);
+                if (tag == null || tag.IsDefault) continue;
+                if (includedTagIds.Count > 0 && !includedTagIds.Contains(kvp.Key)) continue;
+                filtered[kvp.Key] = kvp.Value;
+            }
+            return filtered;
         }
 
         private void DrawPieChart(Canvas canvas, Dictionary<int, TimeSpan> tagTimes)

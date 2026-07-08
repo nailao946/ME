@@ -133,55 +133,37 @@
                 </Border>
             </Grid>
 
-            <!-- Daily Trend Chart -->
+            <!-- Time Statistics -->
             <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12" Padding="16">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="每日打卡趋势" FontSize="14" FontWeight="Bold"
+                    <TextBlock DockPanel.Dock="Top" Text="时间统计" FontSize="14" FontWeight="Bold"
                                Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
+
+                    <!-- Period Buttons -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                        <Button x:Name="StatsTodayBtn" Content="今天" Click="StatsPeriodBtn_Click"
+                                Tag="Today" Style="{StaticResource PrimaryButtonStyle}" Padding="12,4" Margin="0,0,6,0" />
+                        <Button x:Name="StatsWeeklyBtn" Content="本周" Click="StatsPeriodBtn_Click"
+                                Tag="Week" Style="{StaticResource SecondaryButtonStyle}" Padding="12,4" Margin="0,0,6,0" />
+                        <Button x:Name="StatsMonthlyBtn" Content="本月" Click="StatsPeriodBtn_Click"
+                                Tag="Month" Style="{StaticResource SecondaryButtonStyle}" Padding="12,4" Margin="0,0,6,0" />
+                        <Button x:Name="StatsAllBtn" Content="全部" Click="StatsPeriodBtn_Click"
+                                Tag="All" Style="{StaticResource SecondaryButtonStyle}" Padding="12,4" />
+                    </StackPanel>
+
+                    <!-- Tag Selector -->
+                    <WrapPanel DockPanel.Dock="Top" x:Name="TagSelectorPanel" Margin="0,0,0,12" />
+
+                    <!-- Chart Area -->
                     <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="8"
-                            Padding="16,12" Height="220">
-                        <Grid x:Name="ChartGrid">
-                            <Canvas x:Name="ChartCanvas" />
+                            Padding="16,12" Height="240" Margin="0,0,0,12">
+                        <Grid x:Name="StatsChartGrid">
+                            <Canvas x:Name="StatsChartCanvas" />
                         </Grid>
                     </Border>
-                </DockPanel>
-            </Border>
 
-            <!-- Goal Progress -->
-            <Border Style="{StaticResource CardStyle}" Padding="16">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="目标进度" FontSize="14" FontWeight="Bold"
-                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
-                    <ItemsControl x:Name="GoalProgressList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border CornerRadius="8" Padding="12,10" Margin="0,0,0,8"
-                                        Background="{DynamicResource BackgroundBrush}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="60" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4"
-                                                Background="{Binding ColorBrush}"
-                                                VerticalAlignment="Center" Margin="0,0,10,0" />
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextBrush}" />
-                                            <ProgressBar Value="{Binding Progress}" Maximum="100" Height="6"
-                                                         Margin="0,4,0,0"
-                                                         Background="{DynamicResource BackgroundBrush}"
-                                                         Foreground="{Binding ColorBrush}" />
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="2" Text="{Binding ProgressText}" FontSize="12"
-                                                   Foreground="{Binding ColorBrush}" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center" TextAlignment="Right" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <!-- Summary Panel -->
+                    <StackPanel x:Name="StatsSummaryPanel" />
                 </DockPanel>
             </Border>
         </StackPanel>
