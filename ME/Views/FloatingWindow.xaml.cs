@@ -557,8 +557,44 @@ namespace ME.Views
         {
             TaskListPanel.Children.Clear();
 
-            var tasks = _taskRepo.GetTodayTasks();
-            if (tasks.Count == 0)
+            var allTasks = _taskRepo.GetAllTasks();
+            var mainTasks = new List<TaskItem>();
+            var subtasksMap = new Dictionary<int, List<TaskItem>>();
+            var today = DateTime.Today;
+
+            foreach (var task in allTasks)
+            {
+                if (task.IsDeleted || task.IsCompleted) continue;
+
+                if (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)
+                {
+                    if (!_taskService.ShouldShowRecurringTaskOnDate(task, today))
+                        continue;
+                }
+                else if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+                {
+                    if (!_taskService.ShouldShowRecurringTaskOnDate(task, today))
+                        continue;
+                }
+                else if (task.Type == TaskType.OneTime || task.Type == TaskType.Periodic)
+                {
+                    if (task.StartDate.HasValue && task.StartDate.Value.Date > today) continue;
+                    if (task.EndDate.HasValue && task.EndDate.Value.Date < today) continue;
+                }
+
+                if (task.ParentTaskId.HasValue)
+                {
+                    if (!subtasksMap.ContainsKey(task.ParentTaskId.Value))
+                        subtasksMap[task.ParentTaskId.Value] = new List<TaskItem>();
+                    subtasksMap[task.ParentTaskId.Value].Add(task);
+                }
+                else
+                {
+                    mainTasks.Add(task);
+                }
+            }
+
+            if (mainTasks.Count == 0)
             {
                 TaskListPanel.Children.Add(new TextBlock
                 {
@@ -571,11 +607,71 @@ namespace ME.Views
                 return;
             }
 
-            foreach (var task in tasks)
+            foreach (var task in mainTasks)
             {
                 var row = CreateTaskRow(task);
                 TaskListPanel.Children.Add(row);
+
+                // Add subtasks nested under parent
+                if (subtasksMap.ContainsKey(task.Id))
+                {
+                    foreach (var sub in subtasksMap[task.Id])
+                    {
+                        var subRow = CreateSubtaskRow(sub);
+                        TaskListPanel.Children.Add(subRow);
+                    }
+                }
             }
+        }
+
+        private Border CreateSubtaskRow(TaskItem task)
+        {
+            Brush textBrush, secondaryBrush;
+            try { textBrush = (Brush)FindResource("TextBrush"); secondaryBrush = (Brush)FindResource("SecondaryTextBrush"); }
+            catch { textBrush = Brushes.White; secondaryBrush = new SolidColorBrush(Color.FromRgb(174, 174, 178)); }
+
+            bool displayDone = _taskService.IsTaskCompletedForDisplay(task, DateTime.Today);
+
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Color.FromArgb(12, 128, 128, 128)),
+                Padding = new Thickness(10, 6, 10, 6),
+                Margin = new Thickness(24, 0, 0, 3),
+                Tag = task.Id
+            };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var cb = new CheckBox
+            {
+                IsChecked = displayDone,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
+                Tag = task.Id
+            };
+            cb.Checked += TaskCheckBox_Changed;
+            cb.Unchecked += TaskCheckBox_Changed;
+            Grid.SetColumn(cb, 0);
+            grid.Children.Add(cb);
+
+            var title = new TextBlock
+            {
+                Text = task.Title,
+                FontSize = 12,
+                Foreground = displayDone ? secondaryBrush : textBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            if (displayDone)
+                title.TextDecorations.Add(TextDecorations.Strikethrough[0]);
+            Grid.SetColumn(title, 1);
+            grid.Children.Add(title);
+
+            border.Child = grid;
+            return border;
         }
 
         private Border CreateTaskRow(TaskItem task)
@@ -814,7 +910,7 @@ namespace ME.Views
             try { textBrush = (Brush)FindResource("TextBrush"); }
             catch { textBrush = Brushes.White; }
 
-            var isRunning = SharedTimerService.IsRunning && SharedTimerService.SelectedTagId == tag.Id;
+            var isActive = (SharedTimerService.IsRunning || SharedTimerService.IsPaused) && SharedTimerService.SelectedTagId == tag.Id;
             Color tagColor;
             try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
             catch { tagColor = Color.FromRgb(128, 128, 128); }
@@ -822,10 +918,10 @@ namespace ME.Views
             var chip = new Border
             {
                 CornerRadius = new CornerRadius(12),
-                Background = isRunning
+                Background = isActive
                     ? new SolidColorBrush(tagColor)
                     : new SolidColorBrush(Color.FromArgb(30, tagColor.R, tagColor.G, tagColor.B)),
-                BorderBrush = isRunning
+                BorderBrush = isActive
                     ? new SolidColorBrush(tagColor)
                     : new SolidColorBrush(Color.FromArgb(60, tagColor.R, tagColor.G, tagColor.B)),
                 BorderThickness = new Thickness(1),
@@ -835,9 +931,9 @@ namespace ME.Views
                 Tag = tag.Id,
                 Child = new TextBlock
                 {
-                    Text = (isRunning ? "● " : "") + tag.Name,
+                    Text = (isActive ? "● " : "") + tag.Name,
                     FontSize = 11,
-                    Foreground = isRunning ? Brushes.White : textBrush,
+                    Foreground = isActive ? Brushes.White : textBrush,
                     VerticalAlignment = VerticalAlignment.Center
                 }
             };
