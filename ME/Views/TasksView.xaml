@@ -58,26 +58,21 @@
                 <StackPanel>
                     <!-- Row 1: Timer controls -->
                     <DockPanel Margin="0,0,0,4">
-                        <TextBlock Text="⏱ 计时" FontSize="12" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <Border x:Name="MiniRunningDot" Width="6" Height="6" CornerRadius="3"
+                        <Border x:Name="MiniDot" Width="6" Height="6" CornerRadius="3"
                                 Background="Gray" VerticalAlignment="Center" Margin="0,0,4,0" />
-                        <TextBlock x:Name="MiniRunningTag" Text="" FontSize="10"
+                        <TextBlock x:Name="MiniTag" Text="" FontSize="10"
                                    Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <TextBlock x:Name="MiniTimerText" Text="00:00:00" FontSize="18" FontWeight="Bold"
                                    Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock x:Name="MiniTimerStatus" Text="" FontSize="10"
+                        <TextBlock x:Name="MiniStatus" Text="" FontSize="10"
                                    Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Button x:Name="MiniTimerPauseBtn" Content="⏸" Click="MiniTimerPause_Click"
+                        <Button x:Name="MiniPauseBtn" Content="⏸" Click="MiniPause_Click"
                                 FontSize="10" Padding="6,3" Margin="0,0,4,0" Visibility="Collapsed"
                                 Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="MiniPomodoroBtn" DockPanel.Dock="Right" Content="🍅"
-                                Click="MiniPomodoro_Click" FontSize="10" Padding="6,3" Margin="0,0,4,0"
-                                Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="MiniTimerToggleBtn" DockPanel.Dock="Right" Content="开始"
-                                Click="MiniTimerToggle_Click" FontSize="10" Padding="10,3"
+                        <Button x:Name="MiniActionBtn" Content="开始"
+                                Click="MiniActionBtn_Click" FontSize="10" Padding="10,3"
                                 Style="{StaticResource PrimaryButtonStyle}" />
-                        <ComboBox x:Name="MiniTagComboBox" DockPanel.Dock="Right"
+                        <ComboBox x:Name="MiniTagBox" DockPanel.Dock="Right"
                                   Style="{StaticResource MacComboBoxStyle}"
                                   DisplayMemberPath="Name" SelectedValuePath="Id"
                                   FontSize="10" Height="24" Width="110" Margin="0,0,6,0"

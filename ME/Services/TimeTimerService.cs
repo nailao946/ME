@@ -16,13 +16,6 @@ namespace ME.Services
         Paused
     }
 
-    public enum PomodoroPhase
-    {
-        Work,
-        ShortBreak,
-        LongBreak
-    }
-
     public class TimeTimerService : IDisposable
     {
         private Timer _timer;
@@ -32,28 +25,16 @@ namespace ME.Services
 
         public event Action<TimeSpan> Tick;
         public event Action CountdownFinished;
-        public event Action PomodoroPhaseCompleted;
-        public event Action<PomodoroPhase, int> PomodoroPhaseChanged;
 
         public TimeTimerMode Mode { get; private set; } = TimeTimerMode.CountUp;
         public TimeTimerState State { get; private set; } = TimeTimerState.Stopped;
         public TimeSpan Current { get; private set; } = TimeSpan.Zero;
         public int FocusMinutes { get; set; } = 25;
 
-        public PomodoroPhase CurrentPhase { get; private set; } = PomodoroPhase.Work;
-        public int CurrentPomodoro { get; private set; } = 1;
-        public int ShortBreakMinutes { get; set; } = 5;
-        public int LongBreakMinutes { get; set; } = 15;
-        public int PomodorosBeforeLongBreak { get; set; } = 4;
-        public bool AutoStartBreaks { get; set; } = true;
-        public bool AutoStartPomodoros { get; set; } = true;
-        public bool IsPomodoroMode { get; set; } = false;
-
         public TimeTimerService()
         {
             _timer = new Timer(1000);
             _timer.Elapsed += OnTimerElapsed;
-            PomodoroPhaseCompleted += InternalOnPomodoroPhaseCompleted;
         }
 
         public void SetMode(TimeTimerMode mode)
@@ -115,50 +96,8 @@ namespace ME.Services
             _accumulated = TimeSpan.Zero;
             Current = TimeSpan.Zero;
             if (Mode == TimeTimerMode.CountDown)
-            {
-                if (IsPomodoroMode)
-                    _countdownTarget = TimeSpan.FromMinutes(GetCurrentPhaseMinutes());
-                else
-                    _countdownTarget = TimeSpan.FromMinutes(FocusMinutes);
-            }
+                _countdownTarget = TimeSpan.FromMinutes(FocusMinutes);
             Tick?.Invoke(Current);
-        }
-
-        public void StartPomodoro()
-        {
-            IsPomodoroMode = true;
-            CurrentPhase = PomodoroPhase.Work;
-            CurrentPomodoro = 1;
-            Mode = TimeTimerMode.CountDown;
-            _countdownTarget = TimeSpan.FromMinutes(FocusMinutes);
-            _accumulated = TimeSpan.Zero;
-            Current = _countdownTarget;
-            State = TimeTimerState.Stopped;
-            Tick?.Invoke(Current);
-            PomodoroPhaseChanged?.Invoke(CurrentPhase, CurrentPomodoro);
-        }
-
-        public void SetPhase(PomodoroPhase phase)
-        {
-            CurrentPhase = phase;
-            _accumulated = TimeSpan.Zero;
-            _countdownTarget = TimeSpan.FromMinutes(GetCurrentPhaseMinutes());
-            Current = _countdownTarget;
-            State = TimeTimerState.Stopped;
-            _timer.Stop();
-            Tick?.Invoke(Current);
-            PomodoroPhaseChanged?.Invoke(CurrentPhase, CurrentPomodoro);
-        }
-
-        private int GetCurrentPhaseMinutes()
-        {
-            return CurrentPhase switch
-            {
-                PomodoroPhase.Work => FocusMinutes,
-                PomodoroPhase.ShortBreak => ShortBreakMinutes,
-                PomodoroPhase.LongBreak => LongBreakMinutes,
-                _ => FocusMinutes
-            };
         }
 
         private void OnTimerElapsed(object sender, ElapsedEventArgs e)
@@ -181,64 +120,8 @@ namespace ME.Services
             {
                 _timer.Stop();
                 State = TimeTimerState.Stopped;
-
-                if (IsPomodoroMode)
-                {
-                    PomodoroPhaseCompleted?.Invoke();
-                }
-                else
-                {
-                    CountdownFinished?.Invoke();
-                }
+                CountdownFinished?.Invoke();
             }
-        }
-
-        public void AdvancePomodoroPhase()
-        {
-            if (CurrentPhase == PomodoroPhase.Work)
-            {
-                if (CurrentPomodoro >= PomodorosBeforeLongBreak)
-                {
-                    CurrentPhase = PomodoroPhase.LongBreak;
-                    CurrentPomodoro = 1;
-                }
-                else
-                {
-                    CurrentPhase = PomodoroPhase.ShortBreak;
-                }
-            }
-            else
-            {
-                if (CurrentPhase == PomodoroPhase.LongBreak)
-                    CurrentPomodoro = 1;
-                else
-                    CurrentPomodoro++;
-                CurrentPhase = PomodoroPhase.Work;
-            }
-
-            _accumulated = TimeSpan.Zero;
-            _countdownTarget = TimeSpan.FromMinutes(GetCurrentPhaseMinutes());
-            Current = _countdownTarget;
-            State = TimeTimerState.Stopped;
-            Tick?.Invoke(Current);
-            PomodoroPhaseChanged?.Invoke(CurrentPhase, CurrentPomodoro);
-        }
-
-        private void InternalOnPomodoroPhaseCompleted()
-        {
-            AdvancePomodoroPhase();
-            if (ShouldAutoStart())
-            {
-                Start();
-            }
-        }
-
-        public bool ShouldAutoStart()
-        {
-            if (CurrentPhase == PomodoroPhase.Work)
-                return AutoStartPomodoros;
-            else
-                return AutoStartBreaks;
         }
 
         public void Dispose()

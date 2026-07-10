@@ -4,6 +4,11 @@ using ME.Models;
 
 namespace ME.Services
 {
+    public static class SharedPomodoroService
+    {
+        public static PomodoroService Instance { get; } = new PomodoroService();
+    }
+
     public static class SharedTimerService
     {
         private static readonly TimeTimerService _timer;
@@ -17,7 +22,6 @@ namespace ME.Services
         public static event Action<string, string, string> TimerUpdated;
         public static event Action<bool> RunningStateChanged;
         public static event Action<bool> PausedStateChanged;
-        public static event Action<PomodoroPhase, int> PomodoroPhaseChanged;
 
         public static TimeTimerService Timer => _timer;
         public static int SelectedTagId => _selectedTagId;
@@ -34,23 +38,11 @@ namespace ME.Services
             _currentRecord = null;
 
             _timer.Tick += OnTick;
-
-            _timer.PomodoroPhaseCompleted += () =>
-            {
-                SoundService.PlayCompletionSound();
-            };
-
-            _timer.PomodoroPhaseChanged += (phase, pomodoroNumber) =>
-            {
-                PomodoroPhaseChanged?.Invoke(phase, pomodoroNumber);
-            };
         }
 
         private static void OnTick(TimeSpan time)
         {
-            var timeStr = _timer.Mode == TimeTimerMode.CountDown
-                ? $"{time.Minutes:D2}:{time.Seconds:D2}"
-                : $"{time.Hours:D2}:{time.Minutes:D2}:{time.Seconds:D2}";
+            var timeStr = $"{time.Hours:D2}:{time.Minutes:D2}:{time.Seconds:D2}";
             TimerUpdated?.Invoke(timeStr, _cachedTagName, _cachedTagColor);
         }
 
@@ -108,7 +100,6 @@ namespace ME.Services
                 PausedStateChanged?.Invoke(false);
             _timer.Stop();
             _timer.Reset();
-            _timer.IsPomodoroMode = false;
             RunningStateChanged?.Invoke(false);
         }
 

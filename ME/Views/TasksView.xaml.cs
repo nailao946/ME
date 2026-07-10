@@ -46,34 +46,95 @@ namespace ME.Views
             LoadMiniStats();
             LoadMiniTags();
 
-            // Subscribe to timer updates for mini timer display
+            var pomo = SharedPomodoroService.Instance;
+            pomo.TimerUpdated += (time, mode) =>
+            {
+                if (!this.IsVisible) return;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    MiniTimerText.Text = time;
+                    if (mode == UnifiedTimerMode.Pomodoro)
+                        MiniStatus.Text = "🍅";
+                });
+            };
+            pomo.StateChanged += (state) =>
+            {
+                if (!this.IsVisible) return;
+                Dispatcher.BeginInvoke(() => UpdateMiniActions());
+            };
+            pomo.PhaseChanged += (phase, total, cycle) =>
+            {
+                if (!this.IsVisible) return;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    var text = phase switch
+                    {
+                        PomodoroPhase.Work => $"🍅 工作中",
+                        PomodoroPhase.ShortBreak => "🍅 短休",
+                        PomodoroPhase.LongBreak => "🍅 长休",
+                        _ => ""
+                    };
+                    if (SharedPomodoroService.Instance.State == PomodoroState.Paused)
+                        text = "暂停中";
+                    MiniStatus.Text = text;
+                    MiniTag.Text = $"第{cycle}个";
+                });
+            };
             SharedTimerService.TimerUpdated += OnMiniTimerUpdated;
             SharedTimerService.RunningStateChanged += OnMiniRunningChanged;
             SharedTimerService.PausedStateChanged += OnMiniPausedChanged;
-            SharedTimerService.PomodoroPhaseChanged += OnPomodoroPhaseChanged;
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) =>
             {
                 SharedTimerService.TimerUpdated -= OnMiniTimerUpdated;
                 SharedTimerService.RunningStateChanged -= OnMiniRunningChanged;
                 SharedTimerService.PausedStateChanged -= OnMiniPausedChanged;
-                SharedTimerService.PomodoroPhaseChanged -= OnPomodoroPhaseChanged;
                 ThemeService.ThemeChanged -= OnThemeChanged;
             };
+        }
+
+        private void UpdateMiniActions()
+        {
+            var pomo = SharedPomodoroService.Instance;
+            bool active = pomo.State != PomodoroState.Idle;
+
+            if (!active && !SharedTimerService.IsRunning)
+            {
+                MiniActionBtn.Content = "开始";
+                MiniActionBtn.Style = (Style)FindResource("PrimaryButtonStyle");
+                MiniPauseBtn.Visibility = Visibility.Collapsed;
+                MiniStatus.Text = "";
+            }
+            else if (active)
+            {
+                MiniActionBtn.Content = pomo.State == PomodoroState.Paused ? "继续" : "暂停";
+                MiniActionBtn.Style = pomo.State == PomodoroState.Running
+                    ? (Style)FindResource("SecondaryButtonStyle")
+                    : (Style)FindResource("PrimaryButtonStyle");
+                MiniPauseBtn.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                MiniActionBtn.Content = "停止";
+                MiniActionBtn.Style = (Style)FindResource("DangerButtonStyle");
+                MiniPauseBtn.Visibility = Visibility.Visible;
+            }
         }
 
         private void OnMiniTimerUpdated(string timeStr, string tagName, string tagColor)
         {
             if (!this.IsVisible) return;
+            if (SharedPomodoroService.Instance.Mode == UnifiedTimerMode.Pomodoro) return;
             Dispatcher.BeginInvoke(() =>
             {
                 MiniTimerText.Text = timeStr;
-                MiniRunningTag.Text = tagName;
-                MiniTimerStatus.Text = "计时中";
+                MiniTag.Text = tagName;
+                if (SharedTimerService.IsRunning)
+                    MiniStatus.Text = "计时中";
                 try
                 {
                     var color = (Color)ColorConverter.ConvertFromString(tagColor);
-                    MiniRunningDot.Background = new SolidColorBrush(color);
+                    MiniDot.Background = new SolidColorBrush(color);
                     MiniTimerText.Foreground = new SolidColorBrush(color);
                 }
                 catch { }
@@ -87,38 +148,35 @@ namespace ME.Views
             {
                 if (!isRunning)
                 {
-                    MiniTimerText.Text = "00:00:00";
-                    MiniRunningTag.Text = "";
-                    MiniRunningDot.Background = Brushes.Gray;
-                    MiniTimerText.Foreground = (SolidColorBrush)FindResource("TextBrush");
-                    MiniTimerToggleBtn.Content = "开始";
-                    MiniTimerToggleBtn.Style = (Style)FindResource("PrimaryButtonStyle");
-                    MiniTimerStatus.Text = "";
-                    MiniTimerPauseBtn.Visibility = Visibility.Collapsed;
-                    MiniPomodoroBtn.Style = (Style)FindResource("SecondaryButtonStyle");
+                    if (SharedPomodoroService.Instance.State == PomodoroState.Idle)
+                    {
+                        MiniTimerText.Text = "00:00:00";
+                        MiniTag.Text = "";
+                        MiniDot.Background = Brushes.Gray;
+                        MiniTimerText.Foreground = (SolidColorBrush)FindResource("TextBrush");
+                        MiniStatus.Text = "";
+                        MiniPauseBtn.Visibility = Visibility.Collapsed;
+                    }
+                    UpdateMiniActions();
                     LoadMiniStats();
                     LoadMiniTaskSummary();
                 }
                 else
                 {
-                    MiniTimerToggleBtn.Content = "停止";
-                    MiniTimerToggleBtn.Style = (Style)FindResource("DangerButtonStyle");
-                    MiniTimerStatus.Text = SharedTimerService.Timer.IsPomodoroMode ? "🍅 工作中" : "计时中";
-                    MiniTimerPauseBtn.Visibility = Visibility.Visible;
-                    MiniTimerPauseBtn.Content = "⏸";
-                    if (SharedTimerService.Timer.IsPomodoroMode)
-                        MiniPomodoroBtn.Style = (Style)FindResource("PrimaryButtonStyle");
-                    if (MiniTagComboBox.Items.Count > 0)
+                    MiniPauseBtn.Visibility = Visibility.Visible;
+                    MiniPauseBtn.Content = "⏸";
+                    if (MiniTagBox.Items.Count > 0)
                     {
-                        foreach (var item in MiniTagComboBox.Items)
+                        foreach (var item in MiniTagBox.Items)
                         {
                             if (item is TimeTag tag && tag.Id == SharedTimerService.SelectedTagId)
                             {
-                                MiniTagComboBox.SelectedItem = item;
+                                MiniTagBox.SelectedItem = item;
                                 break;
                             }
                         }
                     }
+                    UpdateMiniActions();
                 }
             });
         }
@@ -127,39 +185,21 @@ namespace ME.Views
         {
             var tagRepo = new ME.Data.TimeTagRepository();
             var tags = tagRepo.GetAllTags();
-            MiniTagComboBox.ItemsSource = tags;
-            if (tags.Count > 0 && MiniTagComboBox.SelectedIndex < 0)
-                MiniTagComboBox.SelectedIndex = 0;
+            MiniTagBox.ItemsSource = tags;
+            if (tags.Count > 0 && MiniTagBox.SelectedIndex < 0)
+                MiniTagBox.SelectedIndex = 0;
 
             if (SharedTimerService.IsRunning)
             {
-                MiniTimerToggleBtn.Content = "停止";
-                MiniTimerToggleBtn.Style = (Style)FindResource("DangerButtonStyle");
                 foreach (var item in tags)
                 {
                     if (item.Id == SharedTimerService.SelectedTagId)
                     {
-                        MiniTagComboBox.SelectedItem = item;
+                        MiniTagBox.SelectedItem = item;
                         break;
                     }
                 }
             }
-        }
-
-        private void OnPomodoroPhaseChanged(PomodoroPhase phase, int pomodoroNumber)
-        {
-            if (!this.IsVisible) return;
-            Dispatcher.BeginInvoke(() =>
-            {
-                var phaseText = phase switch
-                {
-                    PomodoroPhase.Work => $"🍅 第{pomodoroNumber}个番茄 · 工作中",
-                    PomodoroPhase.ShortBreak => "🍅 短休息中",
-                    PomodoroPhase.LongBreak => "🍅 长休息中",
-                    _ => "🍅 番茄钟"
-                };
-                MiniTimerStatus.Text = phaseText;
-            });
         }
 
         private void OnMiniPausedChanged(bool isPaused)
@@ -169,66 +209,52 @@ namespace ME.Views
             {
                 if (isPaused)
                 {
-                    MiniTimerStatus.Text = "暂停中";
-                    MiniTimerPauseBtn.Content = "▶";
-                    MiniTimerPauseBtn.ToolTip = "继续";
+                    MiniStatus.Text = "暂停中";
+                    MiniPauseBtn.Content = "▶";
+                    MiniPauseBtn.ToolTip = "继续";
                 }
                 else if (SharedTimerService.IsRunning)
                 {
-                    MiniTimerStatus.Text = "计时中";
-                    MiniTimerPauseBtn.Content = "⏸";
-                    MiniTimerPauseBtn.ToolTip = "暂停";
+                    MiniStatus.Text = "计时中";
+                    MiniPauseBtn.Content = "⏸";
+                    MiniPauseBtn.ToolTip = "暂停";
                 }
             });
         }
 
-        private void MiniTimerToggle_Click(object sender, RoutedEventArgs e)
+        private void MiniActionBtn_Click(object sender, RoutedEventArgs e)
         {
+            var pomo = SharedPomodoroService.Instance;
+            if (pomo.Mode == UnifiedTimerMode.Pomodoro)
+            {
+                switch (pomo.State)
+                {
+                    case PomodoroState.Idle: pomo.Start(); break;
+                    case PomodoroState.Running: pomo.Pause(); break;
+                    case PomodoroState.Paused: pomo.Resume(); break;
+                }
+                return;
+            }
+
             if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
             {
                 SharedTimerService.StopCurrent();
             }
             else
             {
-                if (MiniTagComboBox.SelectedItem is TimeTag tag)
+                if (MiniTagBox.SelectedItem is TimeTag tag)
                 {
                     SharedTimerService.StartWithTag(tag.Id);
                 }
             }
         }
 
-        private void MiniTimerPause_Click(object sender, RoutedEventArgs e)
+        private void MiniPause_Click(object sender, RoutedEventArgs e)
         {
             if (SharedTimerService.IsPaused)
                 SharedTimerService.ResumeCurrent();
             else
                 SharedTimerService.PauseCurrent();
-        }
-
-        private void MiniPomodoro_Click(object sender, RoutedEventArgs e)
-        {
-            if (SharedTimerService.Timer.IsPomodoroMode)
-            {
-                SharedTimerService.Timer.IsPomodoroMode = false;
-                SharedTimerService.Timer.SetMode(TimeTimerMode.CountUp);
-                MiniPomodoroBtn.Style = (Style)FindResource("SecondaryButtonStyle");
-                if (SharedTimerService.IsRunning)
-                    SharedTimerService.StopCurrent();
-            }
-            else
-            {
-                if (MiniTagComboBox.SelectedItem is TimeTag tag)
-                {
-                    SharedTimerService.StopCurrent();
-                    SharedTimerService.Timer.StartPomodoro();
-                    SharedTimerService.Timer.IsPomodoroMode = true;
-                    MiniPomodoroBtn.Style = (Style)FindResource("PrimaryButtonStyle");
-                    var timeStr = $"{SharedTimerService.Timer.Current.Minutes:D2}:{SharedTimerService.Timer.Current.Seconds:D2}";
-                    MiniTimerText.Text = timeStr;
-                    MiniTimerStatus.Text = "🍅 工作中";
-                    MiniTimerPauseBtn.Visibility = Visibility.Visible;
-                }
-            }
         }
 
         private void LoadMiniStats()

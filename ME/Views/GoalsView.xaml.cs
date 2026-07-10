@@ -55,7 +55,6 @@ namespace ME.Views
                     SharedTimerService.TimerUpdated += OnSharedTimerUpdated;
                     SharedTimerService.RunningStateChanged += OnSharedRunningStateChanged;
                     SharedTimerService.PausedStateChanged += OnSharedPausedChanged;
-                    SharedTimerService.PomodoroPhaseChanged += OnPomodoroPhaseChanged;
 
                     LoadTimerTags();
                     SharedTimerService.CheckRunningState();
@@ -70,7 +69,6 @@ namespace ME.Views
                     SharedTimerService.TimerUpdated -= OnSharedTimerUpdated;
                     SharedTimerService.RunningStateChanged -= OnSharedRunningStateChanged;
                     SharedTimerService.PausedStateChanged -= OnSharedPausedChanged;
-                    SharedTimerService.PomodoroPhaseChanged -= OnPomodoroPhaseChanged;
                     _eventsWired = false;
                 }
             };
@@ -146,11 +144,6 @@ namespace ME.Views
             });
         }
 
-        private void OnPomodoroPhaseChanged(PomodoroPhase phase, int pomodoroNumber)
-        {
-            // ignore; button style updated via RunningStateChanged
-        }
-
         private void GoalTimerToggle_Click(object sender, RoutedEventArgs e)
         {
             if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
@@ -175,28 +168,6 @@ namespace ME.Views
                 SharedTimerService.ResumeCurrent();
             else
                 SharedTimerService.PauseCurrent();
-        }
-
-        private void GoalPomodoro_Click(object sender, RoutedEventArgs e)
-        {
-            if (SharedTimerService.Timer.IsPomodoroMode)
-            {
-                SharedTimerService.Timer.IsPomodoroMode = false;
-                SharedTimerService.Timer.SetMode(TimeTimerMode.CountUp);
-                if (SharedTimerService.IsRunning)
-                    SharedTimerService.StopCurrent();
-            }
-            else
-            {
-                if (GoalTagComboBox.SelectedItem is TimeTag tag)
-                {
-                    SharedTimerService.StopCurrent();
-                    SharedTimerService.Timer.StartPomodoro();
-                    SharedTimerService.Timer.IsPomodoroMode = true;
-                    var timeStr = $"{SharedTimerService.Timer.Current.Minutes:D2}:{SharedTimerService.Timer.Current.Seconds:D2}";
-                    GoalTimerText.Text = timeStr;
-                }
-            }
         }
 
         private void OnTagChanged(string message)

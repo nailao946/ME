@@ -13,69 +13,122 @@
         <!-- Left Panel -->
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
-                <!-- Unified Timer Card: Clock + Timer + Pomodoro -->
-                <Border Style="{StaticResource CardStyle}" Padding="16,12">
+                <!-- Unified Timer Card -->
+                <Border Style="{StaticResource CardStyle}" Padding="20,16">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <!-- Top: Real-time clock + running tag -->
+                        <!-- Row 0: Clock + mode + status -->
                         <Grid Grid.Row="0">
-                            <TextBlock x:Name="ClockText" Text="00:00:00" FontSize="14"
+                            <TextBlock x:Name="ClockText" Text="00:00:00" FontSize="13"
                                        FontWeight="Medium" HorizontalAlignment="Left"
                                        Foreground="{DynamicResource SecondaryTextBrush}" />
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <TextBlock x:Name="RunningTagText" Text="" FontSize="12"
-                                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,8,0" />
-                                <Border x:Name="RunningTagDot" Width="8" Height="8" CornerRadius="4"
-                                        Background="Transparent" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- Mode switch tabs -->
+                            <Border Height="26" Margin="80,0,0,0" HorizontalAlignment="Left" Width="158">
+                                <Grid>
+                                    <Border x:Name="ModeTabBg" CornerRadius="6" Background="{DynamicResource CardBrush}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="SimpleModeTab" Grid.Column="0" Content="计时"
+                                                Click="SimpleModeTab_Click" FontSize="11" Padding="0"
+                                                Style="{StaticResource SecondaryButtonStyle}" />
+                                        <Button x:Name="PomoModeTab" Grid.Column="1" Content="番茄钟"
+                                                Click="PomoModeTab_Click" FontSize="11" Padding="0"
+                                                Style="{StaticResource SecondaryButtonStyle}" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                            <TextBlock x:Name="TimerStatusText" Text="" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center" />
                         </Grid>
 
-                        <!-- Center: Timer display -->
-                        <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,4,0,4">
-                            <TextBlock x:Name="TimerText" Text="00:00:00" FontSize="42"
-                                       FontWeight="Bold" TextAlignment="Center"
-                                       Foreground="{DynamicResource SecondaryTextBrush}" />
-                            <TextBlock x:Name="PomodoroPhaseText" Text="" FontSize="12"
-                                       TextAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}"
-                                       Margin="0,2,0,0" Visibility="Collapsed" />
-                            <ProgressBar x:Name="PomodoroProgress" Height="4" Margin="0,4,0,0"
-                                         Visibility="Collapsed" />
+                        <!-- Row 1: Large timer -->
+                        <TextBlock Grid.Row="1" x:Name="TimerDisplay" Text="00:00:00"
+                                   FontSize="56" FontWeight="Bold" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextBrush}"
+                                   Margin="0,6,0,2" />
+
+                        <!-- Row 2: Phase tabs (pomodoro only) + tag selector (simple only) -->
+                        <Border Grid.Row="2" Height="32" Margin="40,0,40,6" Visibility="Collapsed">
+                            <Grid>
+                                <Border CornerRadius="6" Background="{DynamicResource CardBrush}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition />
+                                        <ColumnDefinition />
+                                        <ColumnDefinition />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="WorkTab" Grid.Column="0" Content="工作 25:00"
+                                            Click="WorkTab_Click" FontSize="11" Padding="0"
+                                            Style="{StaticResource SecondaryButtonStyle}" />
+                                    <Button x:Name="ShortBreakTab" Grid.Column="1" Content="短休 5:00"
+                                            Click="ShortBreakTab_Click" FontSize="11" Padding="0"
+                                            Style="{StaticResource SecondaryButtonStyle}" />
+                                    <Button x:Name="LongBreakTab" Grid.Column="2" Content="长休 15:00"
+                                            Click="LongBreakTab_Click" FontSize="11" Padding="0"
+                                            Style="{StaticResource SecondaryButtonStyle}" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <!-- Tag selector (simple mode) -->
+                        <Border Grid.Row="2" x:Name="TagSelectorRow" Height="28" Margin="40,0,40,6"
+                                Visibility="Visible">
+                            <DockPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Border x:Name="RunningTagDot" Width="8" Height="8" CornerRadius="4"
+                                        Background="Gray" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock x:Name="RunningTagText" Text="未计时" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <ComboBox x:Name="TagComboBox"
+                                          Style="{StaticResource MacComboBoxStyle}"
+                                          DisplayMemberPath="Name" SelectedValuePath="Id"
+                                          FontSize="11" Height="24" Width="120"
+                                          VerticalAlignment="Center" SelectionChanged="TagComboBox_SelectionChanged" />
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Row 3: Action buttons -->
+                        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                            <Button x:Name="ActionBtn" Content="开始"
+                                    Click="ActionBtn_Click" FontSize="14" Padding="28,8"
+                                    Style="{StaticResource PrimaryButtonStyle}" MinWidth="100" />
+                            <Button x:Name="StopBtn" Content="■ 停止"
+                                    Click="StopBtn_Click" FontSize="11" Padding="10,6" Margin="6,0,0,0"
+                                    Style="{StaticResource DangerButtonStyle}" Visibility="Collapsed" />
+                            <Button x:Name="SkipBtn" Content="⏭ 跳过"
+                                    Click="SkipBtn_Click" FontSize="11" Padding="10,6" Margin="6,0,0,0"
+                                    Style="{StaticResource SecondaryButtonStyle}" Visibility="Collapsed" />
+                            <Button x:Name="Add1Btn" Content="+1m"
+                                    Click="Add1Btn_Click" FontSize="11" Padding="8,6" Margin="6,0,0,0"
+                                    Style="{StaticResource SecondaryButtonStyle}" Visibility="Collapsed" />
+                            <Button x:Name="Add5Btn" Content="+5m"
+                                    Click="Add5Btn_Click" FontSize="11" Padding="8,6" Margin="6,0,0,0"
+                                    Style="{StaticResource SecondaryButtonStyle}" Visibility="Collapsed" />
+                            <Button x:Name="SettingsBtn" Content="⚙"
+                                    Click="SettingsBtn_Click" FontSize="14" Padding="8,6" Margin="6,0,0,0"
+                                    Style="{StaticResource SecondaryButtonStyle}" ToolTip="番茄钟设置"
+                                    Visibility="Collapsed" />
                         </StackPanel>
 
-                        <!-- Bottom: Timer controls + Pomodoro + minutes input -->
-                        <DockPanel Grid.Row="2">
-                            <Button x:Name="TimerPauseBtn" DockPanel.Dock="Left" Content="⏸"
-                                    Click="TimerPause_Click" FontSize="11" Padding="6,4"
-                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
-                                    Visibility="Collapsed" ToolTip="暂停" />
-                            <Button x:Name="PomodoroToggleBtn" DockPanel.Dock="Left" Content="🍅 番茄钟"
-                                    Click="PomodoroToggle_Click" FontSize="11" Padding="10,4" Margin="4,0,0,0"
-                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center" />
-                            <Button x:Name="PomodoroSettingsBtn" DockPanel.Dock="Left" Content="⚙"
-                                    Click="PomodoroSettings_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"
-                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
-                                    ToolTip="番茄钟设置" Visibility="Collapsed" />
-                            <Button x:Name="PomodoroSkipBtn" DockPanel.Dock="Left" Content="⏭ 跳过休息"
-                                    Click="PomodoroSkip_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"
-                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
-                                    Visibility="Collapsed" />
-                            <Button x:Name="PomodoroEndBtn" DockPanel.Dock="Left" Content="✕ 结束番茄"
-                                    Click="PomodoroEnd_Click" FontSize="11" Padding="6,4" Margin="6,0,0,0"
-                                    Style="{StaticResource SecondaryButtonStyle}" VerticalAlignment="Center"
-                                    Visibility="Collapsed" />
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <TextBlock Text="分钟:" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
-                                           VerticalAlignment="Center" Margin="0,0,4,0" />
-                                <TextBox x:Name="MinutesInput" Text="25" Width="40" FontSize="12"
-                                         HorizontalContentAlignment="Center" VerticalAlignment="Center"
-                                         Style="{StaticResource InputTextBoxStyle}" Padding="4,2" />
-                            </StackPanel>
-                        </DockPanel>
+                        <!-- Row 4: Progress bar (pomodoro only) -->
+                        <ProgressBar Grid.Row="4" x:Name="ProgressBar" Height="4"
+                                     Maximum="100" Value="0" Visibility="Collapsed" />
+
+                        <!-- Row 5: Stats text -->
+                        <TextBlock Grid.Row="5" x:Name="StatsText" Text="" FontSize="11"
+                                   TextAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Margin="0,4,0,0" Visibility="Collapsed" />
                     </Grid>
                 </Border>
 

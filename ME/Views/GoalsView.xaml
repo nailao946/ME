@@ -44,9 +44,6 @@
                 <Button x:Name="GoalTimerPauseBtn" Content="⏸" Click="GoalTimerPause_Click"
                         FontSize="10" Padding="6,3" Margin="0,0,4,0" Visibility="Collapsed"
                         Style="{StaticResource SecondaryButtonStyle}" />
-                <Button x:Name="GoalPomodoroBtn" DockPanel.Dock="Right" Content="🍅"
-                        Click="GoalPomodoro_Click" FontSize="10" Padding="6,3" Margin="0,0,4,0"
-                        Style="{StaticResource SecondaryButtonStyle}" />
                 <Button x:Name="GoalTimerToggleBtn" DockPanel.Dock="Right" Content="开始"
                         Click="GoalTimerToggle_Click" FontSize="10" Padding="10,3"
                         Style="{StaticResource PrimaryButtonStyle}" />

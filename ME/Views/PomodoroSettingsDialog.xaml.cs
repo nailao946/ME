@@ -10,14 +10,19 @@ namespace ME.Views
         public int ShortBreakMinutes { get; private set; }
         public int LongBreakMinutes { get; private set; }
         public int PomodorosBeforeLongBreak { get; private set; }
+        public bool AutoStartBreaks { get; private set; }
+        public bool AutoStartPomodoros { get; private set; }
 
-        public PomodoroSettingsDialog(int work, int shortBreak, int longBreak, int beforeLong)
+        public PomodoroSettingsDialog(int work, int shortBreak, int longBreak, int beforeLong,
+            bool autoBreak = true, bool autoWork = false)
         {
             InitializeComponent();
             WorkMinutesBox.Text = work.ToString();
             ShortBreakBox.Text = shortBreak.ToString();
             LongBreakBox.Text = longBreak.ToString();
             BeforeLongBox.Text = beforeLong.ToString();
+            AutoBreakCheck.IsChecked = autoBreak;
+            AutoWorkCheck.IsChecked = autoWork;
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -52,6 +57,8 @@ namespace ME.Views
             ShortBreakMinutes = sb;
             LongBreakMinutes = lb;
             PomodorosBeforeLongBreak = bl;
+            AutoStartBreaks = AutoBreakCheck.IsChecked == true;
+            AutoStartPomodoros = AutoWorkCheck.IsChecked == true;
             DialogResult = true;
         }
     }
