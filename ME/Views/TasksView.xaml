@@ -56,7 +56,7 @@
             <!-- Timer + Stats (right, compact horizontal, no ring) -->
             <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12,6,12,6">
                 <StackPanel>
-                    <!-- Row 1: Timer controls -->
+                    <!-- Row 1: Timer controls (no start btn, tag bar instead) -->
                     <DockPanel Margin="0,0,0,4">
                         <Border x:Name="MiniDot" Width="6" Height="6" CornerRadius="3"
                                 Background="Gray" VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -69,15 +69,16 @@
                         <Button x:Name="MiniPauseBtn" Content="⏸" Click="MiniPause_Click"
                                 FontSize="10" Padding="6,3" Margin="0,0,4,0" Visibility="Collapsed"
                                 Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button x:Name="MiniActionBtn" Content="开始"
-                                Click="MiniActionBtn_Click" FontSize="10" Padding="10,3"
-                                Style="{StaticResource PrimaryButtonStyle}" />
-                        <ComboBox x:Name="MiniTagBox" DockPanel.Dock="Right"
-                                  Style="{StaticResource MacComboBoxStyle}"
-                                  DisplayMemberPath="Name" SelectedValuePath="Id"
-                                  FontSize="10" Height="24" Width="110" Margin="0,0,6,0"
-                                  VerticalAlignment="Center" />
+                        <Button x:Name="MiniStopBtn" Content="■" Click="MiniStopBtn_Click"
+                                FontSize="10" Padding="6,3" Margin="0,0,4,0" Visibility="Collapsed"
+                                Style="{StaticResource DangerButtonStyle}" />
+                        <!-- Tag scroll bar replaces combo -->
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                                      Height="24" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,4,0">
+                            <WrapPanel x:Name="MiniTagBar" VerticalAlignment="Center" />
+                        </ScrollViewer>
                     </DockPanel>
+
 
                     <!-- Row 2: Stats (single horizontal line) -->
                     <DockPanel>

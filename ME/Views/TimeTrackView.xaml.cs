@@ -80,7 +80,7 @@ namespace ME.Views
 
         private void TimeTrackView_Loaded(object sender, RoutedEventArgs e)
         {
-            LoadTagsCombo();
+            LoadTagBar();
             LoadTags();
             LoadRecords();
             GenerateCalendar();
@@ -136,6 +136,7 @@ namespace ME.Views
         {
             var s = _pomo.State;
             bool isPomo = _pomo.Mode == UnifiedTimerMode.Pomodoro;
+            bool active = s != PomodoroState.Idle;
 
             SimpleModeTab.Style = (Style)FindResource(isPomo ? "SecondaryButtonStyle" : "PrimaryButtonStyle");
             PomoModeTab.Style = (Style)FindResource(isPomo ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
@@ -160,42 +161,31 @@ namespace ME.Views
                 ShortBreakTab.Style = (Style)FindResource(p == PomodoroPhase.ShortBreak ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
                 LongBreakTab.Style = (Style)FindResource(p == PomodoroPhase.LongBreak ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             }
-            else
-            {
-                UpdateTagDisplay();
-            }
 
             if (s == PomodoroState.Idle)
                 TimerDisplay.Text = _pomo.FormatTime();
 
-            if (s == PomodoroState.Paused)
-                TimerStatusText.Text = "已暂停";
-            else if (s == PomodoroState.Running)
-                TimerStatusText.Text = isPomo ? "计时中" : "";
-            else
-                TimerStatusText.Text = "";
-
-            switch (s)
+            TimerStatusText.Text = s switch
             {
-                case PomodoroState.Idle:
-                    ActionBtn.Content = "开始";
-                    ActionBtn.Style = (Style)FindResource("PrimaryButtonStyle");
-                    break;
-                case PomodoroState.Running:
-                    ActionBtn.Content = "暂停";
-                    ActionBtn.Style = (Style)FindResource("SecondaryButtonStyle");
-                    break;
-                case PomodoroState.Paused:
-                    ActionBtn.Content = "继续";
-                    ActionBtn.Style = (Style)FindResource("PrimaryButtonStyle");
-                    break;
-            }
+                PomodoroState.Paused => "已暂停",
+                PomodoroState.Running when isPomo => "计时中",
+                _ => ""
+            };
 
-            bool active = s != PomodoroState.Idle;
+            PauseBtn.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
             StopBtn.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
             SkipBtn.Visibility = (isPomo && active) ? Visibility.Visible : Visibility.Collapsed;
             Add1Btn.Visibility = (isPomo && s == PomodoroState.Running) ? Visibility.Visible : Visibility.Collapsed;
             Add5Btn.Visibility = (isPomo && s == PomodoroState.Running) ? Visibility.Visible : Visibility.Collapsed;
+
+            PauseBtn.Content = s switch
+            {
+                PomodoroState.Paused => "▶ 继续",
+                _ => "⏸ 暂停"
+            };
+            PauseBtn.Style = (Style)FindResource(s == PomodoroState.Paused ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+
+            if (!isPomo) LoadTagBar();
 
             UpdateStatsText();
         }
@@ -242,13 +232,6 @@ namespace ME.Views
             }
         }
 
-        private void UpdateTagDisplay()
-        {
-            RunningTagDot.Background = new SolidColorBrush(
-                (Color)ColorConverter.ConvertFromString(_pomo.SelectedTagColor));
-            RunningTagText.Text = _pomo.SelectedTagName;
-        }
-
         // ========== MODE SWITCH ==========
         private void SimpleModeTab_Click(object sender, RoutedEventArgs e)
         {
@@ -284,28 +267,11 @@ namespace ME.Views
             TimerDisplay.Text = _pomo.FormatTime();
         }
 
-        // ========== ACTION BUTTONS ==========
-        private void ActionBtn_Click(object sender, RoutedEventArgs e)
+        // ========== CONTROL BUTTONS (no start button) ==========
+        private void PauseBtn_Click(object sender, RoutedEventArgs e)
         {
             switch (_pomo.State)
             {
-                case PomodoroState.Idle:
-                    if (_pomo.Mode == UnifiedTimerMode.Simple)
-                    {
-                        if (_selectedTagId <= 0)
-                        {
-                            if (TagComboBox.SelectedItem is TimeTag selTag)
-                                _selectedTagId = selTag.Id;
-                            if (_selectedTagId <= 0) return;
-                        }
-                        SharedTimerService.StartWithTag(_selectedTagId);
-                        _pomo.SelectedTagId = _selectedTagId;
-                        var activeTag = _tagRepo.GetTagById(_selectedTagId);
-                        _pomo.SelectedTagName = activeTag?.Name ?? "未计时";
-                        _pomo.SelectedTagColor = activeTag?.Color ?? "#808080";
-                    }
-                    _pomo.Start();
-                    break;
                 case PomodoroState.Running:
                     if (_pomo.Mode == UnifiedTimerMode.Simple)
                         SharedTimerService.PauseCurrent();
@@ -335,6 +301,7 @@ namespace ME.Views
                 DrawGanttChart();
             }
             _pomo.Stop();
+            LoadTagBar();
         }
 
         private void SkipBtn_Click(object sender, RoutedEventArgs e)
@@ -373,7 +340,7 @@ namespace ME.Views
             }
         }
 
-        // ========== PHASE TABS ==========
+        // ========== PHASE TABS (click starts pomodoro if idle) ==========
         private void WorkTab_Click(object sender, RoutedEventArgs e)
         {
             if (_pomo.State != PomodoroState.Idle)
@@ -381,8 +348,12 @@ namespace ME.Views
                 bool confirmed = ConfirmDialog.Show(Window.GetWindow(this),
                     "切换阶段", "切换会放弃当前进度，确认？", "确认", "取消");
                 if (!confirmed) return;
+                _pomo.Stop();
             }
             _pomo.SetPhase(PomodoroPhase.Work);
+            _pomo.Current = TimeSpan.FromMinutes(_pomo.WorkMinutes);
+            TimerDisplay.Text = _pomo.FormatTime();
+            _pomo.Start();
         }
 
         private void ShortBreakTab_Click(object sender, RoutedEventArgs e)
@@ -392,8 +363,12 @@ namespace ME.Views
                 bool confirmed = ConfirmDialog.Show(Window.GetWindow(this),
                     "切换阶段", "切换会放弃当前进度，确认？", "确认", "取消");
                 if (!confirmed) return;
+                _pomo.Stop();
             }
             _pomo.SetPhase(PomodoroPhase.ShortBreak);
+            _pomo.Current = TimeSpan.FromMinutes(_pomo.ShortBreakMinutes);
+            TimerDisplay.Text = _pomo.FormatTime();
+            _pomo.Start();
         }
 
         private void LongBreakTab_Click(object sender, RoutedEventArgs e)
@@ -403,28 +378,89 @@ namespace ME.Views
                 bool confirmed = ConfirmDialog.Show(Window.GetWindow(this),
                     "切换阶段", "切换会放弃当前进度，确认？", "确认", "取消");
                 if (!confirmed) return;
+                _pomo.Stop();
             }
             _pomo.SetPhase(PomodoroPhase.LongBreak);
+            _pomo.Current = TimeSpan.FromMinutes(_pomo.LongBreakMinutes);
+            TimerDisplay.Text = _pomo.FormatTime();
+            _pomo.Start();
         }
 
-        // ========== TAG SELECTOR ==========
-        private void LoadTagsCombo()
+        // ========== TAG BAR (click to start/stop) ==========
+        private void LoadTagBar()
         {
+            TagBarPanel.Children.Clear();
             var tags = _tagRepo.GetAllTags();
-            TagComboBox.ItemsSource = tags;
-            if (tags.Count > 0 && TagComboBox.SelectedIndex < 0)
-                TagComboBox.SelectedIndex = 0;
-        }
 
-        private void TagComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (TagComboBox.SelectedItem is TimeTag tag)
+            foreach (var tag in tags)
             {
-                _selectedTagId = tag.Id;
-                _pomo.SelectedTagId = tag.Id;
-                _pomo.SelectedTagName = tag.Name;
-                _pomo.SelectedTagColor = tag.Color;
-                UpdateTagDisplay();
+                bool isRunning = _pomo.State != PomodoroState.Idle && _pomo.SelectedTagId == tag.Id
+                    && _pomo.Mode == UnifiedTimerMode.Simple;
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
+                catch { tagColor = Color.FromRgb(128, 128, 128); }
+
+                var chip = new Border
+                {
+                    CornerRadius = new CornerRadius(12),
+                    Background = isRunning
+                        ? new SolidColorBrush(tagColor)
+                        : new SolidColorBrush(Color.FromArgb(25, tagColor.R, tagColor.G, tagColor.B)),
+                    BorderBrush = new SolidColorBrush(tagColor),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(10, 4, 10, 4),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    Cursor = Cursors.Hand,
+                    Tag = tag
+                };
+
+                var text = new TextBlock
+                {
+                    Text = (isRunning ? "● " : "") + tag.Name,
+                    FontSize = 11,
+                    Foreground = isRunning ? Brushes.White : (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                chip.Child = text;
+
+                var captured = tag;
+                chip.MouseLeftButtonDown += (s, e) =>
+                {
+                    if (_pomo.State != PomodoroState.Idle && _selectedTagId == captured.Id
+                        && _pomo.Mode == UnifiedTimerMode.Simple)
+                    {
+                        SharedTimerService.StopCurrent();
+                        _pomo.Stop();
+                        _selectedTagId = 0;
+                        LoadStats();
+                        DrawGanttChart();
+                    }
+                    else
+                    {
+                        if (SharedTimerService.IsRunning)
+                        {
+                            SharedTimerService.StopCurrent();
+                            InsertIdleRecords();
+                        }
+                        if (_pomo.State != PomodoroState.Idle)
+                            _pomo.Stop();
+
+                        _selectedTagId = captured.Id;
+                        _pomo.SelectedTagId = captured.Id;
+                        _pomo.SelectedTagName = captured.Name;
+                        _pomo.SelectedTagColor = captured.Color;
+                        _pomo.Mode = UnifiedTimerMode.Simple;
+                        SharedTimerService.StartWithTag(captured.Id);
+                        _pomo.Start();
+                    }
+                    LoadTagBar();
+                    LoadTags();
+                    LoadRecords();
+                    LoadStats();
+                    DrawGanttChart();
+                };
+
+                TagBarPanel.Children.Add(chip);
             }
         }
 
@@ -432,6 +468,7 @@ namespace ME.Views
         {
             Dispatcher.BeginInvoke(() =>
             {
+                LoadTagBar();
                 LoadTags();
                 LoadRecords();
                 LoadStats();
@@ -450,7 +487,8 @@ namespace ME.Views
             int idx = 0;
             foreach (var tag in _allTags)
             {
-                bool isSelected = tag.Id == _selectedTagId && SharedTimerService.IsRunning;
+                bool isSelected = tag.Id == _selectedTagId && _pomo.State != PomodoroState.Idle
+                    && _pomo.Mode == UnifiedTimerMode.Simple;
 
                 var border = new Border
                 {
@@ -510,19 +548,28 @@ namespace ME.Views
                 if (SharedTimerService.IsRunning && _selectedTagId == tag.Id)
                 {
                     SharedTimerService.StopCurrent();
+                    _pomo.Stop();
                     _selectedTagId = 0;
                     InsertIdleRecords();
                 }
                 else
                 {
+                    if (_pomo.State != PomodoroState.Idle)
+                        _pomo.Stop();
                     if (SharedTimerService.IsRunning)
                     {
                         SharedTimerService.StopCurrent();
                         InsertIdleRecords();
                     }
                     _selectedTagId = tag.Id;
+                    _pomo.SelectedTagId = tag.Id;
+                    _pomo.SelectedTagName = tag.Name;
+                    _pomo.SelectedTagColor = tag.Color;
+                    _pomo.Mode = UnifiedTimerMode.Simple;
                     SharedTimerService.StartWithTag(tag.Id);
+                    _pomo.Start();
                 }
+                LoadTagBar();
                 LoadTags();
                 LoadRecords();
                 LoadStats();
@@ -715,7 +762,9 @@ namespace ME.Views
                 var panel = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Margin = new Thickness(0, 0, 10, 4)
+                    Margin = new Thickness(0, 0, 10, 4),
+                    Cursor = Cursors.Hand,
+                    Tag = tag
                 };
                 panel.Children.Add(new Border
                 {
@@ -731,6 +780,15 @@ namespace ME.Views
                     Foreground = (Brush)FindResource("SecondaryTextBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 });
+                panel.MouseLeftButtonDown += (s, e) =>
+                {
+                    if (s is StackPanel sp && sp.Tag is TimeTag clickedTag)
+                    {
+                        ShowPieDetail(clickedTag, kvp.Value,
+                            totalTime.TotalSeconds > 0 ? kvp.Value.TotalSeconds / totalTime.TotalSeconds * 100 : 0,
+                            clickedTag.Color);
+                    }
+                };
                 TodayStatsPanel.Children.Add(panel);
             }
 

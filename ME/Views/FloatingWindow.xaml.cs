@@ -71,6 +71,10 @@ namespace ME.Views
             SharedTimerService.PausedStateChanged += OnPausedStateChanged;
             ThemeService.ThemeChanged += OnThemeChanged;
 
+            var pomo = SharedPomodoroService.Instance;
+            pomo.TimerUpdated += OnTimerUpdated;
+            pomo.StateChanged += OnPomoStateChanged;
+
             // Restore position
             var left = _settingsRepo.GetValue("FloatingWindowLeft", "");
             var top = _settingsRepo.GetValue("FloatingWindowTop", "");
@@ -101,6 +105,9 @@ namespace ME.Views
             SharedTimerService.RunningStateChanged -= OnRunningStateChanged;
             SharedTimerService.PausedStateChanged -= OnPausedStateChanged;
             ThemeService.ThemeChanged -= OnThemeChanged;
+            var pomo = SharedPomodoroService.Instance;
+            pomo.TimerUpdated -= OnTimerUpdated;
+            pomo.StateChanged -= OnPomoStateChanged;
             SavePosition();
         }
 
@@ -383,23 +390,35 @@ namespace ME.Views
             menu.Resources[typeof(MenuItem)] = menuItemStyle;
 
             var tags = _tagRepo.GetAllTags();
+            var pomo = SharedPomodoroService.Instance;
             var runningTagId = (SharedTimerService.IsRunning || SharedTimerService.IsPaused) ? SharedTimerService.SelectedTagId : -1;
+            var pomoActive = pomo.State != PomodoroState.Idle;
 
             // ── Stop current (main menu, not submenu) ──
-            if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
+            if (SharedTimerService.IsRunning || SharedTimerService.IsPaused || pomoActive)
             {
-                var currentTag = _tagRepo.GetTagById(runningTagId);
+                var stopText = pomoActive ? "停止 (番茄钟)" :
+                    (SharedTimerService.IsRunning || SharedTimerService.IsPaused) ? $"■ 停止" : "";
                 var stopItem = new MenuItem
                 {
-                    Header = $"■ 停止 [{currentTag?.Name ?? "未知"}]",
+                    Header = stopText,
                     Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF3B30"))
                 };
-                stopItem.Click += (s, ev) => SharedTimerService.StopCurrent();
+                stopItem.Click += (s, ev) =>
+                {
+                    if (pomoActive)
+                    {
+                        if (pomo.Mode == UnifiedTimerMode.Simple) SharedTimerService.StopCurrent();
+                        pomo.Stop();
+                    }
+                    if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
+                        SharedTimerService.StopCurrent();
+                };
                 menu.Items.Add(stopItem);
             }
 
             // ── 计时器 submenu (tags only) ──
-            var timerMenu = new MenuItem { Header = "计时器" };
+            var timerMenu = new MenuItem { Header = "正计时" };
             timerMenu.Resources[typeof(MenuItem)] = subMenuItemStyle;
 
             foreach (var tag in tags)
@@ -408,7 +427,9 @@ namespace ME.Views
                 try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
                 catch { tagColor = Color.FromRgb(128, 128, 128); }
 
-                var isRunning = (SharedTimerService.IsRunning || SharedTimerService.IsPaused) && runningTagId == tag.Id;
+                var isRunning = pomo.Mode == UnifiedTimerMode.Simple
+                    && pomo.State != PomodoroState.Idle
+                    && pomo.SelectedTagId == tag.Id;
                 var item = new MenuItem
                 {
                     Header = (isRunning ? "● " : "") + tag.Name,
@@ -419,18 +440,68 @@ namespace ME.Views
                         Margin = new Thickness(0, 0, 6, 0)
                     }
                 };
-                var capturedTagId = tag.Id;
+                var captured = tag;
                 item.Click += (s, ev) =>
                 {
-                    if (SharedTimerService.IsRunning && SharedTimerService.SelectedTagId == capturedTagId)
+                    if (isRunning)
+                    {
                         SharedTimerService.StopCurrent();
+                        pomo.Stop();
+                    }
                     else
-                        SharedTimerService.StartWithTag(capturedTagId);
+                    {
+                        if (pomo.State != PomodoroState.Idle) pomo.Stop();
+                        if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
+                        pomo.Mode = UnifiedTimerMode.Simple;
+                        pomo.SelectedTagId = captured.Id;
+                        pomo.SelectedTagName = captured.Name;
+                        pomo.SelectedTagColor = captured.Color;
+                        SharedTimerService.StartWithTag(captured.Id);
+                        pomo.Start();
+                    }
                 };
                 timerMenu.Items.Add(item);
             }
 
             menu.Items.Add(timerMenu);
+
+            // Separator
+            menu.Items.Add(new Separator
+            {
+                Background = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
+                Margin = new Thickness(4, 2, 4, 2)
+            });
+
+            // ── Timer Mode switch ──
+            var modeItem = new MenuItem
+            {
+                Header = pomo.Mode == UnifiedTimerMode.Pomodoro ? "切换为正计时" : "切换为番茄模式"
+            };
+            modeItem.Click += (s, ev) =>
+            {
+                if (pomo.State != PomodoroState.Idle)
+                {
+                    SharedTimerService.StopCurrent();
+                    pomo.Stop();
+                }
+                pomo.Mode = pomo.Mode == UnifiedTimerMode.Pomodoro
+                    ? UnifiedTimerMode.Simple
+                    : UnifiedTimerMode.Pomodoro;
+                if (pomo.Mode == UnifiedTimerMode.Simple)
+                {
+                    pomo.Current = TimeSpan.Zero;
+                    TimerText.Text = "00:00:00";
+                    ExpTimerText.Text = "00:00:00";
+                }
+                else
+                {
+                    pomo.Phase = PomodoroPhase.Work;
+                    pomo.Current = TimeSpan.FromMinutes(pomo.WorkMinutes);
+                    TimerText.Text = pomo.FormatTime();
+                    ExpTimerText.Text = pomo.FormatTime();
+                }
+            };
+            menu.Items.Add(modeItem);
 
             // Show main window
             var showItem = new MenuItem { Header = "显示主窗口" };
@@ -451,13 +522,35 @@ namespace ME.Views
             hideItem.Click += (s, ev) => Hide();
             menu.Items.Add(hideItem);
 
+            // Separator
+            menu.Items.Add(new Separator
+            {
+                Background = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
+                Margin = new Thickness(4, 2, 4, 2)
+            });
+
+            // Exit
+            var exitItem = new MenuItem
+            {
+                Header = "退出",
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 59, 48))
+            };
+            exitItem.Click += (s, ev) =>
+            {
+                var main = Application.Current.MainWindow;
+                if (main != null) main.Close();
+            };
+            menu.Items.Add(exitItem);
+
             menu.IsOpen = true;
         }
 
         // ─── Timer events ──────────────────────────────────────────────
 
+        // SharedTimerService callback
         private void OnTimerUpdated(string timeStr, string tagName, string tagColor)
         {
+            if (SharedPomodoroService.Instance.Mode == UnifiedTimerMode.Pomodoro) return;
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 TimerText.Text = timeStr;
@@ -468,6 +561,29 @@ namespace ME.Views
             }));
         }
 
+        // PomodoroService callback
+        private void OnTimerUpdated(string time, UnifiedTimerMode mode)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                TagNameText.Text = mode == UnifiedTimerMode.Pomodoro ? "🍅" : "";
+                ExpTagNameText.Text = TagNameText.Text;
+                TimerText.Text = time;
+                ExpTimerText.Text = time;
+            }));
+        }
+
+        private void OnPomoStateChanged(PomodoroState state)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                bool active = state != PomodoroState.Idle;
+                ExpPauseBtn.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+                ExpPauseBtn.Content = state == PomodoroState.Paused ? "▶" : "⏸";
+                ExpPauseBtn.ToolTip = state == PomodoroState.Paused ? "继续" : "暂停";
+            }));
+        }
+
         private void OnRunningStateChanged(bool isRunning)
         {
             Dispatcher.BeginInvoke(new Action(() => UpdateDisplay(isRunning)));
@@ -475,10 +591,27 @@ namespace ME.Views
 
         private void ExpPauseBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (SharedTimerService.IsPaused)
+            var pomo = SharedPomodoroService.Instance;
+            if (pomo.State == PomodoroState.Running)
+            {
+                if (pomo.Mode == UnifiedTimerMode.Simple)
+                    SharedTimerService.PauseCurrent();
+                pomo.Pause();
+            }
+            else if (pomo.State == PomodoroState.Paused)
+            {
+                if (pomo.Mode == UnifiedTimerMode.Simple)
+                    SharedTimerService.ResumeCurrent();
+                pomo.Resume();
+            }
+            else if (SharedTimerService.IsPaused)
+            {
                 SharedTimerService.ResumeCurrent();
-            else
+            }
+            else if (SharedTimerService.IsRunning)
+            {
                 SharedTimerService.PauseCurrent();
+            }
         }
 
         private void OnPausedStateChanged(bool isPaused)
@@ -926,7 +1059,10 @@ namespace ME.Views
             try { textBrush = (Brush)FindResource("TextBrush"); }
             catch { textBrush = Brushes.White; }
 
-            var isActive = (SharedTimerService.IsRunning || SharedTimerService.IsPaused) && SharedTimerService.SelectedTagId == tag.Id;
+            var pomo = SharedPomodoroService.Instance;
+            var isActive = pomo.Mode == UnifiedTimerMode.Simple
+                && pomo.State != PomodoroState.Idle
+                && pomo.SelectedTagId == tag.Id;
             Color tagColor;
             try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
             catch { tagColor = Color.FromRgb(128, 128, 128); }
@@ -956,13 +1092,21 @@ namespace ME.Views
 
             chip.MouseLeftButtonDown += (s, e) =>
             {
-                if (SharedTimerService.IsRunning && SharedTimerService.SelectedTagId == tag.Id)
+                if (isActive)
                 {
                     SharedTimerService.StopCurrent();
+                    pomo.Stop();
                 }
                 else
                 {
+                    if (pomo.State != PomodoroState.Idle) pomo.Stop();
+                    if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
+                    pomo.Mode = UnifiedTimerMode.Simple;
+                    pomo.SelectedTagId = tag.Id;
+                    pomo.SelectedTagName = tag.Name;
+                    pomo.SelectedTagColor = tag.Color;
                     SharedTimerService.StartWithTag(tag.Id);
+                    pomo.Start();
                 }
                 LoadTagChips();
                 e.Handled = true;

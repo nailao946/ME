@@ -81,30 +81,21 @@
                                 </Grid>
                             </Grid>
                         </Border>
-                        <!-- Tag selector (simple mode) -->
-                        <Border Grid.Row="2" x:Name="TagSelectorRow" Height="28" Margin="40,0,40,6"
+                        <!-- Tag selector (simple mode) - horizontal tag bar -->
+                        <Border Grid.Row="2" x:Name="TagSelectorRow" Height="34" Margin="40,0,40,6"
                                 Visibility="Visible">
-                            <DockPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <Border x:Name="RunningTagDot" Width="8" Height="8" CornerRadius="4"
-                                        Background="Gray" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock x:Name="RunningTagText" Text="未计时" FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <ComboBox x:Name="TagComboBox"
-                                          Style="{StaticResource MacComboBoxStyle}"
-                                          DisplayMemberPath="Name" SelectedValuePath="Id"
-                                          FontSize="11" Height="24" Width="120"
-                                          VerticalAlignment="Center" SelectionChanged="TagComboBox_SelectionChanged" />
-                            </DockPanel>
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <WrapPanel x:Name="TagBarPanel" />
+                            </ScrollViewer>
                         </Border>
 
-                        <!-- Row 3: Action buttons -->
+                        <!-- Row 3: Control buttons (no start button) -->
                         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
-                            <Button x:Name="ActionBtn" Content="开始"
-                                    Click="ActionBtn_Click" FontSize="14" Padding="28,8"
-                                    Style="{StaticResource PrimaryButtonStyle}" MinWidth="100" />
+                            <Button x:Name="PauseBtn" Content="⏸ 暂停"
+                                    Click="PauseBtn_Click" FontSize="13" Padding="20,8"
+                                    Style="{StaticResource SecondaryButtonStyle}" Visibility="Collapsed" />
                             <Button x:Name="StopBtn" Content="■ 停止"
-                                    Click="StopBtn_Click" FontSize="11" Padding="10,6" Margin="6,0,0,0"
+                                    Click="StopBtn_Click" FontSize="13" Padding="20,8" Margin="6,0,0,0"
                                     Style="{StaticResource DangerButtonStyle}" Visibility="Collapsed" />
                             <Button x:Name="SkipBtn" Content="⏭ 跳过"
                                     Click="SkipBtn_Click" FontSize="11" Padding="10,6" Margin="6,0,0,0"

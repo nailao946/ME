@@ -44,7 +44,7 @@ namespace ME.Views
             BuildTagFilter();
             LoadData();
             LoadMiniStats();
-            LoadMiniTags();
+            LoadMiniTagBar();
 
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated += (time, mode) =>
@@ -97,27 +97,20 @@ namespace ME.Views
         {
             var pomo = SharedPomodoroService.Instance;
             bool active = pomo.State != PomodoroState.Idle;
+            bool simpleRunning = SharedTimerService.IsRunning;
 
-            if (!active && !SharedTimerService.IsRunning)
+            MiniPauseBtn.Visibility = (active || simpleRunning) ? Visibility.Visible : Visibility.Collapsed;
+            MiniStopBtn.Visibility = (active || simpleRunning) ? Visibility.Visible : Visibility.Collapsed;
+
+            if (pomo.State == PomodoroState.Paused)
             {
-                MiniActionBtn.Content = "开始";
-                MiniActionBtn.Style = (Style)FindResource("PrimaryButtonStyle");
-                MiniPauseBtn.Visibility = Visibility.Collapsed;
-                MiniStatus.Text = "";
-            }
-            else if (active)
-            {
-                MiniActionBtn.Content = pomo.State == PomodoroState.Paused ? "继续" : "暂停";
-                MiniActionBtn.Style = pomo.State == PomodoroState.Running
-                    ? (Style)FindResource("SecondaryButtonStyle")
-                    : (Style)FindResource("PrimaryButtonStyle");
-                MiniPauseBtn.Visibility = Visibility.Collapsed;
+                MiniPauseBtn.Content = "▶";
+                MiniPauseBtn.Style = (Style)FindResource("PrimaryButtonStyle");
             }
             else
             {
-                MiniActionBtn.Content = "停止";
-                MiniActionBtn.Style = (Style)FindResource("DangerButtonStyle");
-                MiniPauseBtn.Visibility = Visibility.Visible;
+                MiniPauseBtn.Content = "⏸";
+                MiniPauseBtn.Style = (Style)FindResource("SecondaryButtonStyle");
             }
         }
 
@@ -131,6 +124,7 @@ namespace ME.Views
                 MiniTag.Text = tagName;
                 if (SharedTimerService.IsRunning)
                     MiniStatus.Text = "计时中";
+                LoadMiniTagBar();
                 try
                 {
                     var color = (Color)ColorConverter.ConvertFromString(tagColor);
@@ -155,50 +149,84 @@ namespace ME.Views
                         MiniDot.Background = Brushes.Gray;
                         MiniTimerText.Foreground = (SolidColorBrush)FindResource("TextBrush");
                         MiniStatus.Text = "";
-                        MiniPauseBtn.Visibility = Visibility.Collapsed;
                     }
                     UpdateMiniActions();
                     LoadMiniStats();
                     LoadMiniTaskSummary();
+                    LoadMiniTagBar();
                 }
                 else
                 {
-                    MiniPauseBtn.Visibility = Visibility.Visible;
-                    MiniPauseBtn.Content = "⏸";
-                    if (MiniTagBox.Items.Count > 0)
-                    {
-                        foreach (var item in MiniTagBox.Items)
-                        {
-                            if (item is TimeTag tag && tag.Id == SharedTimerService.SelectedTagId)
-                            {
-                                MiniTagBox.SelectedItem = item;
-                                break;
-                            }
-                        }
-                    }
                     UpdateMiniActions();
+                    LoadMiniTagBar();
                 }
             });
         }
 
-        private void LoadMiniTags()
+        private void LoadMiniTagBar()
         {
-            var tagRepo = new ME.Data.TimeTagRepository();
+            MiniTagBar.Children.Clear();
+            var tagRepo = new TimeTagRepository();
             var tags = tagRepo.GetAllTags();
-            MiniTagBox.ItemsSource = tags;
-            if (tags.Count > 0 && MiniTagBox.SelectedIndex < 0)
-                MiniTagBox.SelectedIndex = 0;
+            var pomo = SharedPomodoroService.Instance;
 
-            if (SharedTimerService.IsRunning)
+            foreach (var tag in tags)
             {
-                foreach (var item in tags)
+                bool isActive = pomo.Mode == UnifiedTimerMode.Simple
+                    && pomo.State != PomodoroState.Idle
+                    && pomo.SelectedTagId == tag.Id;
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
+                catch { tagColor = Color.FromRgb(128, 128, 128); }
+
+                var chip = new Border
                 {
-                    if (item.Id == SharedTimerService.SelectedTagId)
+                    CornerRadius = new CornerRadius(10),
+                    Background = isActive
+                        ? new SolidColorBrush(tagColor)
+                        : new SolidColorBrush(Color.FromArgb(20, tagColor.R, tagColor.G, tagColor.B)),
+                    BorderBrush = new SolidColorBrush(tagColor),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(8, 2, 8, 2),
+                    Margin = new Thickness(0, 0, 4, 0),
+                    Cursor = Cursors.Hand,
+                    Tag = tag.Id
+                };
+
+                var text = new TextBlock
+                {
+                    Text = (isActive ? "● " : "") + tag.Name,
+                    FontSize = 10,
+                    Foreground = isActive ? Brushes.White : (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                chip.Child = text;
+
+                var captured = tag;
+                chip.MouseLeftButtonDown += (s, e) =>
+                {
+                    if (pomo.Mode == UnifiedTimerMode.Simple && pomo.State != PomodoroState.Idle
+                        && pomo.SelectedTagId == captured.Id)
                     {
-                        MiniTagBox.SelectedItem = item;
-                        break;
+                        SharedTimerService.StopCurrent();
+                        pomo.Stop();
                     }
-                }
+                    else
+                    {
+                        if (pomo.State != PomodoroState.Idle) pomo.Stop();
+                        if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
+                        pomo.Mode = UnifiedTimerMode.Simple;
+                        pomo.SelectedTagId = captured.Id;
+                        pomo.SelectedTagName = captured.Name;
+                        pomo.SelectedTagColor = captured.Color;
+                        SharedTimerService.StartWithTag(captured.Id);
+                        pomo.Start();
+                    }
+                    LoadMiniTagBar();
+                    LoadMiniStats();
+                };
+
+                MiniTagBar.Children.Add(chip);
             }
         }
 
@@ -210,51 +238,60 @@ namespace ME.Views
                 if (isPaused)
                 {
                     MiniStatus.Text = "暂停中";
-                    MiniPauseBtn.Content = "▶";
-                    MiniPauseBtn.ToolTip = "继续";
                 }
                 else if (SharedTimerService.IsRunning)
                 {
                     MiniStatus.Text = "计时中";
-                    MiniPauseBtn.Content = "⏸";
-                    MiniPauseBtn.ToolTip = "暂停";
                 }
             });
         }
 
-        private void MiniActionBtn_Click(object sender, RoutedEventArgs e)
+        private void MiniStopBtn_Click(object sender, RoutedEventArgs e)
         {
             var pomo = SharedPomodoroService.Instance;
-            if (pomo.Mode == UnifiedTimerMode.Pomodoro)
-            {
-                switch (pomo.State)
-                {
-                    case PomodoroState.Idle: pomo.Start(); break;
-                    case PomodoroState.Running: pomo.Pause(); break;
-                    case PomodoroState.Paused: pomo.Resume(); break;
-                }
-                return;
-            }
+            bool confirmed = ConfirmDialog.Show(Window.GetWindow(this),
+                "确认停止", pomo.Mode == UnifiedTimerMode.Pomodoro
+                    ? "要放弃当前番茄/休息吗？" : "要停止计时吗？",
+                "停止", "取消");
+            if (!confirmed) return;
 
-            if (SharedTimerService.IsRunning || SharedTimerService.IsPaused)
+            if (pomo.State != PomodoroState.Idle)
+            {
+                if (pomo.Mode == UnifiedTimerMode.Simple)
+                    SharedTimerService.StopCurrent();
+                pomo.Stop();
+            }
+            else if (SharedTimerService.IsRunning)
             {
                 SharedTimerService.StopCurrent();
             }
-            else
-            {
-                if (MiniTagBox.SelectedItem is TimeTag tag)
-                {
-                    SharedTimerService.StartWithTag(tag.Id);
-                }
-            }
+            LoadMiniTagBar();
+            LoadMiniStats();
         }
 
         private void MiniPause_Click(object sender, RoutedEventArgs e)
         {
-            if (SharedTimerService.IsPaused)
+            var pomo = SharedPomodoroService.Instance;
+            if (pomo.State == PomodoroState.Running)
+            {
+                if (pomo.Mode == UnifiedTimerMode.Simple)
+                    SharedTimerService.PauseCurrent();
+                pomo.Pause();
+            }
+            else if (pomo.State == PomodoroState.Paused)
+            {
+                if (pomo.Mode == UnifiedTimerMode.Simple)
+                    SharedTimerService.ResumeCurrent();
+                pomo.Resume();
+            }
+            else if (SharedTimerService.IsPaused)
+            {
                 SharedTimerService.ResumeCurrent();
-            else
+            }
+            else if (SharedTimerService.IsRunning)
+            {
                 SharedTimerService.PauseCurrent();
+            }
         }
 
         private void LoadMiniStats()
