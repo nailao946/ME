@@ -20,8 +20,11 @@ namespace ME.Services
         private int _beforeLongBreak;
         private bool _autoStartBreaks;
         private bool _autoStartPomodoros;
+        private bool _suppressAutoStart;
 
         public event Action<string, UnifiedTimerMode> TimerUpdated;
+        public event Action WorkPhaseEnded;
+        internal static bool IsBreakConfirmShowing;
         public event Action<PomodoroState> StateChanged;
         public event Action<PomodoroPhase, int, int> PhaseChanged;
         public event Action PhaseCompleted;
@@ -243,7 +246,36 @@ namespace ME.Services
         {
             PhaseCompleted?.Invoke();
             SoundService.PlayCompletionSound();
+
+            if (Phase == PomodoroPhase.Work)
+            {
+                _suppressAutoStart = true;
+                AdvancePhase();
+                _suppressAutoStart = false;
+                WorkPhaseEnded?.Invoke();
+            }
+            else
+            {
+                AdvancePhase();
+            }
+        }
+
+        public void ConfirmBreak()
+        {
+            if (State != PomodoroState.Idle || Phase == PomodoroPhase.Work) return;
+            _sessionStart = DateTime.Now;
+            _accumulated = TimeSpan.Zero;
+            State = PomodoroState.Running;
+            _timer.Start();
+            StateChanged?.Invoke(State);
+        }
+
+        public void SkipBreak()
+        {
+            if (State != PomodoroState.Idle || Phase == PomodoroPhase.Work) return;
+            _suppressAutoStart = true;
             AdvancePhase();
+            _suppressAutoStart = false;
         }
 
         private void AdvancePhase()
@@ -270,7 +302,7 @@ namespace ME.Services
             StateChanged?.Invoke(State);
             FireTimerUpdated();
 
-            if (State == PomodoroState.Idle)
+            if (State == PomodoroState.Idle && !_suppressAutoStart)
             {
                 bool shouldAutoStart = Phase == PomodoroPhase.Work
                     ? _autoStartPomodoros : _autoStartBreaks;

@@ -52,6 +52,7 @@ namespace ME.Views
                     _pomo.TimerUpdated += OnTimerUpdated;
                     _pomo.StateChanged += OnStateChanged;
                     _pomo.PhaseChanged += OnPhaseChanged;
+                    _pomo.WorkPhaseEnded += OnWorkPhaseEnded;
                     ThemeService.ThemeChanged += OnThemeChanged;
                     _eventsWired = true;
                 }
@@ -62,6 +63,7 @@ namespace ME.Views
                 _pomo.TimerUpdated -= OnTimerUpdated;
                 _pomo.StateChanged -= OnStateChanged;
                 _pomo.PhaseChanged -= OnPhaseChanged;
+                _pomo.WorkPhaseEnded -= OnWorkPhaseEnded;
                 ThemeService.ThemeChanged -= OnThemeChanged;
                 _eventsWired = false;
                 _clockTimer?.Stop();
@@ -134,6 +136,31 @@ namespace ME.Views
                 UpdateUI();
                 UpdateStatsText();
             });
+        }
+
+        private void OnWorkPhaseEnded()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (PomodoroService.IsBreakConfirmShowing) return;
+                PomodoroService.IsBreakConfirmShowing = true;
+                try
+                {
+                    var win = Window.GetWindow(this);
+                    if (win == null) return;
+                    bool confirmed = ConfirmDialog.Show(win,
+                        "番茄时间到！", "是否开始休息？",
+                        "开始休息", "跳过");
+                    if (confirmed)
+                        _pomo.ConfirmBreak();
+                    else
+                        _pomo.SkipBreak();
+                }
+                finally
+                {
+                    PomodoroService.IsBreakConfirmShowing = false;
+                }
+            }));
         }
 
         private void UpdateUI()

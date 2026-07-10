@@ -74,6 +74,7 @@ namespace ME.Views
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated += OnTimerUpdated;
             pomo.StateChanged += OnPomoStateChanged;
+            pomo.WorkPhaseEnded += OnPomoWorkPhaseEnded;
 
             // Restore position
             var left = _settingsRepo.GetValue("FloatingWindowLeft", "");
@@ -108,6 +109,7 @@ namespace ME.Views
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated -= OnTimerUpdated;
             pomo.StateChanged -= OnPomoStateChanged;
+            pomo.WorkPhaseEnded -= OnPomoWorkPhaseEnded;
             SavePosition();
         }
 
@@ -589,6 +591,32 @@ namespace ME.Views
                 ExpPauseBtn.ToolTip = state == PomodoroState.Paused ? "继续" : "暂停";
                 if (state == PomodoroState.Idle && SharedTimerService.IsRunning)
                     SharedTimerService.StopCurrent();
+            }));
+        }
+
+        private void OnPomoWorkPhaseEnded()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (PomodoroService.IsBreakConfirmShowing) return;
+                PomodoroService.IsBreakConfirmShowing = true;
+                try
+                {
+                    var win = Window.GetWindow(this);
+                    if (win == null) return;
+                    var pomo = SharedPomodoroService.Instance;
+                    bool confirmed = ConfirmDialog.Show(win,
+                        "番茄时间到！", "是否开始休息？",
+                        "开始休息", "跳过");
+                    if (confirmed)
+                        pomo.ConfirmBreak();
+                    else
+                        pomo.SkipBreak();
+                }
+                finally
+                {
+                    PomodoroService.IsBreakConfirmShowing = false;
+                }
             }));
         }
 

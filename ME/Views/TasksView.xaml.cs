@@ -85,6 +85,7 @@ namespace ME.Views
                     MiniTag.Text = $"第{cycle}个";
                 });
             };
+            pomo.WorkPhaseEnded += OnMiniWorkPhaseEnded;
             SharedTimerService.TimerUpdated += OnMiniTimerUpdated;
             SharedTimerService.RunningStateChanged += OnMiniRunningChanged;
             SharedTimerService.PausedStateChanged += OnMiniPausedChanged;
@@ -94,6 +95,8 @@ namespace ME.Views
                 SharedTimerService.TimerUpdated -= OnMiniTimerUpdated;
                 SharedTimerService.RunningStateChanged -= OnMiniRunningChanged;
                 SharedTimerService.PausedStateChanged -= OnMiniPausedChanged;
+                var pomo = SharedPomodoroService.Instance;
+                pomo.WorkPhaseEnded -= OnMiniWorkPhaseEnded;
                 ThemeService.ThemeChanged -= OnThemeChanged;
             };
         }
@@ -138,6 +141,33 @@ namespace ME.Views
                 }
                 catch { }
             });
+        }
+
+        private void OnMiniWorkPhaseEnded()
+        {
+            if (!this.IsVisible) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (PomodoroService.IsBreakConfirmShowing) return;
+                PomodoroService.IsBreakConfirmShowing = true;
+                try
+                {
+                    var win = Window.GetWindow(this);
+                    if (win == null) return;
+                    var pomo = SharedPomodoroService.Instance;
+                    bool confirmed = ConfirmDialog.Show(win,
+                        "番茄时间到！", "是否开始休息？",
+                        "开始休息", "跳过");
+                    if (confirmed)
+                        pomo.ConfirmBreak();
+                    else
+                        pomo.SkipBreak();
+                }
+                finally
+                {
+                    PomodoroService.IsBreakConfirmShowing = false;
+                }
+            }));
         }
 
         private void OnMiniRunningChanged(bool isRunning)

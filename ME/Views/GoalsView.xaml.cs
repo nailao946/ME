@@ -56,6 +56,7 @@ namespace ME.Views
                     pomo.TimerUpdated += OnPomoTimerUpdated;
                     pomo.StateChanged += OnPomoStateChanged;
                     pomo.PhaseChanged += OnPomoPhaseChanged;
+                    pomo.WorkPhaseEnded += OnPomoWorkPhaseEnded;
                     SharedTimerService.TimerUpdated += OnSharedTimerUpdated;
                     SharedTimerService.RunningStateChanged += OnSharedRunningStateChanged;
 
@@ -71,6 +72,7 @@ namespace ME.Views
                     pomo.TimerUpdated -= OnPomoTimerUpdated;
                     pomo.StateChanged -= OnPomoStateChanged;
                     pomo.PhaseChanged -= OnPomoPhaseChanged;
+                    pomo.WorkPhaseEnded -= OnPomoWorkPhaseEnded;
                     SharedTimerService.TimerUpdated -= OnSharedTimerUpdated;
                     SharedTimerService.RunningStateChanged -= OnSharedRunningStateChanged;
                     _eventsWired = false;
@@ -119,6 +121,32 @@ namespace ME.Views
                 GoalStatus.Text = text;
                 GoalTag.Text = $"第{cycle}个";
             });
+        }
+
+        private void OnPomoWorkPhaseEnded()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (PomodoroService.IsBreakConfirmShowing) return;
+                PomodoroService.IsBreakConfirmShowing = true;
+                try
+                {
+                    var win = Window.GetWindow(this);
+                    if (win == null) return;
+                    var pomo = SharedPomodoroService.Instance;
+                    bool confirmed = ConfirmDialog.Show(win,
+                        "番茄时间到！", "是否开始休息？",
+                        "开始休息", "跳过");
+                    if (confirmed)
+                        pomo.ConfirmBreak();
+                    else
+                        pomo.SkipBreak();
+                }
+                finally
+                {
+                    PomodoroService.IsBreakConfirmShowing = false;
+                }
+            }));
         }
 
         // ========== TAG BAR ==========
