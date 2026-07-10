@@ -60,7 +60,12 @@ namespace ME.Views
             pomo.StateChanged += (state) =>
             {
                 if (!this.IsVisible) return;
-                Dispatcher.BeginInvoke(() => UpdateMiniActions());
+                Dispatcher.BeginInvoke(() =>
+                {
+                    UpdateMiniActions();
+                    if (state == PomodoroState.Idle && SharedTimerService.IsRunning)
+                        SharedTimerService.StopCurrent();
+                });
             };
             pomo.PhaseChanged += (phase, total, cycle) =>
             {
@@ -211,8 +216,7 @@ namespace ME.Views
                 var captured = tag;
                 chip.MouseLeftButtonDown += (s, e) =>
                 {
-                    if (pomo.Mode == UnifiedTimerMode.Simple && pomo.State != PomodoroState.Idle
-                        && pomo.SelectedTagId == captured.Id)
+                    if (pomo.State != PomodoroState.Idle && pomo.SelectedTagId == captured.Id)
                     {
                         SharedTimerService.StopCurrent();
                         pomo.Stop();
@@ -221,7 +225,6 @@ namespace ME.Views
                     {
                         if (pomo.State != PomodoroState.Idle) pomo.Stop();
                         if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
-                        pomo.Mode = UnifiedTimerMode.Simple;
                         pomo.SelectedTagId = captured.Id;
                         pomo.SelectedTagName = captured.Name;
                         pomo.SelectedTagColor = captured.Color;

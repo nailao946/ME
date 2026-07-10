@@ -119,7 +119,12 @@ namespace ME.Views
 
         private void OnStateChanged(PomodoroState state)
         {
-            Dispatcher.BeginInvoke(() => UpdateUI());
+            Dispatcher.BeginInvoke(() =>
+            {
+                UpdateUI();
+                if (state == PomodoroState.Idle && SharedTimerService.IsRunning)
+                    SharedTimerService.StopCurrent();
+            });
         }
 
         private void OnPhaseChanged(PomodoroPhase phase, int total, int cycle)
@@ -464,7 +469,7 @@ namespace ME.Views
         {
             if (sender is Border border && border.Tag is TimeTag tag)
             {
-                if (SharedTimerService.IsRunning && _selectedTagId == tag.Id)
+                if (_pomo.State != PomodoroState.Idle && _selectedTagId == tag.Id)
                 {
                     SharedTimerService.StopCurrent();
                     _pomo.Stop();
@@ -484,7 +489,6 @@ namespace ME.Views
                     _pomo.SelectedTagId = tag.Id;
                     _pomo.SelectedTagName = tag.Name;
                     _pomo.SelectedTagColor = tag.Color;
-                    _pomo.Mode = UnifiedTimerMode.Simple;
                     SharedTimerService.StartWithTag(tag.Id);
                     _pomo.Start();
                 }

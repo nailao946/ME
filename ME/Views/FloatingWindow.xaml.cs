@@ -443,7 +443,7 @@ namespace ME.Views
                 var captured = tag;
                 item.Click += (s, ev) =>
                 {
-                    if (isRunning)
+                    if (pomo.State != PomodoroState.Idle && pomo.SelectedTagId == captured.Id)
                     {
                         SharedTimerService.StopCurrent();
                         pomo.Stop();
@@ -452,7 +452,6 @@ namespace ME.Views
                     {
                         if (pomo.State != PomodoroState.Idle) pomo.Stop();
                         if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
-                        pomo.Mode = UnifiedTimerMode.Simple;
                         pomo.SelectedTagId = captured.Id;
                         pomo.SelectedTagName = captured.Name;
                         pomo.SelectedTagColor = captured.Color;
@@ -566,10 +565,13 @@ namespace ME.Views
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                TagNameText.Text = mode == UnifiedTimerMode.Pomodoro ? "🍅" : "";
-                ExpTagNameText.Text = TagNameText.Text;
                 TimerText.Text = time;
                 ExpTimerText.Text = time;
+                if (mode == UnifiedTimerMode.Pomodoro)
+                {
+                    TagNameText.Text = "🍅";
+                    ExpTagNameText.Text = "🍅";
+                }
             }));
         }
 
@@ -581,6 +583,8 @@ namespace ME.Views
                 ExpPauseBtn.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
                 ExpPauseBtn.Content = state == PomodoroState.Paused ? "▶" : "⏸";
                 ExpPauseBtn.ToolTip = state == PomodoroState.Paused ? "继续" : "暂停";
+                if (state == PomodoroState.Idle && SharedTimerService.IsRunning)
+                    SharedTimerService.StopCurrent();
             }));
         }
 
@@ -1092,7 +1096,7 @@ namespace ME.Views
 
             chip.MouseLeftButtonDown += (s, e) =>
             {
-                if (isActive)
+                if (pomo.State != PomodoroState.Idle && pomo.SelectedTagId == tag.Id)
                 {
                     SharedTimerService.StopCurrent();
                     pomo.Stop();
@@ -1101,7 +1105,6 @@ namespace ME.Views
                 {
                     if (pomo.State != PomodoroState.Idle) pomo.Stop();
                     if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
-                    pomo.Mode = UnifiedTimerMode.Simple;
                     pomo.SelectedTagId = tag.Id;
                     pomo.SelectedTagName = tag.Name;
                     pomo.SelectedTagColor = tag.Color;
