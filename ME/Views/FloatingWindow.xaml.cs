@@ -569,8 +569,12 @@ namespace ME.Views
                 ExpTimerText.Text = time;
                 if (mode == UnifiedTimerMode.Pomodoro)
                 {
-                    TagNameText.Text = "🍅";
-                    ExpTagNameText.Text = "🍅";
+                    var pomo = SharedPomodoroService.Instance;
+                    var tagName = !string.IsNullOrEmpty(pomo.SelectedTagName) && pomo.SelectedTagName != "未计时"
+                        ? "🍅-" + pomo.SelectedTagName : "🍅";
+                    TagNameText.Text = tagName;
+                    ExpTagNameText.Text = tagName;
+                    SetTagDotColor(pomo.SelectedTagColor);
                 }
             }));
         }
