@@ -82,7 +82,7 @@ namespace ME.Views
                     if (SharedPomodoroService.Instance.State == PomodoroState.Paused)
                         text = "暂停中";
                     MiniStatus.Text = text;
-                    MiniTag.Text = $"第{cycle}个";
+                    MiniTag.Text = $"本轮 {cycle}/{SharedPomodoroService.Instance.BeforeLongBreak} 个";
                 });
             };
             pomo.WorkPhaseEnded += OnMiniWorkPhaseEnded;

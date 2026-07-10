@@ -74,6 +74,7 @@ namespace ME.Views
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated += OnTimerUpdated;
             pomo.StateChanged += OnPomoStateChanged;
+            pomo.PhaseChanged += OnPomoPhaseChanged;
             pomo.WorkPhaseEnded += OnPomoWorkPhaseEnded;
 
             // Restore position
@@ -91,6 +92,9 @@ namespace ME.Views
             }
 
             UpdateDisplay(SharedTimerService.IsRunning);
+            var pomoInit = SharedPomodoroService.Instance;
+            if (pomoInit.Mode == UnifiedTimerMode.Pomodoro && pomoInit.CycleCount > 0)
+                UpdateCycleDisplay(pomoInit.CycleCount);
             LoadTagChips();
         }
 
@@ -109,6 +113,7 @@ namespace ME.Views
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated -= OnTimerUpdated;
             pomo.StateChanged -= OnPomoStateChanged;
+            pomo.PhaseChanged -= OnPomoPhaseChanged;
             pomo.WorkPhaseEnded -= OnPomoWorkPhaseEnded;
             SavePosition();
         }
@@ -581,6 +586,20 @@ namespace ME.Views
             }));
         }
 
+        private void OnPomoPhaseChanged(PomodoroPhase phase, int total, int cycle)
+        {
+            Dispatcher.BeginInvoke(new Action(() => UpdateCycleDisplay(cycle)));
+        }
+
+        private void UpdateCycleDisplay(int cycle)
+        {
+            var pomo = SharedPomodoroService.Instance;
+            if (pomo.Mode == UnifiedTimerMode.Pomodoro && cycle > 0)
+                ExpCycleText.Text = $"本轮 {cycle}/{pomo.BeforeLongBreak} 个";
+            else
+                ExpCycleText.Text = "";
+        }
+
         private void OnPomoStateChanged(PomodoroState state)
         {
             Dispatcher.BeginInvoke(new Action(() =>
@@ -591,6 +610,8 @@ namespace ME.Views
                 ExpPauseBtn.ToolTip = state == PomodoroState.Paused ? "继续" : "暂停";
                 if (state == PomodoroState.Idle && SharedTimerService.IsRunning)
                     SharedTimerService.StopCurrent();
+                if (state == PomodoroState.Idle)
+                    ExpCycleText.Text = "";
             }));
         }
 

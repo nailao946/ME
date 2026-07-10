@@ -105,6 +105,9 @@
                                            Foreground="{DynamicResource TextBrush}" />
                                 <TextBlock x:Name="ExpTagNameText" Text="未计时"
                                            FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" />
+                                <TextBlock x:Name="ExpCycleText" Text=""
+                                           FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,-1,0,0" />
                             </StackPanel>
 
                             <!-- Pause/Resume button -->

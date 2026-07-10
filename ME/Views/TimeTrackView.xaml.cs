@@ -240,7 +240,7 @@ namespace ME.Views
             if (_pomo.TodayCompletions > 0)
                 parts.Add($"今日 {_pomo.TodayCompletions} 个");
             if (_pomo.CycleCount > 0)
-                parts.Add($"本轮 {_pomo.CycleCount} 个");
+                parts.Add($"本轮 {_pomo.CycleCount}/{_pomo.BeforeLongBreak} 个");
             if (_pomo.TotalCompletions > 0)
                 parts.Add($"总计 {_pomo.TotalCompletions} 个");
 

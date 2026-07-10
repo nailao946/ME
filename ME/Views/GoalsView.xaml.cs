@@ -119,7 +119,7 @@ namespace ME.Views
                 if (SharedPomodoroService.Instance.State == PomodoroState.Paused)
                     text = "暂停中";
                 GoalStatus.Text = text;
-                GoalTag.Text = $"第{cycle}个";
+                GoalTag.Text = $"本轮 {cycle}/{SharedPomodoroService.Instance.BeforeLongBreak} 个";
             });
         }
 
