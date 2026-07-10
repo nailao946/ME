@@ -1117,7 +1117,44 @@ namespace ME.Views
 
         private void UpdateTagChipStates()
         {
-            if (_isExpanded) LoadTagChips();
+            var pomo = SharedPomodoroService.Instance;
+            Brush textBrush;
+            try { textBrush = (Brush)FindResource("TextBrush"); }
+            catch { textBrush = Brushes.White; }
+
+            foreach (var child in TagChipsPanel.Children)
+            {
+                if (child is Border chip && chip.Tag is int tagId)
+                {
+                    var isActive = pomo.Mode == UnifiedTimerMode.Simple
+                        && pomo.State != PomodoroState.Idle
+                        && pomo.SelectedTagId == tagId;
+                    Color tagColor = Color.FromRgb(128, 128, 128);
+                    string tagName = "";
+                    try
+                    {
+                        var tag = _tagRepo.GetTagById(tagId);
+                        if (tag != null)
+                        {
+                            tagColor = (Color)ColorConverter.ConvertFromString(tag.Color);
+                            tagName = tag.Name;
+                        }
+                    }
+                    catch { }
+
+                    chip.Background = isActive
+                        ? new SolidColorBrush(tagColor)
+                        : new SolidColorBrush(Color.FromArgb(30, tagColor.R, tagColor.G, tagColor.B));
+                    chip.BorderBrush = isActive
+                        ? new SolidColorBrush(tagColor)
+                        : new SolidColorBrush(Color.FromArgb(60, tagColor.R, tagColor.G, tagColor.B));
+                    if (chip.Child is TextBlock tb)
+                    {
+                        tb.Text = (isActive ? "● " : "") + tagName;
+                        tb.Foreground = isActive ? Brushes.White : textBrush;
+                    }
+                }
+            }
         }
     }
 }

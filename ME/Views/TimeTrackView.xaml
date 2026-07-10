@@ -59,7 +59,7 @@
                                    Foreground="{DynamicResource TextBrush}"
                                    Margin="0,6,0,2" />
 
-                        <!-- Row 2: Phase tabs (pomodoro only) + tag selector (simple only) -->
+                        <!-- Row 2: Phase tabs (pomodoro only) -->
                         <Border Grid.Row="2" Height="32" Margin="40,0,40,6" Visibility="Collapsed">
                             <Grid>
                                 <Border CornerRadius="6" Background="{DynamicResource CardBrush}" />
@@ -80,13 +80,6 @@
                                             Style="{StaticResource SecondaryButtonStyle}" />
                                 </Grid>
                             </Grid>
-                        </Border>
-                        <!-- Tag selector (simple mode) - horizontal tag bar -->
-                        <Border Grid.Row="2" x:Name="TagSelectorRow" Height="34" Margin="40,0,40,6"
-                                Visibility="Visible">
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                <WrapPanel x:Name="TagBarPanel" />
-                            </ScrollViewer>
                         </Border>
 
                         <!-- Row 3: Control buttons (no start button) -->

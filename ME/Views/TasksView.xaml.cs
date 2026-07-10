@@ -163,6 +163,12 @@ namespace ME.Views
             });
         }
 
+        private void MiniTagScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            MiniTagScroller.ScrollToHorizontalOffset(MiniTagScroller.HorizontalOffset - e.Delta);
+            e.Handled = true;
+        }
+
         private void LoadMiniTagBar()
         {
             MiniTagBar.Children.Clear();

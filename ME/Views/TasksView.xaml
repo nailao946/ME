@@ -73,8 +73,9 @@
                                 FontSize="10" Padding="6,3" Margin="0,0,4,0" Visibility="Collapsed"
                                 Style="{StaticResource DangerButtonStyle}" />
                         <!-- Tag scroll bar replaces combo -->
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                                      Height="24" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,4,0">
+                        <ScrollViewer x:Name="MiniTagScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                                      Height="24" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,4,0"
+                                      PreviewMouseWheel="MiniTagScroller_PreviewMouseWheel">
                             <WrapPanel x:Name="MiniTagBar" VerticalAlignment="Center" />
                         </ScrollViewer>
                     </DockPanel>
