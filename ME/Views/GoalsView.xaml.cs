@@ -199,13 +199,12 @@ namespace ME.Views
                     }
                     else
                     {
-                        if (pomo.State != PomodoroState.Idle) pomo.Stop();
                         if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
                         pomo.SelectedTagId = captured.Id;
                         pomo.SelectedTagName = captured.Name;
                         pomo.SelectedTagColor = captured.Color;
                         SharedTimerService.StartWithTag(captured.Id);
-                        pomo.Start();
+                        pomo.Restart();
                     }
                     LoadGoalTagBar();
                 };
@@ -290,7 +289,7 @@ namespace ME.Views
 
         private void OnTaskCompleted(string message)
         {
-            if (message == "TaskCompleted")
+            if (message == "TaskCompleted" || message == "DayChanged")
             {
                 Dispatcher.BeginInvoke(new Action(() => LoadGoalsWithSections()));
             }

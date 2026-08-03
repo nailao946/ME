@@ -53,6 +53,12 @@
                     <TextBlock Text="标签" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6" />
                     <ComboBox x:Name="TagComboBox" FontSize="13" DisplayMemberPath="Name"
                               Style="{StaticResource MacComboBoxStyle}" />
+
+                    <TextBlock Text="备注" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,12,0,6" />
+                    <TextBox x:Name="NoteBox" Style="{DynamicResource InputTextBoxStyle}"
+                             Height="60" TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             FontSize="12" VerticalContentAlignment="Top" Padding="8" />
                 </StackPanel>
             </ScrollViewer>
 

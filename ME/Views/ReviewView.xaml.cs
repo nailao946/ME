@@ -63,7 +63,7 @@ namespace ME.Views
 
         private void OnGlobalEvent(string message)
         {
-            if (message == "TaskCompleted")
+            if (message == "TaskCompleted" || message == "DayChanged")
                 Dispatcher.BeginInvoke(new Action(() => { if (this.IsVisible) { LoadData(); } }));
         }
 
@@ -440,7 +440,7 @@ namespace ME.Views
             }
 
             var maxMinutes = tagTimes.Values.Max();
-            var sorted = tagTimes.OrderByDescending(kv => kv.Value).Take(6);
+            var sorted = tagTimes.OrderByDescending(kv => kv.Value);
             int idx = 0;
 
             foreach (var kv in sorted)
@@ -617,9 +617,80 @@ namespace ME.Views
                 tagData[tag.Id] = dailyList;
             }
 
+            tagData = PrepareChartTagData(tagData);
+
             BuildTagChips(allTags);
             BuildTimeStatsChart(tagData, allTags);
+            BuildLegend(tagData, allTags);
             BuildStatsSummary(tagData, allTags, totalDays);
+        }
+
+        private const int MaxChartTags = 6;
+        private const int OthersKey = -1;
+
+        private Dictionary<int, List<(string date, TimeSpan dur)>> PrepareChartTagData(Dictionary<int, List<(string date, TimeSpan dur)>> tagData)
+        {
+            var withData = tagData
+                .Where(kv => kv.Value.Sum(d => d.dur.TotalSeconds) > 0)
+                .OrderByDescending(kv => kv.Value.Sum(d => d.dur.TotalSeconds))
+                .ToList();
+            if (withData.Count == 0)
+                return new Dictionary<int, List<(string date, TimeSpan dur)>>();
+            if (withData.Count <= MaxChartTags)
+                return withData.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            var top = withData.Take(MaxChartTags).ToList();
+            var rest = withData.Skip(MaxChartTags).ToList();
+            var count = top[0].Value.Count;
+            var others = new List<(string date, TimeSpan dur)>();
+            for (int i = 0; i < count; i++)
+            {
+                var total = TimeSpan.Zero;
+                foreach (var kv in rest) total += kv.Value[i].dur;
+                others.Add((top[0].Value[i].date, total));
+            }
+            var result = top.ToDictionary(kv => kv.Key, kv => kv.Value);
+            result[OthersKey] = others;
+            return result;
+        }
+
+        private void BuildLegend(Dictionary<int, List<(string date, TimeSpan dur)>> tagData, List<TimeTag> allTags)
+        {
+            StatsLegendPanel.Children.Clear();
+            int colorIdx = 0;
+            foreach (var kv in tagData)
+            {
+                var tag = kv.Key == OthersKey ? null : allTags.FirstOrDefault(t => t.Id == kv.Key);
+                Color tagColor;
+                if (kv.Key == OthersKey)
+                {
+                    tagColor = Color.FromRgb(142, 142, 147);
+                }
+                else
+                {
+                    try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
+                    catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+                }
+                var name = kv.Key == OthersKey ? "其他" : (tag?.Name ?? "未标记");
+
+                var legendItem = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 16, 4) };
+                legendItem.Children.Add(new Border
+                {
+                    Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
+                    Background = new SolidColorBrush(tagColor),
+                    Margin = new Thickness(0, 0, 4, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                legendItem.Children.Add(new TextBlock
+                {
+                    Text = name,
+                    FontSize = 10,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                StatsLegendPanel.Children.Add(legendItem);
+                colorIdx++;
+            }
         }
 
         private void BuildTagChips(List<TimeTag> allTags)
@@ -702,10 +773,18 @@ namespace ME.Views
 
             foreach (var kv in tagData)
             {
-                var tag = allTags.FirstOrDefault(t => t.Id == kv.Key);
+                var tag = kv.Key == OthersKey ? null : allTags.FirstOrDefault(t => t.Id == kv.Key);
                 Color tagColor;
-                try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
-                catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+                if (kv.Key == OthersKey)
+                {
+                    tagColor = Color.FromRgb(142, 142, 147);
+                }
+                else
+                {
+                    try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
+                    catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+                }
+                var tagName = kv.Key == OthersKey ? "其他" : (tag?.Name ?? "未标记");
 
                 var points = new List<Point>();
                 var step = kv.Value.Count > 1 ? chartWidth / (double)(kv.Value.Count - 1) : chartWidth / 2.0;
@@ -724,9 +803,9 @@ namespace ME.Views
                         Fill = new SolidColorBrush(tagColor),
                         Stroke = (Brush)FindResource("CardBrush"),
                         StrokeThickness = 1,
-                        Tag = $"{tag?.Name}: {mins}m"
+                        Tag = $"{tagName}: {mins}m"
                     };
-                    dot.ToolTip = $"{kv.Value[i].date}\n{tag?.Name}: {mins}分钟";
+                    dot.ToolTip = $"{kv.Value[i].date}\n{tagName}: {mins}分钟";
                     Canvas.SetLeft(dot, x - 2.5);
                     Canvas.SetTop(dot, y - 2.5);
                     StatsChartCanvas.Children.Add(dot);
@@ -754,8 +833,6 @@ namespace ME.Views
                 tagLines[kv.Key] = points;
                 colorIdx++;
             }
-
-            // Grid lines and Y-axis labels
             for (int i = 0; i <= 4; i++)
             {
                 var y = padding + i * chartHeight / 4;
@@ -797,38 +874,6 @@ namespace ME.Views
                     Canvas.SetTop(label, canvasHeight - 18);
                     StatsChartCanvas.Children.Add(label);
                 }
-            }
-
-            // Legend
-            colorIdx = 0;
-            var legendX = padding;
-            foreach (var kv in tagData)
-            {
-                var tag = allTags.FirstOrDefault(t => t.Id == kv.Key);
-                Color tagColor;
-                try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
-                catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
-
-                var legendItem = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 16, 0) };
-                legendItem.Children.Add(new Border
-                {
-                    Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
-                    Background = new SolidColorBrush(tagColor),
-                    Margin = new Thickness(0, 0, 4, 0),
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-                legendItem.Children.Add(new TextBlock
-                {
-                    Text = tag?.Name ?? "未标记",
-                    FontSize = 10,
-                    Foreground = (Brush)FindResource("TextBrush"),
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-                Canvas.SetLeft(legendItem, legendX);
-                Canvas.SetTop(legendItem, canvasHeight - 2);
-                StatsChartCanvas.Children.Add(legendItem);
-                legendX += 120;
-                colorIdx++;
             }
         }
 
@@ -892,10 +937,18 @@ namespace ME.Views
             int colorIdx = 0;
             foreach (var kv in tagData)
             {
-                var tag = allTags.FirstOrDefault(t => t.Id == kv.Key);
+                var tag = kv.Key == OthersKey ? null : allTags.FirstOrDefault(t => t.Id == kv.Key);
                 Color tagColor;
-                try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
-                catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+                if (kv.Key == OthersKey)
+                {
+                    tagColor = Color.FromRgb(142, 142, 147);
+                }
+                else
+                {
+                    try { tagColor = (Color)ColorConverter.ConvertFromString(tag?.Color ?? "#007AFF"); }
+                    catch { tagColor = LineChartColors[colorIdx % LineChartColors.Length]; }
+                }
+                var tagName = kv.Key == OthersKey ? "其他" : (tag?.Name ?? "未标记");
 
                 var totalMin = kv.Value.Sum(d => (int)d.dur.TotalMinutes);
                 var avgMin = days > 0 ? totalMin / days : 0;
@@ -915,7 +968,7 @@ namespace ME.Views
                 });
                 dotRow.Children.Add(new TextBlock
                 {
-                    Text = tag?.Name ?? "未标记",
+                    Text = tagName,
                     FontSize = 11,
                     Foreground = (Brush)FindResource("TextBrush"),
                     VerticalAlignment = VerticalAlignment.Center

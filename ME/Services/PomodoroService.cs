@@ -138,6 +138,24 @@ namespace ME.Services
             FireTimerUpdated();
         }
 
+        public void Restart()
+        {
+            _timer.Stop();
+            var now = DateTime.Now;
+            if (now.ToString("yyyy-MM-dd") != Today)
+            {
+                Today = now.ToString("yyyy-MM-dd");
+                TodayCompletions = 0;
+            }
+            _sessionStart = now;
+            _accumulated = TimeSpan.Zero;
+            State = PomodoroState.Running;
+            Current = Mode == UnifiedTimerMode.Pomodoro ? GetPhaseDuration() : TimeSpan.Zero;
+            _timer.Start();
+            StateChanged?.Invoke(State);
+            FireTimerUpdated();
+        }
+
         public void Pause()
         {
             if (State != PomodoroState.Running) return;
@@ -213,6 +231,16 @@ namespace ME.Services
         public void ResetTodayCount()
         {
             TodayCompletions = 0;
+        }
+
+        public void RefreshToday()
+        {
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            if (today != Today)
+            {
+                Today = today;
+                TodayCompletions = 0;
+            }
         }
 
         private void OnTick(object sender, EventArgs e)

@@ -33,6 +33,13 @@ namespace ME.Views
         {
             if (message == "TaskCompleted")
                 Dispatcher.BeginInvoke(new Action(() => { if (this.IsVisible) LoadCalendar(); }));
+            else if (message == "DayChanged")
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _currentMonth = DateTime.Today;
+                    _selectedDate = DateTime.Today;
+                    if (this.IsVisible) LoadCalendar();
+                }));
         }
 
         private void CalendarView_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)

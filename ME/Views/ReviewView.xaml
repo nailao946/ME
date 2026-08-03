@@ -128,7 +128,9 @@
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="时间分配" FontSize="14" FontWeight="Bold"
                                    Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
-                        <StackPanel x:Name="TimeAllocPanel" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                            <StackPanel x:Name="TimeAllocPanel" />
+                        </ScrollViewer>
                     </DockPanel>
                 </Border>
             </Grid>
@@ -152,7 +154,9 @@
                     </StackPanel>
 
                     <!-- Tag Selector -->
-                    <WrapPanel DockPanel.Dock="Top" x:Name="TagSelectorPanel" Margin="0,0,0,12" />
+                    <ScrollViewer DockPanel.Dock="Top" VerticalScrollBarVisibility="Auto" MaxHeight="120" Margin="0,0,0,12">
+                        <WrapPanel x:Name="TagSelectorPanel" />
+                    </ScrollViewer>
 
                     <!-- Chart Area -->
                     <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="8"
@@ -161,6 +165,12 @@
                             <Canvas x:Name="StatsChartCanvas" />
                         </Grid>
                     </Border>
+
+                    <!-- Legend -->
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                                  Margin="0,0,0,12">
+                        <WrapPanel x:Name="StatsLegendPanel" />
+                    </ScrollViewer>
 
                     <!-- Summary Panel -->
                     <StackPanel x:Name="StatsSummaryPanel" />

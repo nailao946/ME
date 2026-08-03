@@ -76,6 +76,7 @@ namespace ME.Views
             pomo.StateChanged += OnPomoStateChanged;
             pomo.PhaseChanged += OnPomoPhaseChanged;
             pomo.WorkPhaseEnded += OnPomoWorkPhaseEnded;
+            EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
 
             // Restore position
             var left = _settingsRepo.GetValue("FloatingWindowLeft", "");
@@ -457,13 +458,12 @@ namespace ME.Views
                     }
                     else
                     {
-                        if (pomo.State != PomodoroState.Idle) pomo.Stop();
                         if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
                         pomo.SelectedTagId = captured.Id;
                         pomo.SelectedTagName = captured.Name;
                         pomo.SelectedTagColor = captured.Color;
                         SharedTimerService.StartWithTag(captured.Id);
-                        pomo.Start();
+                        pomo.Restart();
                     }
                 };
                 timerMenu.Items.Add(item);
@@ -644,6 +644,22 @@ namespace ME.Views
         private void OnRunningStateChanged(bool isRunning)
         {
             Dispatcher.BeginInvoke(new Action(() => UpdateDisplay(isRunning)));
+        }
+
+        private void OnGlobalEvent(string message)
+        {
+            if (message != "DayChanged") return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                UpdateDisplay(SharedTimerService.IsRunning);
+                LoadTagChips();
+                if (_isExpanded) LoadTaskList();
+                var pomo = SharedPomodoroService.Instance;
+                if (pomo.Mode == UnifiedTimerMode.Pomodoro && pomo.CycleCount > 0)
+                    UpdateCycleDisplay(pomo.CycleCount);
+                else
+                    ExpCycleText.Text = "";
+            }));
         }
 
         private void ExpPauseBtn_Click(object sender, RoutedEventArgs e)
@@ -1156,13 +1172,12 @@ namespace ME.Views
                 }
                 else
                 {
-                    if (pomo.State != PomodoroState.Idle) pomo.Stop();
                     if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
                     pomo.SelectedTagId = tag.Id;
                     pomo.SelectedTagName = tag.Name;
                     pomo.SelectedTagColor = tag.Color;
                     SharedTimerService.StartWithTag(tag.Id);
-                    pomo.Start();
+                    pomo.Restart();
                 }
                 LoadTagChips();
                 e.Handled = true;

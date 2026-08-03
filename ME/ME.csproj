@@ -14,7 +14,16 @@
     <Version>1.9.2.0</Version>
     <StartupObject>ME.App</StartupObject>
     <Authors>JOE</Authors>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <Target Name="CleanPublishOutput" BeforeTargets="PrepareForPublish">
+    <RemoveDir Directories="$(PublishDir)" Condition="'$(PublishDir)' != '' And Exists('$(PublishDir)')" />
+  </Target>
+
+  <Target Name="TrimPublishOutput" AfterTargets="Publish">
+    <RemoveDir Directories="$(PublishDir)runtimes" Condition="'$(PublishDir)' != '' And Exists('$(PublishDir)runtimes')" />
+  </Target>
 
   <ItemGroup>
     <Content Include="hobby_working_dailyroutine_life_time_management_icon_142245.ico">

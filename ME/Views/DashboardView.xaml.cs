@@ -39,6 +39,20 @@ namespace ME.Views
                     LoadStats();
                 }
             }
+            else if (message == "DayChanged")
+            {
+                _currentMonth = DateTime.Today;
+                if (this.IsVisible)
+                {
+                    BuildTagFilter();
+                    LoadData();
+                    if (_selectedTask != null)
+                    {
+                        LoadCalendar();
+                        LoadStats();
+                    }
+                }
+            }
         }
 
         private void OnThemeChanged(string theme)

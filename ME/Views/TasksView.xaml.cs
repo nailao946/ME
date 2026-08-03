@@ -46,6 +46,8 @@ namespace ME.Views
             LoadMiniStats();
             LoadMiniTagBar();
 
+            EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
+
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated += (time, mode) =>
             {
@@ -253,13 +255,12 @@ namespace ME.Views
                     }
                     else
                     {
-                        if (pomo.State != PomodoroState.Idle) pomo.Stop();
                         if (SharedTimerService.IsRunning) SharedTimerService.StopCurrent();
                         pomo.SelectedTagId = captured.Id;
                         pomo.SelectedTagName = captured.Name;
                         pomo.SelectedTagColor = captured.Color;
                         SharedTimerService.StartWithTag(captured.Id);
-                        pomo.Start();
+                        pomo.Restart();
                     }
                     LoadMiniTagBar();
                     LoadMiniStats();
@@ -485,6 +486,21 @@ namespace ME.Views
                 LoadData();
                 LoadMiniStats();
             }
+        }
+
+        private void OnGlobalEvent(string message)
+        {
+            if (message != "DayChanged") return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _selectedDate = DateTime.Today;
+                _stripStartDate = DateTime.Today.AddDays(-3);
+                if (!this.IsVisible) return;
+                BuildDateStrip();
+                BuildTagFilter();
+                LoadData();
+                LoadMiniStats();
+            }));
         }
 
         private void DateStrip_SizeChanged(object sender, SizeChangedEventArgs e)

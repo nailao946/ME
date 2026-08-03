@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using ME.Data;
 using ME.Models;
 using ME.Services;
+using ME.Core;
 
 namespace ME.Views
 {
@@ -57,6 +58,8 @@ namespace ME.Views
                     _eventsWired = true;
                 }
             };
+
+            EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
 
             Unloaded += (s, e) =>
             {
@@ -160,6 +163,24 @@ namespace ME.Views
                 {
                     PomodoroService.IsBreakConfirmShowing = false;
                 }
+            }));
+        }
+
+        private void OnGlobalEvent(string message)
+        {
+            if (message != "DayChanged") return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _selectedDate = DateTime.Now;
+                _currentMonth = DateTime.Now;
+                if (!IsVisible) return;
+                LoadTags();
+                LoadRecords();
+                GenerateCalendar();
+                LoadStats();
+                DrawGanttChart();
+                DrawPieCharts();
+                UpdateUI();
             }));
         }
 
@@ -505,8 +526,6 @@ namespace ME.Views
                 }
                 else
                 {
-                    if (_pomo.State != PomodoroState.Idle)
-                        _pomo.Stop();
                     if (SharedTimerService.IsRunning)
                     {
                         SharedTimerService.StopCurrent();
@@ -517,7 +536,7 @@ namespace ME.Views
                     _pomo.SelectedTagName = tag.Name;
                     _pomo.SelectedTagColor = tag.Color;
                     SharedTimerService.StartWithTag(tag.Id);
-                    _pomo.Start();
+                    _pomo.Restart();
                 }
                 LoadTags();
                 LoadRecords();
@@ -778,6 +797,14 @@ namespace ME.Views
             return $"{(int)ts.TotalSeconds}s";
         }
 
+        private string EscapeCsv(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            if (s.Contains(",") || s.Contains("\"") || s.Contains("\n"))
+                return "\"" + s.Replace("\"", "\"\"") + "\"";
+            return s;
+        }
+
         // ========== GANTT CHART ==========
         private void GanttBorder_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -877,7 +904,7 @@ namespace ME.Views
                         Background = brush,
                         Opacity = record.EndTime.HasValue ? 0.8 : 1.0,
                         Cursor = Cursors.Hand,
-                        ToolTip = $"{tag?.Name}\n{record.StartTime:HH:mm} - {record.EndTime?.ToString("HH:mm") ?? "进行中"}\n时长: {FormatDuration(dur)}\n占比: {pctOfTag:F1}%"
+                        ToolTip = $"{tag?.Name}\n{record.StartTime:HH:mm} - {record.EndTime?.ToString("HH:mm") ?? "进行中"}\n时长: {FormatDuration(dur)}\n占比: {pctOfTag:F1}%{(string.IsNullOrEmpty(record.Note) ? "" : $"\n备注: {record.Note}")}"
                     };
                     bar.Tag = new GanttBarInfo { Tag = tag, Record = record, Dur = dur, Pct = pctOfTag, Color = color };
                     bar.MouseLeftButtonDown += GanttBar_Click;
@@ -955,6 +982,19 @@ namespace ME.Views
                     panel.Children.Add(durText);
                 }
 
+                if (!string.IsNullOrEmpty(record.Note))
+                {
+                    var noteText = new TextBlock
+                    {
+                        Text = $"📝 {record.Note}",
+                        FontSize = 11,
+                        Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0)
+                    };
+                    panel.Children.Add(noteText);
+                }
+
                 var buttonsPanel = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -972,6 +1012,18 @@ namespace ME.Views
                 };
                 editBtn.Click += (s, ev) => EditRecord(record);
                 buttonsPanel.Children.Add(editBtn);
+
+                var noteBtn = new Button
+                {
+                    Content = "备注",
+                    FontSize = 11,
+                    Padding = new Thickness(8, 3, 8, 3),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    Tag = record,
+                    Style = (Style)FindResource("SecondaryButtonStyle")
+                };
+                noteBtn.Click += (s, ev) => EditRecordNote(record);
+                buttonsPanel.Children.Add(noteBtn);
 
                 var deleteBtn = new Button
                 {
@@ -1035,6 +1087,25 @@ namespace ME.Views
                 record.StartTime = dialog.ResultStartTime;
                 record.EndTime = dialog.ResultEndTime;
                 record.TagId = dialog.ResultTagId;
+                record.Note = dialog.ResultNote;
+                _recordRepo.UpdateRecord(record);
+                LoadRecords();
+                LoadStats();
+                DrawGanttChart();
+            }
+        }
+
+        private void EditRecordNote(TimeRecord record)
+        {
+            var tag = _allTags.FirstOrDefault(t => t.Id == record.TagId);
+            var timeRange = $"{record.StartTime:HH:mm} - {(record.EndTime?.ToString("HH:mm") ?? "进行中")}";
+            var dialog = new NoteInputDialog(tag?.Name ?? "未知", timeRange, record.Note)
+            {
+                Owner = Window.GetWindow(this)
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                record.Note = dialog.ResultNote;
                 _recordRepo.UpdateRecord(record);
                 LoadRecords();
                 LoadStats();
@@ -1076,12 +1147,12 @@ namespace ME.Views
                 try
                 {
                     var records = _recordRepo.GetAllRecords();
-                    var lines = new List<string> { "日期,标签,开始时间,结束时间,时长(分钟)" };
+                    var lines = new List<string> { "日期,标签,开始时间,结束时间,时长(分钟),备注" };
                     foreach (var r in records)
                     {
                         var tag = _allTags.FirstOrDefault(t => t.Id == r.TagId);
                         var dur = r.EndTime.HasValue ? (r.EndTime.Value - r.StartTime).TotalMinutes : 0;
-                        lines.Add($"{r.Date},{tag?.Name ?? "未知"},{r.StartTime:HH:mm},{r.EndTime?.ToString("HH:mm") ?? ""},{dur:F0}");
+                        lines.Add($"{r.Date},{tag?.Name ?? "未知"},{r.StartTime:HH:mm},{r.EndTime?.ToString("HH:mm") ?? ""},{dur:F0},{EscapeCsv(r.Note)}");
                     }
                     System.IO.File.WriteAllText(dialog.FileName, string.Join("\n", lines), System.Text.Encoding.UTF8);
                     ConfirmDialog.Show(Window.GetWindow(this), "提示", "导出成功！", "确定");
@@ -1611,7 +1682,21 @@ namespace ME.Views
                 recGrid.Children.Add(dateText);
                 recGrid.Children.Add(timeText);
                 recGrid.Children.Add(durText);
-                recBorder.Child = recGrid;
+
+                var recContent = new StackPanel();
+                recContent.Children.Add(recGrid);
+                if (!string.IsNullOrEmpty(rec.Note))
+                {
+                    recContent.Children.Add(new TextBlock
+                    {
+                        Text = $"📝 {rec.Note}",
+                        FontSize = 10,
+                        Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0)
+                    });
+                }
+                recBorder.Child = recContent;
 
                 if (isHighlighted)
                 {

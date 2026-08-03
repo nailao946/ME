@@ -13,6 +13,7 @@ namespace ME.Views
         public DateTime ResultStartTime { get; private set; }
         public DateTime? ResultEndTime { get; private set; }
         public int ResultTagId { get; private set; }
+        public string ResultNote { get; private set; }
 
         private readonly List<TimeTag> _tags;
 
@@ -36,6 +37,7 @@ namespace ME.Views
 
             TagComboBox.ItemsSource = _tags;
             TagComboBox.SelectedItem = _tags.FirstOrDefault(t => t.Id == record.TagId);
+            NoteBox.Text = record.Note ?? "";
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -71,6 +73,7 @@ namespace ME.Views
             ResultStartTime = start;
             ResultEndTime = end;
             ResultTagId = (TagComboBox.SelectedItem as TimeTag)?.Id ?? 0;
+            ResultNote = NoteBox.Text?.Trim();
             DialogResult = true;
         }
 
