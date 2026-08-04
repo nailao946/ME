@@ -66,6 +66,7 @@ namespace ME.Services
             _timer.Reset();
             _timer.Start();
             RunningStateChanged?.Invoke(true);
+            try { IdleTimeService.EnsureIdleRecords(DateTime.Today); } catch { }
         }
 
         public static void StopCurrent()
@@ -101,6 +102,7 @@ namespace ME.Services
             _timer.Stop();
             _timer.Reset();
             RunningStateChanged?.Invoke(false);
+            try { IdleTimeService.EnsureIdleRecords(DateTime.Today); } catch { }
         }
 
         public static void PauseCurrent()

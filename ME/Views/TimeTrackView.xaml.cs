@@ -522,14 +522,14 @@ namespace ME.Views
                     SharedTimerService.StopCurrent();
                     _pomo.Stop();
                     _selectedTagId = 0;
-                    InsertIdleRecords();
+                    IdleTimeService.EnsureIdleRecords(DateTime.Today);
                 }
                 else
                 {
                     if (SharedTimerService.IsRunning)
                     {
                         SharedTimerService.StopCurrent();
-                        InsertIdleRecords();
+                        IdleTimeService.EnsureIdleRecords(DateTime.Today);
                     }
                     _selectedTagId = tag.Id;
                     _pomo.SelectedTagId = tag.Id;
@@ -620,34 +620,7 @@ namespace ME.Views
         // ========== IDLE RECORD AUTO-FILL ==========
         private void InsertIdleRecords()
         {
-            var today = DateTime.Now.ToString("yyyy-MM-dd");
-            var records = _recordRepo.GetRecordsByDate(today);
-            if (records.Count < 2) return;
-
-            var idleTag = _allTags.FirstOrDefault(t => t.IsDefault);
-            if (idleTag == null) return;
-
-            var sorted = records.OrderBy(r => r.StartTime).ToList();
-            for (int i = 0; i < sorted.Count - 1; i++)
-            {
-                var current = sorted[i];
-                var next = sorted[i + 1];
-                if (current.EndTime.HasValue && current.EndTime.Value < next.StartTime)
-                {
-                    var gap = next.StartTime - current.EndTime.Value;
-                    if (gap.TotalMinutes >= 1)
-                    {
-                        var idleRecord = new TimeRecord
-                        {
-                            TagId = idleTag.Id,
-                            StartTime = current.EndTime.Value,
-                            EndTime = next.StartTime,
-                            Date = today
-                        };
-                        _recordRepo.InsertRecord(idleRecord);
-                    }
-                }
-            }
+            IdleTimeService.EnsureIdleRecords(DateTime.Today);
         }
 
         // ========== STATS MODE ==========
@@ -922,7 +895,10 @@ namespace ME.Views
         // ========== RECORDS ==========
         private void LoadRecords()
         {
+            try { IdleTimeService.EnsureIdleRecords(_selectedDate); } catch { }
             var records = _recordRepo.GetRecordsByDate(_selectedDate.ToString("yyyy-MM-dd"));
+            var idleTagId = _allTags.FirstOrDefault(t => t.IsDefault)?.Id ?? IdleTimeService.GetIdleTagId();
+            records = records.Where(r => r.TagId != idleTagId).ToList();
             if (_sortAsc)
                 records = records.OrderBy(r => r.StartTime).ToList();
             else
@@ -1147,9 +1123,11 @@ namespace ME.Views
                 try
                 {
                     var records = _recordRepo.GetAllRecords();
+                    var idleTagId = _allTags.FirstOrDefault(t => t.IsDefault)?.Id ?? IdleTimeService.GetIdleTagId();
                     var lines = new List<string> { "日期,标签,开始时间,结束时间,时长(分钟),备注" };
                     foreach (var r in records)
                     {
+                        if (r.TagId == idleTagId) continue;
                         var tag = _allTags.FirstOrDefault(t => t.Id == r.TagId);
                         var dur = r.EndTime.HasValue ? (r.EndTime.Value - r.StartTime).TotalMinutes : 0;
                         lines.Add($"{r.Date},{tag?.Name ?? "未知"},{r.StartTime:HH:mm},{r.EndTime?.ToString("HH:mm") ?? ""},{dur:F0},{EscapeCsv(r.Note)}");

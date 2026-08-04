@@ -342,9 +342,11 @@ namespace ME.Views
             var today = DateTime.Today.ToString("yyyy-MM-dd");
             var records = recordRepo.GetRecordsByDate(today);
             var tags = tagRepo.GetAllTags();
+            var idleTagId = tags.FirstOrDefault(t => t.IsDefault)?.Id;
             var tagTime = new Dictionary<int, TimeSpan>();
             foreach (var r in records)
             {
+                if (r.TagId == idleTagId) continue;
                 if (!tagTime.ContainsKey(r.TagId)) tagTime[r.TagId] = TimeSpan.Zero;
                 var end = r.EndTime ?? DateTime.Now;
                 tagTime[r.TagId] += end - r.StartTime;

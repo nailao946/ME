@@ -90,6 +90,11 @@ namespace ME.Data
             JsonStore.Save(FileName, records);
         }
 
+        public void SaveAllRecords(List<TimeRecord> records)
+        {
+            JsonStore.Save(FileName, records);
+        }
+
         public void ClearRecordsByDate(string date)
         {
             var records = JsonStore.Load<TimeRecord>(FileName);

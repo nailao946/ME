@@ -16,6 +16,7 @@ namespace ME
             base.OnStartup(e);
             Data.DatabaseHelper.Initialize();
             ThemeService.Initialize();
+            try { IdleTimeService.BackfillAllDates(); } catch { }
             StartDayWatcher();
         }
 
@@ -27,7 +28,10 @@ namespace ME
             {
                 var today = DateTime.Today;
                 if (today == _lastCheckedDate) return;
+                var yesterday = _lastCheckedDate;
                 _lastCheckedDate = today;
+                try { IdleTimeService.EnsureIdleRecords(yesterday); } catch { }
+                try { IdleTimeService.EnsureIdleRecords(today); } catch { }
                 try { SharedPomodoroService.Instance.RefreshToday(); } catch { }
                 EventAggregator.Instance.Publish("DayChanged");
             };
