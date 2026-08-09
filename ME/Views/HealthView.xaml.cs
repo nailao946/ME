@@ -1841,7 +1841,7 @@ namespace ME.Views
                 sb.AppendLine("<table><tr><th>药名</th><th>类型</th><th>规格</th><th>频率</th><th>用药时间</th><th>持续时间</th><th>备注</th></tr>");
                 foreach (var m in meds)
                 {
-                    sb.AppendLine($"<tr><td>{m.Name}</td><td>{MedicationRepository.MedicationTypeName(m.Type)}</td><td>{FormatSpec(m)}</td><td>{FormatFrequency(m)}</td><td>{FormatTimes(m)}</td><td>{FormatDuration(m)}</td><td>{m.Note ?? ""}</td></tr>");
+                    sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(m.Name)}</td><td>{MedicationRepository.MedicationTypeName(m.Type)}</td><td>{FormatSpec(m)}</td><td>{FormatFrequency(m)}</td><td>{FormatTimes(m)}</td><td>{FormatDuration(m)}</td><td>{System.Net.WebUtility.HtmlEncode(m.Note ?? "")}</td></tr>");
                 }
                 sb.AppendLine("</table>");
             }

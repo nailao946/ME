@@ -39,9 +39,6 @@ namespace ME.Services
             var url = provider.BaseUrl.Trim().TrimEnd('/');
             if (url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
                 return url;
-            if (url.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ||
-                url.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
-                return url + "/chat/completions";
             return url + "/chat/completions";
         }
 

@@ -49,10 +49,10 @@ namespace ME.Data
                 existing.BaseUrl = provider.BaseUrl;
                 existing.Model = provider.Model;
                 existing.ApiFormat = provider.ApiFormat;
-                if (provider.IsDefault)
-                {
-                    foreach (var p in providers) p.IsDefault = p.Id == provider.Id;
-                }
+                // 无条件同步"设为默认"，允许取消默认；同时保证至少有一个默认
+                existing.IsDefault = provider.IsDefault;
+                if (!providers.Any(p => p.IsDefault))
+                    existing.IsDefault = true;
                 JsonStore.Save(FileName, providers);
             }
         }
@@ -68,7 +68,7 @@ namespace ME.Data
             }
         }
 
-        /// <summary>确保至少有一个默认 DeepSeek 供应商（首次启动）</summary>
+        /// <summary>确保至少有一个默认 DeepSeek 供应商（首次启动），并迁移旧版 DeepSeekApiKey 设置</summary>
         public List<AiProvider> EnsureDefaultDeepSeek()
         {
             var providers = GetAll();
@@ -87,6 +87,17 @@ namespace ME.Data
                     }
                 };
                 providers[0].Id = 1;
+
+                // 迁移旧版 DeepSeek API Key（v1.9.19 及之前存于 settings 键，DPAPI 加密）
+                try
+                {
+                    var settingsRepo = new SettingsRepository();
+                    var oldKey = settingsRepo.GetValue(SettingsKeys.DeepSeekApiKey, "");
+                    if (!string.IsNullOrEmpty(oldKey))
+                        providers[0].EncryptedApiKey = oldKey; // 已是 DPAPI 密文，直接沿用
+                }
+                catch { }
+
                 JsonStore.Save(FileName, providers);
             }
             return providers;
