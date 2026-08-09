@@ -43,9 +43,12 @@ namespace ME.Views
             SleepDatePicker.SelectedDate = DateTime.Today;
             WeightDatePicker.SelectedDate = DateTime.Today;
             UricAcidDatePicker.SelectedDate = DateTime.Today;
+            UricHourBox.Text = DateTime.Now.Hour.ToString("D2");
+            UricMinBox.Text = DateTime.Now.Minute.ToString("D2");
             WeightFromPicker.SelectedDateChanged += (s, ev) => OnWeightRangePicked();
             WeightToPicker.SelectedDateChanged += (s, ev) => OnWeightRangePicked();
             SleepDatePicker.SelectedDateChanged += (s, ev) => LoadSleep(); // 切换日期回填该天入睡/起床
+            UricAcidDatePicker.SelectedDateChanged += (s, ev) => LoadUricAcid(); // 切换日期回填该天测量时间
             UricTargetBox.Text = _settingsRepo.GetValue(SettingsKeys.UricTarget, "");
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) => ThemeService.ThemeChanged -= OnThemeChanged;
@@ -58,6 +61,7 @@ namespace ME.Views
             LoadMedications();
             LoadCompare();
             LoadOverview();
+            AiPromptPreview.Text = AiSystemPrompt.Length > 14 ? AiSystemPrompt.Substring(0, 14) + "…" : AiSystemPrompt;
         }
 
         private void OnWeightRangePicked()
@@ -173,6 +177,19 @@ namespace ME.Views
             foreach (var c in e.Text)
             {
                 if (!char.IsDigit(c))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>允许数字和小数点（尿酸值可带小数）</summary>
+        private void UricValue_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            foreach (var c in e.Text)
+            {
+                if (!char.IsDigit(c) && c != '.')
                 {
                     e.Handled = true;
                     return;
@@ -1051,8 +1068,20 @@ namespace ME.Views
                 UricAcidHint.Text = "请输入有效的尿酸值（μmol/L）";
                 return;
             }
-            _repo.Upsert(new HealthRecord { Type = "uric_acid", Date = date.ToString("yyyy-MM-dd"), Value = v });
-            UricAcidHint.Text = $"已保存：{v:F0} μmol/L";
+            // 测量时间（默认当前时间），存入 Detail 供记录列表显示
+            var timeStr = "00:00";
+            if (int.TryParse(UricHourBox.Text, out var hh) && int.TryParse(UricMinBox.Text, out var mm)
+                && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59)
+            {
+                timeStr = $"{hh:D2}:{mm:D2}";
+            }
+            else
+            {
+                UricAcidHint.Text = "测量时间无效（时 0-23，分 0-59）";
+                return;
+            }
+            _repo.Upsert(new HealthRecord { Type = "uric_acid", Date = date.ToString("yyyy-MM-dd"), Value = v, Detail = timeStr });
+            UricAcidHint.Text = $"已保存：{v:F0} μmol/L（{timeStr}）";
             LoadUricAcid();
         }
 
@@ -1102,6 +1131,29 @@ namespace ME.Views
             var (lower, upper) = GetUricRange();
             UricRangeText.Text = $"正常范围：{lower:F0} ~ {upper:F0} μmol/L（参考线）";
 
+            // 切换日期时回填该天的测量时间；无记录则重置为当前时间，避免把旧时刻误存到新日期
+            var selUricDate = (UricAcidDatePicker.SelectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+            var selRec = all.FirstOrDefault(r => r.Date == selUricDate);
+            if (selRec != null && !string.IsNullOrEmpty(selRec.Detail) && selRec.Detail.Contains(":"))
+            {
+                var tp = selRec.Detail.Split(':');
+                if (tp.Length == 2 && int.TryParse(tp[0], out var hh2) && int.TryParse(tp[1], out var mm2))
+                {
+                    UricHourBox.Text = hh2.ToString("D2");
+                    UricMinBox.Text = mm2.ToString("D2");
+                }
+                else
+                {
+                    UricHourBox.Text = DateTime.Now.Hour.ToString("D2");
+                    UricMinBox.Text = DateTime.Now.Minute.ToString("D2");
+                }
+            }
+            else
+            {
+                UricHourBox.Text = DateTime.Now.Hour.ToString("D2");
+                UricMinBox.Text = DateTime.Now.Minute.ToString("D2");
+            }
+
             var latest = all.LastOrDefault();
             if (latest != null)
             {
@@ -1123,8 +1175,9 @@ namespace ME.Views
             foreach (var r in recent)
             {
                 var (text, brush) = ClassifyUric(r.Value, lower, upper);
+                var dateText = string.IsNullOrEmpty(r.Detail) ? r.Date : $"{r.Date} {r.Detail}";
                 UricRecordsPanel.Children.Add(BuildRecordRow(
-                    $"{r.Date}  {r.Value:F0} μmol/L",
+                    $"{dateText}  {r.Value:F0} μmol/L",
                     text,
                     (s, ev) => { _repo.Delete(r.Id); LoadUricAcid(); },
                     brush));
@@ -1214,6 +1267,10 @@ namespace ME.Views
         }
 
         // ============ 对比 + AI 分析 ============
+        /// <summary>AI 分析使用的 system 提示词（在界面"查看提示词"中可查看）</summary>
+        private const string AiSystemPrompt =
+            "你是一名健康数据分析助手。用户会提供若干健康指标按日期的数据（数值越大代表量越多；心情 0=开心、3=难过）。" +
+            "请分析这些指标之间可能存在的相关性、趋势规律，给出可执行的健康建议。用简体中文回答，分点列出，不超过 400 字。";
         private int _compareDays = 30;
         private bool _compareInitializing = true;
 
@@ -1261,38 +1318,15 @@ namespace ME.Views
                 series.Add((p.key, p.name, p.emoji, values));
             }
 
-            DrawCompareChart(days, series);
+            DrawCompareCharts(days, series);
             BuildCompareLegend(series);
         }
 
-        private void DrawCompareChart(List<DateTime> days, List<(string key, string name, string emoji, List<double?> values)> series)
+        private void DrawCompareCharts(List<DateTime> days, List<(string key, string name, string emoji, List<double?> values)> series)
         {
-            CompareChartCanvas.Children.Clear();
-            var w = CompareChartCanvas.ActualWidth;
-            var h = CompareChartCanvas.ActualHeight;
+            CompareChartsPanel.Children.Clear();
+            var w = CompareChartsPanel.ActualWidth;
             if (w < 50) w = 700;
-            if (h < 50) h = 200;
-            var axisBrush = (Brush)FindResource("BorderBrush");
-            var textBrush = (Brush)FindResource("SecondaryTextBrush");
-
-            // 网格线 + Y 轴归一化刻度
-            for (int g = 1; g <= 3; g++)
-            {
-                var gy = h - 20 - (h - 40) * g / 4.0;
-                CompareChartCanvas.Children.Add(new Line
-                {
-                    X1 = 0, X2 = w, Y1 = gy, Y2 = gy,
-                    Stroke = axisBrush, StrokeThickness = 0.6, Opacity = 0.5
-                });
-                var gl = new TextBlock
-                {
-                    Text = $"{100 - g * 25}%",
-                    FontSize = 8,
-                    Foreground = textBrush
-                };
-                Canvas.SetLeft(gl, 2); Canvas.SetTop(gl, gy - 8);
-                CompareChartCanvas.Children.Add(gl);
-            }
 
             var colors = new[]
             {
@@ -1302,88 +1336,146 @@ namespace ME.Views
                 (Brush)FindResource("AccentRedBrush"),
                 (Brush)FindResource("AccentYellowBrush")
             };
+            var textBrush = (Brush)FindResource("SecondaryTextBrush");
+            var axisBrush = (Brush)FindResource("BorderBrush");
 
-            int seriesWithData = 0;
-            for (int s = 0; s < series.Count; s++)
+            foreach (var p in series)
             {
-                var vals = series[s].values.Where(v => v.HasValue).Select(v => v.Value).ToList();
-                if (vals.Count == 0) continue;
-                seriesWithData++;
+                var idx = series.IndexOf(p);
+                var card = new Border
+                {
+                    Style = (Style)FindResource("CardStyle"),
+                    Padding = new Thickness(12, 8, 12, 6),
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+                var panel = new StackPanel();
+
+                // 标题行：emoji + 名称 + 数值范围
+                var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
+                titleRow.Children.Add(new TextBlock
+                {
+                    Text = $"{p.emoji} {p.name}",
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                var vals = p.values.Where(v => v.HasValue).Select(v => v.Value).ToList();
+                titleRow.Children.Add(new TextBlock
+                {
+                    Text = vals.Count > 0 ? $"　{vals.Min():F1} ~ {vals.Max():F1}" : "　暂无数据",
+                    FontSize = 10,
+                    Foreground = textBrush,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                panel.Children.Add(titleRow);
+
+                var canvas = new Canvas { Height = 100, Margin = new Thickness(0, 6, 0, 0) };
+                panel.Children.Add(canvas);
+                card.Child = panel;
+                CompareChartsPanel.Children.Add(card);
+
+                // 空数据占位
+                if (vals.Count == 0)
+                {
+                    canvas.Children.Add(new TextBlock
+                    {
+                        Text = "该时间段暂无记录",
+                        FontSize = 11,
+                        Foreground = textBrush,
+                        Margin = new Thickness(12, 30, 0, 0)
+                    });
+                    continue;
+                }
+
+                // 每个参数按各自数据范围绘制（不归一化到 0-100%，直观显示各自走势）
                 var minV = vals.Min();
                 var maxV = vals.Max();
                 var range = maxV - minV;
-                if (range < 1e-9) range = 1;
+                if (range < 1e-9) range = Math.Max(Math.Abs(maxV) * 0.1, 1);
+                minV -= range * 0.1;
+                maxV += range * 0.1;
+                range = maxV - minV;
 
-                // 按连续非空段分段画线，避免跨缺口误导性连线
+                double Y(double v) => 84 - (v - minV) / range * 70;
+
+                // 网格线（3 条）
+                for (int g = 1; g <= 3; g++)
+                {
+                    var gy = 84 - 70 * g / 4.0;
+                    canvas.Children.Add(new Line { X1 = 0, X2 = w, Y1 = gy, Y2 = gy, Stroke = axisBrush, StrokeThickness = 0.5, Opacity = 0.4 });
+                }
+
+                // 折线（按连续段）
                 int segStart = -1;
                 for (int i = 0; i <= days.Count; i++)
                 {
-                    bool has = i < days.Count && series[s].values[i].HasValue;
+                    bool has = i < days.Count && p.values[i].HasValue;
                     if (has && segStart < 0) segStart = i;
                     if (!has && segStart >= 0)
                     {
-                        DrawCompareSegment(colors[s % colors.Length], days, series[s].values, segStart, i - 1, w, h, minV, range, series[s].name);
+                        DrawCompareSegment(canvas, colors[idx % colors.Length], days, p.values, segStart, i - 1, w, minV, range, p.name, Y);
                         segStart = -1;
                     }
                 }
-            }
 
-            if (seriesWithData == 0)
-            {
-                var empty = new TextBlock
-                {
-                    Text = "所选时间段暂无数据，请先在 睡眠/喝水/尿酸/体重/心情 中记录",
-                    FontSize = 11,
-                    Foreground = textBrush,
-                    TextWrapping = TextWrapping.Wrap,
-                    Width = w - 40
-                };
-                Canvas.SetLeft(empty, 20);
-                Canvas.SetTop(empty, h / 2 - 10);
-                CompareChartCanvas.Children.Add(empty);
-            }
+                // Y 轴刻度（顶部 max、底部 min）
+                canvas.Children.Add(new TextBlock { Text = $"{maxV:F1}", FontSize = 8, Foreground = textBrush });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], 2);
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], 0);
+                canvas.Children.Add(new TextBlock { Text = $"{minV:F1}", FontSize = 8, Foreground = textBrush });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], 2);
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], 78);
 
-            // 日期标签（首/中/尾）
-            if (days.Count > 0)
-            {
-                var idxs = new[] { 0, days.Count / 2, days.Count - 1 };
-                foreach (var i in idxs)
+                // 日期标签（首/中/尾，天数少时去重）+ 底线
+                if (days.Count > 0)
                 {
-                    var lbl = new TextBlock { Text = days[i].ToString("MM/dd"), FontSize = 9, Foreground = textBrush };
-                    var x = (i + 0.5) * w / days.Count;
-                    Canvas.SetLeft(lbl, Math.Max(0, Math.Min(w - 40, x - 16)));
-                    Canvas.SetTop(lbl, h - 16);
-                    CompareChartCanvas.Children.Add(lbl);
+                    var rawIdxs = days.Count > 2 ? new[] { 0, days.Count / 2, days.Count - 1 } : new[] { 0, days.Count - 1 };
+                    var idxs = rawIdxs.Distinct().ToArray();
+                    foreach (var i in idxs)
+                    {
+                        var lbl = new TextBlock { Text = days[i].ToString("MM/dd"), FontSize = 8, Foreground = textBrush };
+                        var x = (i + 0.5) * w / days.Count;
+                        Canvas.SetLeft(lbl, Math.Max(0, Math.Min(w - 40, x - 14)));
+                        Canvas.SetTop(lbl, 84);
+                        canvas.Children.Add(lbl);
+                    }
                 }
+                canvas.Children.Add(new Line { X1 = 0, Y1 = 84, X2 = w, Y2 = 84, Stroke = axisBrush, StrokeThickness = 1 });
             }
-            CompareChartCanvas.Children.Add(new Line { X1 = 0, Y1 = h - 20, X2 = w, Y2 = h - 20, Stroke = axisBrush, StrokeThickness = 1 });
+
+            if (series.Count == 0)
+            {
+                CompareChartsPanel.Children.Add(new TextBlock
+                {
+                    Text = "请勾选至少 1 个参数查看趋势",
+                    FontSize = 12,
+                    Foreground = textBrush,
+                    Margin = new Thickness(8, 16, 0, 8)
+                });
+            }
         }
 
-        private void DrawCompareSegment(Brush brush, List<DateTime> days, List<double?> values, int start, int end, double w, double h, double minV, double range, string seriesName)
+        private void DrawCompareSegment(Canvas canvas, Brush brush, List<DateTime> days, List<double?> values, int start, int end, double w, double minV, double range, string seriesName, Func<double, double> Y)
         {
-            double Norm(double v) => (v - minV) / range * 100.0;
-
             var pts = new List<Point>();
             for (int i = start; i <= end; i++)
             {
                 if (!values[i].HasValue) continue;
                 var x = (i + 0.5) * w / days.Count;
-                var y = h - 20 - Norm(values[i].Value) / 100.0 * (h - 40);
-                pts.Add(new Point(x, y));
+                pts.Add(new Point(x, Y(values[i].Value)));
             }
             for (int i = 1; i < pts.Count; i++)
             {
-                CompareChartCanvas.Children.Add(new Line
+                canvas.Children.Add(new Line
                 {
                     X1 = pts[i - 1].X, Y1 = pts[i - 1].Y, X2 = pts[i].X, Y2 = pts[i].Y,
-                    Stroke = brush, StrokeThickness = 2.5, Opacity = 0.9
+                    Stroke = brush, StrokeThickness = 2, Opacity = 0.9
                 });
             }
             for (int i = 0; i < pts.Count; i++)
             {
-                var dot = new Ellipse { Width = 7, Height = 7, Fill = brush, Stroke = Brushes.White, StrokeThickness = 1.5 };
-                var idx = start + i; // 该点在 days 中的下标（可能跨空位，pts 顺序对应非空值）
-                // 精确下标：重新从 start 数非空
+                var dot = new Ellipse { Width = 6, Height = 6, Fill = brush, Stroke = Brushes.White, StrokeThickness = 1.2 };
                 int realIdx = start;
                 int count = -1;
                 for (int j = start; j <= end; j++)
@@ -1395,9 +1487,9 @@ namespace ME.Views
                     }
                 }
                 dot.ToolTip = $"{seriesName}\n{days[realIdx]:yyyy-MM-dd}  值 {values[realIdx]:F1}";
-                CompareChartCanvas.Children.Add(dot);
-                Canvas.SetLeft(dot, pts[i].X - 3.5);
-                Canvas.SetTop(dot, pts[i].Y - 3.5);
+                canvas.Children.Add(dot);
+                Canvas.SetLeft(dot, pts[i].X - 3);
+                Canvas.SetTop(dot, pts[i].Y - 3);
             }
         }
 
@@ -1431,9 +1523,14 @@ namespace ME.Views
         private async void AiAnalyze_Click(object sender, RoutedEventArgs e)
         {
             var provider = _aiProviderRepo.GetDefault();
-            if (provider == null || string.IsNullOrWhiteSpace(AiProviderRepository.GetApiKey(provider)))
+            if (provider == null)
             {
-                AiStatusText.Text = "未配置 AI 供应商 API Key，请到 设置 → AI 分析 中填写";
+                AiStatusText.Text = "未配置 AI 供应商，请到 设置 → AI 分析 中添加";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(AiProviderRepository.GetApiKey(provider)))
+            {
+                AiStatusText.Text = $"当前供应商「{provider.Name}」未填写 API Key，请到 设置 → AI 分析 中填写，或切换其它已填 Key 的供应商";
                 return;
             }
             var selected = GetSelectedCompareParams();
@@ -1448,11 +1545,9 @@ namespace ME.Views
             try
             {
                 var dataText = BuildCompareDataText(selected);
-                var system = "你是一名健康数据分析助手。用户会提供若干健康指标按日期的数据（数值越大代表量越多；心情 0=开心、3=难过）。" +
-                             "请分析这些指标之间可能存在的相关性、趋势规律，给出可执行的健康建议。用简体中文回答，分点列出，不超过 400 字。";
-                var result = await LlmService.ChatAsync(provider, system, dataText);
+                var result = await LlmService.ChatAsync(provider, AiSystemPrompt, dataText);
                 AiResultText.Text = result;
-                AiStatusText.Text = "分析完成";
+                AiStatusText.Text = $"分析完成（{provider.Name}）";
             }
             catch (Exception ex)
             {
@@ -1462,6 +1557,15 @@ namespace ME.Views
             {
                 AiAnalyzeBtn.IsEnabled = true;
             }
+        }
+
+        private void ShowAiPrompt_Click(object sender, RoutedEventArgs e)
+        {
+            AiPromptPreview.Text = AiSystemPrompt;
+            AiPromptPreview.MaxWidth = 500;
+            AiPromptPreview.ToolTip = AiSystemPrompt;
+            MessageBox.Show(Window.GetWindow(this), AiSystemPrompt, "AI 分析提示词",
+                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private string BuildCompareDataText(List<(string key, string name, string emoji)> selected)
@@ -1589,88 +1693,70 @@ namespace ME.Views
             if (h < 50) h = 360;
 
             var cx = w / 2.0;
-            var outlineBrush = new SolidColorBrush(Color.FromRgb(90, 90, 100));
+            var fillBrush = new SolidColorBrush(Color.FromArgb(36, 0, 122, 255));   // 半透明主题蓝
+            var hoverFill = new SolidColorBrush(Color.FromArgb(70, 0, 122, 255));
+            var borderBrush = new SolidColorBrush(Color.FromRgb(120, 140, 170));
 
-            // 头部（睡眠/心情）
-            var head = new Ellipse
+            // 用圆角填充块画简化人体，每块中间放 emoji 图标，直观不抽象
+            void AddPart(string emoji, string label, double x, double y, double pw, double ph, double radius, string partKey, string tooltip)
             {
-                Width = 56, Height = 56,
-                Stroke = outlineBrush, StrokeThickness = 2,
-                Cursor = Cursors.Hand,
-                ToolTip = "头部：睡眠 / 心情"
-            };
-            Canvas.SetLeft(head, cx - 28); Canvas.SetTop(head, 8);
-            head.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("头部");
-            BodyCanvas.Children.Add(head);
-            AddBodyLabel("头", cx - 28, 8, 56);
+                var rect = new Rectangle
+                {
+                    Width = pw,
+                    Height = ph,
+                    RadiusX = radius,
+                    RadiusY = radius,
+                    Fill = fillBrush,
+                    Stroke = borderBrush,
+                    StrokeThickness = 1.5,
+                    Cursor = Cursors.Hand,
+                    ToolTip = tooltip
+                };
+                Canvas.SetLeft(rect, x);
+                Canvas.SetTop(rect, y);
+                rect.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail(partKey);
+                rect.MouseEnter += (s, e) => rect.Fill = hoverFill;
+                rect.MouseLeave += (s, e) => rect.Fill = fillBrush;
+                BodyCanvas.Children.Add(rect);
 
+                var emojiText = new TextBlock
+                {
+                    Text = emoji,
+                    FontSize = 24,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(emojiText, x + pw / 2 - 12);
+                Canvas.SetTop(emojiText, y + ph / 2 - 22);
+                BodyCanvas.Children.Add(emojiText);
+
+                var lbl = new TextBlock
+                {
+                    Text = label,
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(lbl, x + pw / 2 - 22);
+                Canvas.SetTop(lbl, y + ph / 2 + 4);
+                BodyCanvas.Children.Add(lbl);
+            }
+
+            // 头（睡眠/心情）
+            AddPart("🧠", "睡眠/心情", cx - 28, 6, 56, 56, 28, "头部", "头部：睡眠 / 心情");
             // 躯干（体重/尿酸）
-            var torso = new System.Windows.Shapes.Path
-            {
-                Stroke = outlineBrush, StrokeThickness = 2,
-                Fill = Brushes.Transparent,
-                Cursor = Cursors.Hand,
-                ToolTip = "躯干：体重 / 尿酸",
-                Data = Geometry.Parse($"M {cx - 40},72 C {cx - 46},120 {cx - 50},180 {cx - 48},236 L {cx - 36},236 L {cx - 30},150 C {cx - 30},110 {cx - 22},80 {cx},80 C {cx + 22},80 {cx + 30},110 {cx + 30},150 L {cx + 36},236 L {cx + 48},236 C {cx + 50},180 {cx + 46},120 {cx + 40},72 Z")
-            };
-            torso.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("躯干");
-            BodyCanvas.Children.Add(torso);
-            AddBodyLabel("躯干", cx - 40, 150, 80);
-
-            // 左臂
-            var arm = new System.Windows.Shapes.Path
-            {
-                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
-                Cursor = Cursors.Hand, ToolTip = "左臂：喝水",
-                Data = Geometry.Parse($"M {cx - 40},90 C {cx - 70},110 {cx - 82},150 {cx - 80},200 L {cx - 66},198 C {cx - 68},160 {cx - 56},126 {cx - 32},104 Z")
-            };
-            arm.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("喝水");
-            BodyCanvas.Children.Add(arm);
-
-            // 右臂
-            var arm2 = new System.Windows.Shapes.Path
-            {
-                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
-                Cursor = Cursors.Hand, ToolTip = "右臂：用药",
-                Data = Geometry.Parse($"M {cx + 40},90 C {cx + 70},110 {cx + 82},150 {cx + 80},200 L {cx + 66},198 C {cx + 68},160 {cx + 56},126 {cx + 32},104 Z")
-            };
-            arm2.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("用药");
-            BodyCanvas.Children.Add(arm2);
-
-            // 左腿
-            var leg = new System.Windows.Shapes.Path
-            {
-                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
-                Cursor = Cursors.Hand, ToolTip = "左腿：尿酸",
-                Data = Geometry.Parse($"M {cx - 40},236 L {cx - 26},236 L {cx - 22},300 C {cx - 30},340 {cx - 36},352 {cx - 40},352 L {cx - 48},352 C {cx - 46},330 {cx - 48},290 {cx - 46},250 Z")
-            };
-            leg.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("尿酸");
-            BodyCanvas.Children.Add(leg);
-
-            // 右腿
-            var leg2 = new System.Windows.Shapes.Path
-            {
-                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
-                Cursor = Cursors.Hand, ToolTip = "右腿：体重",
-                Data = Geometry.Parse($"M {cx + 40},236 L {cx + 26},236 L {cx + 22},300 C {cx + 30},340 {cx + 36},352 {cx + 40},352 L {cx + 48},352 C {cx + 46},330 {cx + 48},290 {cx + 46},250 Z")
-            };
-            leg2.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("体重");
-            BodyCanvas.Children.Add(leg2);
-        }
-
-        private void AddBodyLabel(string text, double x, double y, double width)
-        {
-            var lbl = new TextBlock
-            {
-                Text = text,
-                FontSize = 10,
-                Foreground = (Brush)FindResource("SecondaryTextBrush"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                IsHitTestVisible = false
-            };
-            Canvas.SetLeft(lbl, x + width / 2 - 10);
-            Canvas.SetTop(lbl, y + 2);
-            BodyCanvas.Children.Add(lbl);
+            AddPart("🩺", "体重/尿酸", cx - 42, 74, 84, 150, 22, "躯干", "躯干：体重 / 尿酸");
+            // 左臂（喝水）
+            AddPart("💧", "喝水", cx - 88, 92, 36, 112, 18, "喝水", "左臂：喝水");
+            // 右臂（用药）
+            AddPart("💊", "用药", cx + 52, 92, 36, 112, 18, "用药", "右臂：用药");
+            // 左腿（尿酸）
+            AddPart("🦴", "尿酸", cx - 42, 236, 36, 112, 18, "尿酸", "左腿：尿酸");
+            // 右腿（体重）
+            AddPart("⚖️", "体重", cx + 6, 236, 36, 112, 18, "体重", "右腿：体重");
         }
 
         private void ShowBodyPartDetail(string part)

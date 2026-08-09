@@ -21,7 +21,7 @@ namespace ME.Models
         /// </summary>
         public double Value { get; set; }
 
-        /// <summary>补充信息：sleep 存 "HH:mm|HH:mm"（入睡|起床）；其余可放备注</summary>
+        /// <summary>补充信息：sleep 存 "HH:mm|HH:mm"（入睡|起床）；weight 存身高 cm；uric_acid 存测量时间 "HH:mm"；其余可放备注</summary>
         public string Detail { get; set; }
 
         public string Note { get; set; }

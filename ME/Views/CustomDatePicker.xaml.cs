@@ -53,8 +53,39 @@ namespace ME.Views
 
         private void TogglePopup(object sender, MouseButtonEventArgs e)
         {
-            CalendarPopup.IsOpen = !CalendarPopup.IsOpen;
-            if (CalendarPopup.IsOpen) BuildCalendar();
+            if (CalendarPopup.IsOpen)
+            {
+                ClosePopup();
+                return;
+            }
+            CalendarPopup.IsOpen = true;
+            BuildCalendar();
+            // 点击日历以外区域（主窗口/其它界面）时自动关闭
+            var win = Window.GetWindow(this);
+            if (win != null)
+                win.PreviewMouseDown -= Window_PreviewMouseDown;
+            if (win != null)
+                win.PreviewMouseDown += Window_PreviewMouseDown;
+        }
+
+        private void ClosePopup()
+        {
+            if (CalendarPopup.IsOpen)
+            {
+                var win = Window.GetWindow(this);
+                if (win != null)
+                    win.PreviewMouseDown -= Window_PreviewMouseDown;
+                CalendarPopup.IsOpen = false;
+            }
+        }
+
+        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Popup 内的元素不属于任何 Window（Window.GetWindow 返回 null），点击其内部不关闭；
+            // 点击主窗口/对话框等其它区域则关闭日历
+            var src = e.OriginalSource as DependencyObject;
+            if (src != null && Window.GetWindow(src) != null)
+                ClosePopup();
         }
 
         private void Popup_GotMouseCapture(object sender, MouseEventArgs e)

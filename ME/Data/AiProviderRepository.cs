@@ -21,7 +21,14 @@ namespace ME.Data
         public AiProvider GetDefault()
         {
             var providers = GetAll();
-            return providers.FirstOrDefault(p => p.IsDefault) ?? providers.FirstOrDefault();
+            if (providers.Count == 0) return null;
+            // 优先返回"已填 API Key"的供应商：默认有 key → 其次任意有 key → 再默认 → 再第一个。
+            // 避免出现"选了带 Key 的供应商，但健康页却命中无 Key 的内置 DeepSeek"的情况
+            var withKey = providers.Where(p => !string.IsNullOrWhiteSpace(GetApiKey(p))).ToList();
+            var dfltWithKey = withKey.FirstOrDefault(p => p.IsDefault);
+            if (dfltWithKey != null) return dfltWithKey;
+            if (withKey.Count > 0) return withKey[0];
+            return providers.FirstOrDefault(p => p.IsDefault) ?? providers[0];
         }
 
         public int Insert(AiProvider provider)

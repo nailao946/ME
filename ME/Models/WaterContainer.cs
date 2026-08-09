@@ -15,5 +15,7 @@ namespace ME.Models
         public double CapacityMl { get; set; }
 
         public bool IsBuiltIn { get; set; }
+
+        public override string ToString() => $"{Name}（{CapacityMl:0} ml）";
     }
 }

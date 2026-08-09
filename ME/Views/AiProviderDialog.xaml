@@ -43,7 +43,7 @@
                     <TextBlock Text="供应商名称" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="100" VerticalAlignment="Center" />
                     <TextBox x:Name="NameBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="240" FontSize="13" />
+                             Width="260" FontSize="13" />
                 </StackPanel>
                 <TextBlock Text="如：DeepSeek、通义千问、智谱清言、Kimi、OpenAI" FontSize="10"
                            Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,2,0,0" />
@@ -51,7 +51,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="API Key" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="100" VerticalAlignment="Center" />
-                    <PasswordBox x:Name="ApiKeyBox" Width="240" VerticalContentAlignment="Center"
+                    <PasswordBox x:Name="ApiKeyBox" Width="260"
                                  PasswordChar="●" />
                 </StackPanel>
 
@@ -59,7 +59,7 @@
                     <TextBlock Text="请求地址" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="100" VerticalAlignment="Center" />
                     <TextBox x:Name="BaseUrlBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="300" FontSize="13" />
+                             Width="260" FontSize="13" />
                 </StackPanel>
                 <TextBlock Text="如：https://api.deepseek.com（会自动补 /chat/completions）" FontSize="10"
                            Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,2,0,0" />
@@ -68,7 +68,7 @@
                     <TextBlock Text="模型名称" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="100" VerticalAlignment="Center" />
                     <TextBox x:Name="ModelBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="240" FontSize="13" />
+                             Width="260" FontSize="13" />
                 </StackPanel>
                 <TextBlock Text="如：deepseek-chat、qwen-plus、glm-4、gpt-4o-mini" FontSize="10"
                            Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,2,0,0" />
@@ -76,7 +76,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="API 格式" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="100" VerticalAlignment="Center" />
-                    <ComboBox x:Name="FormatCombo" Width="240" Style="{StaticResource MacComboBoxStyle}">
+                    <ComboBox x:Name="FormatCombo" Width="260" Style="{StaticResource MacComboBoxStyle}">
                         <ComboBoxItem Content="OpenAI 兼容" Tag="OpenAI" />
                         <ComboBoxItem Content="Anthropic" Tag="Anthropic" />
                     </ComboBox>

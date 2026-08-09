@@ -45,29 +45,29 @@
                     <TextBlock Text="药名" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="80" VerticalAlignment="Center" />
                     <TextBox x:Name="NameBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="200" FontSize="13" />
+                             Width="300" FontSize="13" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="药品类型" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="80" VerticalAlignment="Center" />
-                    <ComboBox x:Name="TypeCombo" Width="180" Style="{StaticResource MacComboBoxStyle}" />
+                    <ComboBox x:Name="TypeCombo" Width="200" Style="{StaticResource MacComboBoxStyle}" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="规格" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="80" VerticalAlignment="Center" />
                     <TextBox x:Name="SpecValueBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="80" FontSize="13" />
+                             Width="100" FontSize="13" />
                     <TextBlock Text="/" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}"
                                VerticalAlignment="Center" Margin="6,0,6,0" />
-                    <ComboBox x:Name="UnitCombo" Width="120" Style="{StaticResource MacComboBoxStyle}" />
+                    <ComboBox x:Name="UnitCombo" Width="140" Style="{StaticResource MacComboBoxStyle}" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="用药频率" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="80" VerticalAlignment="Center" />
-                    <ComboBox x:Name="FreqCombo" Width="180" Style="{StaticResource MacComboBoxStyle}"
+                    <ComboBox x:Name="FreqCombo" Width="200" Style="{StaticResource MacComboBoxStyle}"
                               SelectionChanged="FreqCombo_Changed" />
                 </StackPanel>
 
@@ -76,7 +76,7 @@
                     <TextBlock Text="每隔" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                VerticalAlignment="Center" />
                     <TextBox x:Name="EveryNDaysBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="60" Text="1" TextAlignment="Center" FontSize="12"
+                             Width="70" Text="1" TextAlignment="Center" FontSize="12"
                              Margin="6,0,0,0" PreviewTextInput="DigitOnly_PreviewTextInput" />
                     <TextBlock Text="天" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                VerticalAlignment="Center" Margin="4,0,0,0" />
@@ -87,7 +87,7 @@
                     <TextBlock Text="每" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                VerticalAlignment="Center" />
                     <TextBox x:Name="IntervalHoursBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="60" Text="8" TextAlignment="Center" FontSize="12"
+                             Width="70" Text="8" TextAlignment="Center" FontSize="12"
                              Margin="6,0,0,0" PreviewTextInput="DigitOnly_PreviewTextInput" />
                     <TextBlock Text="小时" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                VerticalAlignment="Center" Margin="4,0,0,0" />
@@ -141,7 +141,7 @@
                     <TextBlock Text="备注" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                Width="80" VerticalAlignment="Top" Margin="0,4,0,0" />
                     <TextBox x:Name="NoteBox" Style="{StaticResource InputTextBoxStyle}"
-                             Width="360" Height="64" TextWrapping="Wrap" AcceptsReturn="True"
+                             Width="360" Height="72" TextWrapping="Wrap" AcceptsReturn="True"
                              VerticalContentAlignment="Top" Padding="8" FontSize="12" />
                 </StackPanel>
             </StackPanel>

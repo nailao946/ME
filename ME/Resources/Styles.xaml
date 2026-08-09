@@ -113,6 +113,7 @@
         <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryBrush}" />
         <Setter Property="Padding" Value="10,0" />
         <Setter Property="FontSize" Value="13" />
+        <Setter Property="Height" Value="36" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
             <Setter.Value>
@@ -143,6 +144,45 @@
     <!-- 全局 TextBox 默认样式：与日期控件一致的圆角边框，聚焦仅高亮边框不改变背景 -->
     <Style TargetType="TextBox" BasedOn="{StaticResource InputTextBoxStyle}" />
 
+    <!-- PasswordBox 样式：与 TextBox 完全一致（圆角边框、聚焦高亮、统一高度） -->
+    <Style x:Key="InputPasswordBoxStyle" TargetType="PasswordBox">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="border" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+                            <Setter TargetName="border" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="PasswordBox" BasedOn="{StaticResource InputPasswordBoxStyle}" />
+
     <!-- ComboBox Style - macOS rounded, click-anywhere to open -->
     <Style x:Key="MacComboBoxStyle" TargetType="ComboBox">
         <Setter Property="Background" Value="{DynamicResource CardBrush}" />
@@ -151,6 +191,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="10,6" />
         <Setter Property="FontSize" Value="13" />
+        <Setter Property="Height" Value="36" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
             <Setter.Value>

@@ -608,7 +608,11 @@ namespace ME.Views
                 };
                 AiProviderCombo.Items.Add(item);
             }
-            var sel = providers.Find(p => p.Id == selId) ?? providers.Find(p => p.IsDefault) ?? providers.FirstOrDefault();
+            var withKey = providers.Where(p => !string.IsNullOrEmpty(AiProviderRepository.GetApiKey(p))).ToList();
+            var sel = providers.Find(p => p.Id == selId)
+                ?? (withKey.FirstOrDefault(p => p.IsDefault) ?? withKey.FirstOrDefault())
+                ?? providers.Find(p => p.IsDefault)
+                ?? providers.FirstOrDefault();
             if (sel != null)
             {
                 _selectedProviderId = sel.Id;
