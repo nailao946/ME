@@ -221,6 +221,32 @@
                 </StackPanel>
             </Border>
 
+            <!-- AI Analysis (DeepSeek) -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="AI 分析（DeepSeek）" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
+                    <TextBlock Text="在健康 → 对比 页面使用 AI 分析健康数据相关性。填写 DeepSeek API Key 后即可调用。" FontSize="12"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="API Key" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center" Width="100" />
+                        <PasswordBox x:Name="DeepSeekKeyBox" Width="300" VerticalContentAlignment="Center"
+                                     PasswordChar="●" />
+                    </StackPanel>
+                    <TextBlock Text="获取方式：platform.deepseek.com → API Keys 创建。Key 仅保存在本机设置中。" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="保存 API Key" Click="SaveDeepSeekKey_Click"
+                                Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
+                        <Button x:Name="TestDeepSeekKeyBtn" Content="测试连接" Click="TestDeepSeekKey_Click"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
+                    </StackPanel>
+                    <TextBlock x:Name="DeepSeekStatusText" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
             <!-- About -->
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>

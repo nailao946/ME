@@ -45,6 +45,7 @@ namespace ME.Views
             LoadWater();
             LoadMood();
             LoadUricAcid();
+            LoadCompare();
         }
 
         private void OnGlobalEvent(string message)
@@ -62,6 +63,7 @@ namespace ME.Views
                         LoadWater();
                         LoadMood();
                         LoadUricAcid();
+                        LoadCompare();
                     }
                 }));
             }
@@ -78,6 +80,7 @@ namespace ME.Views
                     LoadWater();
                     LoadMood();
                     LoadUricAcid();
+                    LoadCompare();
                 }
             });
         }
@@ -91,6 +94,7 @@ namespace ME.Views
                 LoadWater();
                 LoadMood();
                 LoadUricAcid();
+                LoadCompare();
             }
         }
 
@@ -104,12 +108,14 @@ namespace ME.Views
             WaterPanel.Visibility = _currentTab == "water" ? Visibility.Visible : Visibility.Collapsed;
             MoodPanel.Visibility = _currentTab == "mood" ? Visibility.Visible : Visibility.Collapsed;
             UricAcidPanel.Visibility = _currentTab == "uric_acid" ? Visibility.Visible : Visibility.Collapsed;
+            ComparePanel.Visibility = _currentTab == "compare" ? Visibility.Visible : Visibility.Collapsed;
 
             SleepTabBtn.Style = (Style)FindResource(_currentTab == "sleep" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             WeightTabBtn.Style = (Style)FindResource(_currentTab == "weight" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             WaterTabBtn.Style = (Style)FindResource(_currentTab == "water" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             MoodTabBtn.Style = (Style)FindResource(_currentTab == "mood" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             UricAcidTabBtn.Style = (Style)FindResource(_currentTab == "uric_acid" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            CompareTabBtn.Style = (Style)FindResource(_currentTab == "compare" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
 
             // 面板刚变为可见，按真实宽度重绘图表
             Dispatcher.BeginInvoke(new Action(() =>
@@ -121,6 +127,7 @@ namespace ME.Views
                     case "water": LoadWater(); break;
                     case "mood": LoadMood(); break;
                     case "uric_acid": LoadUricAcid(); break;
+                    case "compare": LoadCompare(); break;
                 }
             }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
@@ -965,6 +972,225 @@ namespace ME.Views
             var ub = new TextBlock { Text = $"{maxV:F0}", FontSize = 9, Foreground = textBrush };
             Canvas.SetLeft(ub, 2); Canvas.SetTop(ub, h - 34);
             UricChartCanvas.Children.Add(ub);
+        }
+
+        // ============ 对比 + AI 分析 ============
+        private int _compareDays = 30;
+
+        private void CompareRange_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is Button btn)) return;
+            _compareDays = int.Parse((string)btn.Tag);
+            CmpRange7Btn.Style = (Style)FindResource(_compareDays == 7 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            CmpRange30Btn.Style = (Style)FindResource(_compareDays == 30 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            LoadCompare();
+        }
+
+        private void CompareParam_Changed(object sender, RoutedEventArgs e)
+        {
+            LoadCompare();
+        }
+
+        private List<(string key, string name, string emoji)> GetSelectedCompareParams()
+        {
+            var list = new List<(string, string, string)>();
+            if (CmpWater.IsChecked == true) list.Add(("water", "喝水(ml)", "💧"));
+            if (CmpSleep.IsChecked == true) list.Add(("sleep", "睡眠(h)", "😴"));
+            if (CmpWeight.IsChecked == true) list.Add(("weight", "体重(kg)", "⚖️"));
+            if (CmpUric.IsChecked == true) list.Add(("uric_acid", "尿酸(μmol/L)", "🩸"));
+            if (CmpMood.IsChecked == true) list.Add(("mood", "心情(0好-3差)", "😊"));
+            return list;
+        }
+
+        private void LoadCompare()
+        {
+            var all = _repo.GetAll();
+            var days = Enumerable.Range(0, _compareDays).Select(i => DateTime.Today.AddDays(-(_compareDays - 1 - i))).ToList();
+            var selected = GetSelectedCompareParams();
+
+            // 每个参数按天取值
+            var series = new List<(string key, string name, string emoji, List<double?> values)>();
+            foreach (var p in selected)
+            {
+                var values = days.Select(d =>
+                {
+                    var rec = all.FirstOrDefault(r => r.Type == p.key && r.Date == d.ToString("yyyy-MM-dd"));
+                    return rec != null ? (double?)rec.Value : null;
+                }).ToList();
+                series.Add((p.key, p.name, p.emoji, values));
+            }
+
+            DrawCompareChart(days, series);
+            BuildCompareLegend(series);
+        }
+
+        private void DrawCompareChart(List<DateTime> days, List<(string key, string name, string emoji, List<double?> values)> series)
+        {
+            CompareChartCanvas.Children.Clear();
+            var w = CompareChartCanvas.ActualWidth;
+            var h = CompareChartCanvas.ActualHeight;
+            if (w < 50) w = 700;
+            if (h < 50) h = 200;
+            var axisBrush = (Brush)FindResource("BorderBrush");
+            var textBrush = (Brush)FindResource("SecondaryTextBrush");
+
+            var colors = new[]
+            {
+                (Brush)FindResource("PrimaryBrush"),
+                (Brush)FindResource("AccentGreenBrush"),
+                (Brush)FindResource("AccentBlueBrush"),
+                (Brush)FindResource("AccentRedBrush"),
+                (Brush)FindResource("AccentYellowBrush")
+            };
+
+            for (int s = 0; s < series.Count; s++)
+            {
+                var vals = series[s].values.Where(v => v.HasValue).Select(v => v.Value).ToList();
+                if (vals.Count == 0) continue;
+                var minV = vals.Min();
+                var maxV = vals.Max();
+                var range = maxV - minV;
+                if (range < 1e-9) range = 1;
+
+                // 按连续非空段分段画线，避免跨缺口误导性连线
+                int segStart = -1;
+                for (int i = 0; i <= days.Count; i++)
+                {
+                    bool has = i < days.Count && series[s].values[i].HasValue;
+                    if (has && segStart < 0) segStart = i;
+                    if (!has && segStart >= 0)
+                    {
+                        DrawCompareSegment(colors[s % colors.Length], days, series[s].values, segStart, i - 1, w, h, minV, range);
+                        segStart = -1;
+                    }
+                }
+            }
+
+            // 日期标签（首/中/尾）
+            if (days.Count > 0)
+            {
+                var idxs = new[] { 0, days.Count / 2, days.Count - 1 };
+                foreach (var i in idxs)
+                {
+                    var lbl = new TextBlock { Text = days[i].ToString("MM/dd"), FontSize = 9, Foreground = textBrush };
+                    var x = (i + 0.5) * w / days.Count;
+                    Canvas.SetLeft(lbl, Math.Max(0, Math.Min(w - 40, x - 16)));
+                    Canvas.SetTop(lbl, h - 16);
+                    CompareChartCanvas.Children.Add(lbl);
+                }
+            }
+            CompareChartCanvas.Children.Add(new Line { X1 = 0, Y1 = h - 20, X2 = w, Y2 = h - 20, Stroke = axisBrush, StrokeThickness = 1 });
+        }
+
+        private void DrawCompareSegment(Brush brush, List<DateTime> days, List<double?> values, int start, int end, double w, double h, double minV, double range)
+        {
+            double Norm(double v) => (v - minV) / range * 100.0;
+
+            var pts = new List<Point>();
+            for (int i = start; i <= end; i++)
+            {
+                if (!values[i].HasValue) continue;
+                var x = (i + 0.5) * w / days.Count;
+                var y = h - 20 - Norm(values[i].Value) / 100.0 * (h - 40);
+                pts.Add(new Point(x, y));
+            }
+            for (int i = 1; i < pts.Count; i++)
+            {
+                CompareChartCanvas.Children.Add(new Line
+                {
+                    X1 = pts[i - 1].X, Y1 = pts[i - 1].Y, X2 = pts[i].X, Y2 = pts[i].Y,
+                    Stroke = brush, StrokeThickness = 2, Opacity = 0.85
+                });
+            }
+            foreach (var p in pts)
+            {
+                CompareChartCanvas.Children.Add(new Ellipse { Width = 4, Height = 4, Fill = brush });
+                Canvas.SetLeft(CompareChartCanvas.Children[CompareChartCanvas.Children.Count - 1], p.X - 2);
+                Canvas.SetTop(CompareChartCanvas.Children[CompareChartCanvas.Children.Count - 1], p.Y - 2);
+            }
+        }
+
+        private void BuildCompareLegend(List<(string key, string name, string emoji, List<double?> values)> series)
+        {
+            CompareLegendPanel.Children.Clear();
+            var colors = new[]
+            {
+                (Brush)FindResource("PrimaryBrush"),
+                (Brush)FindResource("AccentGreenBrush"),
+                (Brush)FindResource("AccentBlueBrush"),
+                (Brush)FindResource("AccentRedBrush"),
+                (Brush)FindResource("AccentYellowBrush")
+            };
+            for (int i = 0; i < series.Count; i++)
+            {
+                var item = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 16, 4) };
+                item.Children.Add(new Border { Width = 14, Height = 4, CornerRadius = new CornerRadius(2), Background = colors[i % colors.Length], VerticalAlignment = VerticalAlignment.Center });
+                item.Children.Add(new TextBlock
+                {
+                    Text = $"{series[i].emoji} {series[i].name}",
+                    FontSize = 11,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    Margin = new Thickness(4, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                CompareLegendPanel.Children.Add(item);
+            }
+        }
+
+        private async void AiAnalyze_Click(object sender, RoutedEventArgs e)
+        {
+            var apiKey = SecureStore.Decrypt(_settingsRepo.GetValue(SettingsKeys.DeepSeekApiKey, ""));
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                AiStatusText.Text = "未配置 DeepSeek API Key，请到 设置 → AI 分析 中填写";
+                return;
+            }
+            var selected = GetSelectedCompareParams();
+            if (selected.Count < 2)
+            {
+                AiStatusText.Text = "请至少勾选 2 个参数再分析";
+                return;
+            }
+            AiAnalyzeBtn.IsEnabled = false;
+            AiStatusText.Text = "正在请求 DeepSeek 分析…";
+            AiResultText.Text = "";
+            try
+            {
+                var dataText = BuildCompareDataText(selected);
+                var system = "你是一名健康数据分析助手。用户会提供若干健康指标按日期的数据（数值越大代表量越多；心情 0=开心、3=难过）。" +
+                             "请分析这些指标之间可能存在的相关性、趋势规律，给出可执行的健康建议。用简体中文回答，分点列出，不超过 400 字。";
+                var result = await DeepSeekService.ChatAsync(apiKey, system, dataText);
+                AiResultText.Text = result;
+                AiStatusText.Text = "分析完成";
+            }
+            catch (Exception ex)
+            {
+                AiStatusText.Text = $"分析失败：{ex.Message}";
+            }
+            finally
+            {
+                AiAnalyzeBtn.IsEnabled = true;
+            }
+        }
+
+        private string BuildCompareDataText(List<(string key, string name, string emoji)> selected)
+        {
+            var all = _repo.GetAll();
+            var days = Enumerable.Range(0, _compareDays).Select(i => DateTime.Today.AddDays(-(_compareDays - 1 - i))).ToList();
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"以下为近 {_compareDays} 天健康数据（日期, " + string.Join(", ", selected.Select(p => p.name)) + "）：");
+            foreach (var d in days)
+            {
+                var dateStr = d.ToString("yyyy-MM-dd");
+                var parts = new List<string>();
+                foreach (var p in selected)
+                {
+                    var rec = all.FirstOrDefault(r => r.Type == p.key && r.Date == dateStr);
+                    parts.Add(rec != null ? rec.Value.ToString("F1", CultureInfo.InvariantCulture) : "无记录");
+                }
+                sb.AppendLine(dateStr + ": " + string.Join(", ", parts));
+            }
+            return sb.ToString();
         }
 
         // ============ 通用 ============

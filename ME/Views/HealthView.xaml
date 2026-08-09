@@ -22,6 +22,8 @@
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="UricAcidTabBtn" Content="🩸 尿酸" Tag="uric_acid" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+                <Button x:Name="CompareTabBtn" Content="📊 对比" Tag="compare" Click="Tab_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
             </StackPanel>
         </Border>
 
@@ -477,6 +479,94 @@
                             <StackPanel x:Name="UricRecordsPanel" />
                         </ScrollViewer>
                     </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 对比面板 ============ -->
+        <Grid Grid.Row="1" x:Name="ComparePanel" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="选择对比参数" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock Text="勾选 2 项以上参数，看它们之间的趋势关联（数值已归一化）"
+                                   FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Margin="0,4,0,8" />
+                        <CheckBox x:Name="CmpWater" Content="💧 喝水" IsChecked="True"
+                                  Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
+                                  Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                        <CheckBox x:Name="CmpSleep" Content="😴 睡眠" IsChecked="True"
+                                  Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
+                                  Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                        <CheckBox x:Name="CmpWeight" Content="⚖️ 体重" IsChecked="False"
+                                  Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
+                                  Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                        <CheckBox x:Name="CmpUric" Content="🩸 尿酸" IsChecked="True"
+                                  Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
+                                  Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                        <CheckBox x:Name="CmpMood" Content="😊 心情" IsChecked="False"
+                                  Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
+                                  Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="时间范围" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <Button x:Name="CmpRange7Btn" Content="近 7 天" Tag="7" Click="CompareRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="26" FontSize="11"
+                                    Padding="10,0" Margin="10,0,4,0" />
+                            <Button x:Name="CmpRange30Btn" Content="近 30 天" Tag="30" Click="CompareRange_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Height="26" FontSize="11"
+                                    Padding="10,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="AI 分析" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock Text="把所选参数这段时间的数据发给 DeepSeek 分析相关性（需在设置中配置 API Key）"
+                                   FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Margin="0,4,0,8" TextWrapping="Wrap" />
+                        <Button x:Name="AiAnalyzeBtn" Content="🤖 开始 AI 分析" Click="AiAnalyze_Click"
+                                Style="{StaticResource PrimaryButtonStyle}" Padding="14,6" FontSize="12" />
+                        <TextBlock x:Name="AiStatusText" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="趋势对比" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <Canvas x:Name="CompareChartCanvas" Height="200" Margin="0,8,0,0" />
+                        <WrapPanel x:Name="CompareLegendPanel" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="AI 分析结果" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                            <TextBlock x:Name="AiResultText" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0" />
+                        </ScrollViewer>
+                    </StackPanel>
                 </Border>
             </Grid>
         </Grid>

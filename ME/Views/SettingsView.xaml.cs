@@ -274,6 +274,9 @@ namespace ME.Views
             // Last sync time
             var lastSync = SyncService.GetLastSyncTime();
             LastSyncTimeText.Text = lastSync.HasValue ? $"上次同步: {lastSync:yyyy-MM-dd HH:mm:ss}" : "未同步";
+
+            // DeepSeek API Key（DPAPI 解密）
+            DeepSeekKeyBox.Password = SecureStore.Decrypt(_settingsRepo.GetValue(SettingsKeys.DeepSeekApiKey, ""));
         }
 
         private void WeekStart_Changed(object sender, SelectionChangedEventArgs e)
@@ -585,6 +588,49 @@ namespace ME.Views
             catch (Exception ex)
             {
                 ConfirmDialog.Show(Window.GetWindow(this), "错误", $"导入失败: {ex.Message}", "确定");
+            }
+        }
+
+        private void SaveDeepSeekKey_Click(object sender, RoutedEventArgs e)
+        {
+            var key = DeepSeekKeyBox.Password?.Trim() ?? "";
+            _settingsRepo.SetValue(SettingsKeys.DeepSeekApiKey, SecureStore.Encrypt(key));
+            if (string.IsNullOrEmpty(key))
+            {
+                DeepSeekStatusText.Text = "已清除 API Key";
+                DeepSeekStatusText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+            }
+            else
+            {
+                DeepSeekStatusText.Text = "API Key 已保存（DPAPI 加密）";
+                DeepSeekStatusText.Foreground = (Brush)FindResource("AccentGreenBrush");
+            }
+        }
+
+        private async void TestDeepSeekKey_Click(object sender, RoutedEventArgs e)
+        {
+            var key = DeepSeekKeyBox.Password?.Trim() ?? "";
+            if (string.IsNullOrEmpty(key))
+            {
+                DeepSeekStatusText.Text = "请先输入 API Key";
+                return;
+            }
+            TestDeepSeekKeyBtn.IsEnabled = false;
+            DeepSeekStatusText.Text = "测试中…";
+            try
+            {
+                var reply = await DeepSeekService.ChatAsync(key, "你是一个测试助手", "请只回复：连接成功", 0);
+                DeepSeekStatusText.Text = $"✅ {reply}（测试成功，请点\"保存 API Key\"写入）";
+                DeepSeekStatusText.Foreground = (Brush)FindResource("AccentGreenBrush");
+            }
+            catch (Exception ex)
+            {
+                DeepSeekStatusText.Text = $"❌ 失败：{ex.Message}";
+                DeepSeekStatusText.Foreground = (Brush)FindResource("AccentRedBrush");
+            }
+            finally
+            {
+                TestDeepSeekKeyBtn.IsEnabled = true;
             }
         }
 
