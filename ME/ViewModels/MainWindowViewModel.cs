@@ -34,7 +34,8 @@ namespace ME.ViewModels
                 new NavItem { Name = "日历视图", Icon = "📅", ViewIndex = 2 },
                 new NavItem { Name = "定期盘点", Icon = "📈", ViewIndex = 3 },
                 new NavItem { Name = "时间追踪", Icon = "⏱️", ViewIndex = 4 },
-                new NavItem { Name = "设置", Icon = "⚙️", ViewIndex = 5 },
+                new NavItem { Name = "健康", Icon = "❤️", ViewIndex = 5 },
+                new NavItem { Name = "设置", Icon = "⚙️", ViewIndex = 6 },
             };
 
             _currentViewTitle = "任务列表";

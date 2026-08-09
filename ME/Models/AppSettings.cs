@@ -23,6 +23,8 @@ namespace ME.Models
         public const string WeekStartDay = "WeekStartDay";
         public const string StatsIncludedTags = "StatsIncludedTags";
         public const string PomodoroAutoStart = "PomodoroAutoStart";
+        public const string HealthWaterGoal = "HealthWaterGoal";
+        public const string HealthHeight = "HealthHeight";
     }
 
     public enum AppTheme

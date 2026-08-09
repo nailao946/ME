@@ -25,6 +25,7 @@ namespace ME
         private ReviewView _reviewView;
         private SettingsView _settingsView;
         private TimeTrackView _timeTrackView;
+        private HealthView _healthView;
         private UserControl _currentView;
         private Forms.NotifyIcon _notifyIcon;
         private bool _isDarkTheme;
@@ -465,7 +466,8 @@ namespace ME
                 case 2: ShowView(ref _calendarView, () => new CalendarView(), "日历视图"); break;
                 case 3: ShowView(ref _reviewView, () => new ReviewView(), "定期盘点"); break;
                 case 4: ShowView(ref _timeTrackView, () => new TimeTrackView(), "时间追踪"); break;
-                case 5: ShowView(ref _settingsView, () => new SettingsView(), "设置"); break;
+                case 5: ShowView(ref _healthView, () => new HealthView(), "健康"); break;
+                case 6: ShowView(ref _settingsView, () => new SettingsView(), "设置"); break;
             }
         }
 

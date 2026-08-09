@@ -1,0 +1,357 @@
+<UserControl x:Class="ME.Views.HealthView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ME.Views"
+             IsVisibleChanged="HealthView_IsVisibleChanged">
+    <Grid Margin="4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Category tabs -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}" Padding="6" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="SleepTabBtn" Content="😴 睡眠" Tag="sleep" Click="Tab_Click"
+                        Style="{StaticResource PrimaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+                <Button x:Name="WeightTabBtn" Content="⚖️ 身体测量" Tag="weight" Click="Tab_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+                <Button x:Name="WaterTabBtn" Content="💧 喝水" Tag="water" Click="Tab_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+                <Button x:Name="MoodTabBtn" Content="😊 心情" Tag="mood" Click="Tab_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+            </StackPanel>
+        </Border>
+
+        <!-- ============ 睡眠面板 ============ -->
+        <Grid Grid.Row="1" x:Name="SleepPanel">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="记录睡眠" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="日期：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <local:CustomDatePicker x:Name="SleepDatePicker" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="入睡" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="SleepTimeBox" Width="64" Text="23:00" TextAlignment="Center"
+                                     Margin="6,0,0,0" VerticalContentAlignment="Center" />
+                            <TextBlock Text="起床" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" Margin="14,0,0,0" />
+                            <TextBox x:Name="WakeTimeBox" Width="64" Text="07:00" TextAlignment="Center"
+                                     Margin="6,0,0,0" VerticalContentAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock x:Name="SleepCalcText" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="保存" Click="SaveSleep_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="80" />
+                            <Button Content="清除当天" Click="ClearSleep_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <UniformGrid Columns="3">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="今日" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="SleepTodayText" Text="--" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="周平均" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="SleepWeekAvgText" Text="--" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBlueBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="月平均" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="SleepMonthAvgText" Text="--" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </UniformGrid>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="近 7 天睡眠时长" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <Canvas x:Name="SleepChartCanvas" Height="150" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="历史记录" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SleepRecordsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 身体测量面板 ============ -->
+        <Grid Grid.Row="1" x:Name="WeightPanel" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="记录体重" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="日期：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <local:CustomDatePicker x:Name="WeightDatePicker" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="体重(kg)" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="WeightBox" Width="90" TextAlignment="Center"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0" />
+                            <TextBlock Text="身高(cm)" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" Margin="14,0,0,0" />
+                            <TextBox x:Name="HeightBox" Width="70" TextAlignment="Center"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock x:Name="BmiText" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="保存" Click="SaveWeight_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="80" />
+                            <Button Content="清除当天" Click="ClearWeight_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <UniformGrid Columns="3">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="最新体重" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="WeightLatestText" Text="--" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="BMI" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="BmiValueText" Text="--" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBlueBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="本月变化" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="WeightChangeText" Text="--" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </UniformGrid>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="近 30 天体重趋势" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <Canvas x:Name="WeightChartCanvas" Height="170" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="历史记录" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="WeightRecordsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 喝水面板 ============ -->
+        <Grid Grid.Row="1" x:Name="WaterPanel" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="今日喝水" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <TextBlock x:Name="WaterTodayCountText" Text="0" FontSize="40" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBlueBrush}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="WaterTargetText" Text="/ 8 杯" FontSize="14"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Bottom" Margin="4,0,0,8" />
+                        </StackPanel>
+                        <ProgressBar x:Name="WaterProgressBar" Height="10" Margin="0,10,0,0"
+                                     Background="{DynamicResource BackgroundBrush}"
+                                     Foreground="{DynamicResource AccentBlueBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="−1" Click="WaterMinus_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="56" Height="34" />
+                            <Button Content="+1" Click="WaterPlus_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="56" Height="34" Margin="8,0,0,0" />
+                            <TextBlock Text="目标杯数：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" Margin="16,0,0,0" />
+                            <TextBox x:Name="WaterGoalBox" Width="48" Text="8" TextAlignment="Center"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0"
+                                     TextChanged="WaterGoalBox_TextChanged" />
+                            <Button Content="保存目标" Click="SaveWaterGoal_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="30"
+                                    Margin="8,0,0,0" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <UniformGrid Columns="2">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="今日" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="WaterTodayStatText" Text="0 杯" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBlueBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="近 7 天平均" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="WaterAvgText" Text="0 杯" FontSize="18" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </UniformGrid>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="近 7 天喝水" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <Canvas x:Name="WaterChartCanvas" Height="150" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="历史记录" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="WaterRecordsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 心情面板 ============ -->
+        <Grid Grid.Row="1" x:Name="MoodPanel" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="今日心情" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock x:Name="MoodTodayHint" Text="点击选择今天的心情"
+                                   FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" />
+                        <UniformGrid Columns="4" Margin="0,14,0,0">
+                            <Button x:Name="MoodBtn0" Content="😊" Tag="0" Click="Mood_Click" FontSize="30"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                                    Padding="0" Margin="0,0,6,0" />
+                            <Button x:Name="MoodBtn1" Content="😐" Tag="1" Click="Mood_Click" FontSize="30"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                                    Padding="0" Margin="0,0,6,0" />
+                            <Button x:Name="MoodBtn2" Content="😔" Tag="2" Click="Mood_Click" FontSize="30"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                                    Padding="0" Margin="0,0,6,0" />
+                            <Button x:Name="MoodBtn3" Content="😢" Tag="3" Click="Mood_Click" FontSize="30"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                                    Padding="0" />
+                        </UniformGrid>
+                        <TextBlock x:Name="MoodSelectedText" FontSize="12"
+                                   Foreground="{DynamicResource PrimaryBrush}" Margin="0,12,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="清除今天" Click="ClearMood_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="90" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="近 7 天心情分布" FontSize="13" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <StackPanel x:Name="MoodDistributionPanel" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="近 30 天心情" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <WrapPanel x:Name="MoodTimelinePanel" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="心情记录" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="MoodRecordsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
