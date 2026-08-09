@@ -25,6 +25,8 @@
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="UricAcidTabBtn" Content="💉 尿酸" Tag="uric_acid" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+                <Button x:Name="ExerciseTabBtn" Content="🏃 锻炼" Tag="exercise" Click="Tab_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="MedicationTabBtn" Content="💊 用药" Tag="medication" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="CompareTabBtn" Content="📊 对比" Tag="compare" Click="Tab_Click"
@@ -35,48 +37,64 @@
 
         <!-- ============ 总览面板 ============ -->
         <Grid Grid.Row="1" x:Name="OverviewPanel" Visibility="Collapsed">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" />
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <!-- 人体图 -->
-            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <!-- 标题 + 导出报告 -->
+            <Border Style="{StaticResource CardStyle}" Padding="12">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="身体总览" FontSize="15" FontWeight="Bold"
-                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
-                    <TextBlock DockPanel.Dock="Top" Text="点击部位查看对应数据" FontSize="11"
-                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
-                    <Canvas x:Name="BodyCanvas" Height="360" ClipToBounds="True" />
+                    <Button x:Name="ExportReportBtn" Content="🖨️ 导出健康报告" Click="ExportReport_Click"
+                            Style="{StaticResource PrimaryButtonStyle}" Padding="16,8"
+                            DockPanel.Dock="Right" />
+                    <TextBlock Text="今日健康概况" FontSize="15" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" />
                 </DockPanel>
             </Border>
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <!-- 报告按钮 + 汇总 -->
+            <!-- 人体图（在上，居中） -->
+            <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                <StackPanel>
+                    <TextBlock Text="身体总览" FontSize="14" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" />
+                    <TextBlock Text="点击部位查看对应数据" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,2,0,4"
+                               HorizontalAlignment="Center" />
+                    <Canvas x:Name="BodyCanvas" Height="360" ClipToBounds="True"
+                            HorizontalAlignment="Center" Width="300" />
+                </StackPanel>
+            </Border>
+            <!-- 下方：部位详细 | 详细信息 -->
+            <Grid Grid.Row="2" Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
                 <Border Style="{StaticResource CardStyle}" Padding="12">
                     <DockPanel>
-                        <Button x:Name="ExportReportBtn" Content="🖨️ 导出健康报告" Click="ExportReport_Click"
-                                Style="{StaticResource PrimaryButtonStyle}" Padding="16,8"
-                                DockPanel.Dock="Right" />
-                        <TextBlock Text="今日健康概况" FontSize="15" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}" />
-                    </DockPanel>
-                </Border>
-                <WrapPanel Grid.Row="1" x:Name="OverviewCardsPanel" Margin="0,10,0,0" />
-                <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="部位详情" FontSize="14" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <TextBlock DockPanel.Dock="Top" Text="部位详细" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                        <TextBlock DockPanel.Dock="Top" Text="点击人体部位，这里显示对应数据" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="OverviewDetailPanel" />
                         </ScrollViewer>
                     </DockPanel>
                 </Border>
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="详细信息" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="OverviewInfoPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
             </Grid>
+            <!-- 底部：汇总卡片 -->
+            <WrapPanel Grid.Row="3" x:Name="OverviewCardsPanel" Margin="0,10,0,0" />
         </Grid>
 
         <!-- ============ 睡眠面板 ============ -->
@@ -103,25 +121,29 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="入睡" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBox x:Name="SleepHourBox" Width="52" Height="36" MaxLength="2"
+                            <TextBox x:Name="SleepHourBox" Width="60" Height="36" MaxLength="2"
                                      Text="23" TextAlignment="Center" Margin="6,0,0,0"
+                                     Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
-                            <TextBox x:Name="SleepMinBox" Width="52" Height="36" MaxLength="2"
+                            <TextBox x:Name="SleepMinBox" Width="60" Height="36" MaxLength="2"
                                      Text="00" TextAlignment="Center" Margin="3,0,0,0"
+                                     Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="分" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
                             <TextBlock Text="起床" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" Margin="16,0,0,0" />
-                            <TextBox x:Name="WakeHourBox" Width="52" Height="36" MaxLength="2"
+                            <TextBox x:Name="WakeHourBox" Width="60" Height="36" MaxLength="2"
                                      Text="07" TextAlignment="Center" Margin="6,0,0,0"
+                                     Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
-                            <TextBox x:Name="WakeMinBox" Width="52" Height="36" MaxLength="2"
+                            <TextBox x:Name="WakeMinBox" Width="60" Height="36" MaxLength="2"
                                      Text="00" TextAlignment="Center" Margin="3,0,0,0"
+                                     Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="分" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
@@ -584,12 +606,14 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="测量时间" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBox x:Name="UricHourBox" Width="52" MaxLength="2"
+                            <TextBox x:Name="UricHourBox" Width="60" MaxLength="2"
+                                     Style="{StaticResource InputTextBoxStyle}"
                                      TextAlignment="Center" Margin="6,0,0,0"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
-                            <TextBox x:Name="UricMinBox" Width="52" MaxLength="2"
+                            <TextBox x:Name="UricMinBox" Width="60" MaxLength="2"
+                                     Style="{StaticResource InputTextBoxStyle}"
                                      TextAlignment="Center" Margin="3,0,0,0"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="分" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
@@ -664,10 +688,10 @@
             </Grid>
         </Grid>
 
-        <!-- ============ 对比面板 ============ -->
-        <Grid Grid.Row="1" x:Name="ComparePanel" Visibility="Collapsed">
+        <!-- ============ 锻炼面板 ============ -->
+        <Grid Grid.Row="1" x:Name="ExercisePanel" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="380" />
                 <ColumnDefinition Width="12" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -675,6 +699,112 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="记录锻炼" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="项目：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <ComboBox x:Name="ExerciseItemCombo" Width="210" Margin="6,0,0,0"
+                                      Style="{StaticResource MacComboBoxStyle}"
+                                      SelectionChanged="ExerciseItemCombo_Changed" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="本次量：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="ExerciseValueBox" Width="100" Height="36" TextAlignment="Center"
+                                     Style="{StaticResource InputTextBoxStyle}" Text="1"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0"
+                                     PreviewTextInput="UricValue_PreviewTextInput" />
+                            <TextBlock x:Name="ExerciseUnitText" Text="次" FontSize="12"
+                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock x:Name="ExerciseHintText" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="＋ 记录本次" Click="RecordExercise_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="110" />
+                            <Button Content="＋ 新建项目" Click="AddExerciseItem_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="110" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="🚶 久坐活动" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock Text="每起身活动一次点一下，统计每天活动次数" FontSize="10"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,2,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="SedentaryPlusBtn" Content="＋ 起身活动一次" Click="SedentaryPlus_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Padding="16,10" FontSize="13" />
+                            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="今日" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" />
+                                <TextBlock x:Name="SedentaryTodayText" Text="0 次" FontSize="18" FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Canvas x:Name="SedentaryChartCanvas" Height="90" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="锻炼项目" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="ExerciseItemsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="今日达标" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel x:Name="ExerciseTodayPanel" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="近 7 天锻炼量" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <Canvas x:Name="ExerciseChartCanvas" Height="150" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="历史记录" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="ExerciseRecordsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 对比面板 ============ -->
+        <Grid Grid.Row="1" x:Name="ComparePanel" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="330" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Border Style="{StaticResource CardStyle}" Padding="12">
                     <StackPanel>
@@ -732,36 +862,30 @@
                                        TextTrimming="CharacterEllipsis" MaxWidth="150"
                                        ToolTip="点击查看完整提示词" />
                         </StackPanel>
-                    </StackPanel>
-                </Border>
-            </Grid>
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <Border Style="{StaticResource CardStyle}" Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="趋势对比" FontSize="14" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}" />
-                        <TextBlock Text="每个参数按各自数据单独绘制折线，便于观察各自走势" FontSize="10"
-                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,2,0,0" />
-                        <StackPanel x:Name="CompareChartsPanel" Margin="0,8,0,0" />
-                        <WrapPanel x:Name="CompareLegendPanel" Margin="0,8,0,0" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
-                    <StackPanel>
-                        <TextBlock Text="AI 分析结果" FontSize="14" FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}" />
-                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                        <!-- AI 分析结果（紧跟 AI 分析下面） -->
+                        <TextBlock Text="AI 分析结果" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,10,0,0" />
+                        <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
                             <TextBlock x:Name="AiResultText" FontSize="12" TextWrapping="Wrap"
-                                       Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0" />
+                                       Foreground="{DynamicResource TextBrush}" />
                         </ScrollViewer>
                     </StackPanel>
                 </Border>
             </Grid>
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="趋势对比" FontSize="14" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" />
+                    <TextBlock DockPanel.Dock="Top" Text="每个参数按各自数据单独绘制折线，便于观察各自走势（图多可滚动）"
+                               FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,2,0,0" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+                        <StackPanel>
+                            <StackPanel x:Name="CompareChartsPanel" />
+                            <WrapPanel x:Name="CompareLegendPanel" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Grid>
 
         <!-- ============ 用药面板 ============ -->

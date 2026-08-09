@@ -1,0 +1,109 @@
+<Window x:Class="ME.Views.ExerciseEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ME.Views"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Title="锻炼项目" Height="430" Width="480"
+        KeyDown="Window_KeyDown">
+    <Border CornerRadius="14" Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Opacity="0.25" BlurRadius="24" ShadowDepth="2" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <Border Grid.Row="0" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseDown"
+                    Background="{DynamicResource CardBrush}">
+                <Grid Margin="16,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="12" Height="12" CornerRadius="3"
+                                Background="{DynamicResource PrimaryBrush}"
+                                VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="TitleText" Text="添加锻炼项目" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <Button Content="✕" Click="Cancel_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"
+                            Padding="8,2" FontSize="12"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Content -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20,14,20,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="项目名称" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="80" VerticalAlignment="Center" />
+                    <TextBox x:Name="NameBox" Style="{StaticResource InputTextBoxStyle}"
+                             Width="300" FontSize="13" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="锻炼频率" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="80" VerticalAlignment="Center" />
+                    <ComboBox x:Name="FreqCombo" Width="200" Style="{StaticResource MacComboBoxStyle}"
+                              SelectionChanged="FreqCombo_Changed" />
+                </StackPanel>
+
+                <!-- 每周指定日期 -->
+                <StackPanel x:Name="WeeklyDaysPanel" Orientation="Horizontal" Margin="80,8,0,0" Visibility="Collapsed">
+                    <CheckBox x:Name="WMon" Content="一" Tag="1" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" Margin="0,0,10,0" />
+                    <CheckBox x:Name="WTue" Content="二" Tag="2" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" Margin="0,0,10,0" />
+                    <CheckBox x:Name="WWed" Content="三" Tag="3" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" Margin="0,0,10,0" />
+                    <CheckBox x:Name="WThu" Content="四" Tag="4" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" Margin="0,0,10,0" />
+                    <CheckBox x:Name="WFri" Content="五" Tag="5" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" Margin="0,0,10,0" />
+                    <CheckBox x:Name="WSat" Content="六" Tag="6" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" Margin="0,0,10,0" />
+                    <CheckBox x:Name="WSun" Content="日" Tag="7" Checked="WeeklyDay_Changed" Unchecked="WeeklyDay_Changed"
+                              Foreground="{DynamicResource TextBrush}" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="目标量" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="80" VerticalAlignment="Center" />
+                    <TextBox x:Name="TargetValueBox" Style="{StaticResource InputTextBoxStyle}"
+                             Width="120" FontSize="13" TextAlignment="Center"
+                             PreviewTextInput="Decimal_PreviewTextInput" />
+                    <ComboBox x:Name="UnitCombo" Width="120" Style="{StaticResource MacComboBoxStyle}"
+                              Margin="8,0,0,0" />
+                </StackPanel>
+                <TextBlock Text="示例：目标量 30 + 单位 分钟 → 每天/隔日锻炼 30 分钟达标" FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="80,4,0,0" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="备注" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="80" VerticalAlignment="Top" Margin="0,4,0,0" />
+                    <TextBox x:Name="NoteBox" Style="{StaticResource InputTextBoxStyle}"
+                             Width="320" Height="64" TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalContentAlignment="Top" Padding="8" FontSize="12" />
+                </StackPanel>
+            </StackPanel>
+            </ScrollViewer>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,8,20,16">
+                <Button Content="取消" Click="Cancel_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"
+                        Padding="20,8" Margin="0,0,10,0" FontSize="13" />
+                <Button Content="保存" Click="Save_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"
+                        Padding="20,8" FontSize="13" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
