@@ -34,6 +34,7 @@ namespace ME.Views
         public HealthView()
         {
             InitializeComponent();
+            _compareInitializing = false; // XAML 加载完成，控件已全部创建
             SleepDatePicker.SelectedDate = DateTime.Today;
             WeightDatePicker.SelectedDate = DateTime.Today;
             UricAcidDatePicker.SelectedDate = DateTime.Today;
@@ -976,6 +977,7 @@ namespace ME.Views
 
         // ============ 对比 + AI 分析 ============
         private int _compareDays = 30;
+        private bool _compareInitializing = true;
 
         private void CompareRange_Click(object sender, RoutedEventArgs e)
         {
@@ -988,6 +990,7 @@ namespace ME.Views
 
         private void CompareParam_Changed(object sender, RoutedEventArgs e)
         {
+            if (_compareInitializing) return; // XAML 顺序加载中，控件尚未全部创建
             LoadCompare();
         }
 
