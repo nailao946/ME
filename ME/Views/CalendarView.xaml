@@ -22,6 +22,12 @@
                                VerticalAlignment="Center" />
                 </DockPanel>
 
+                <!-- Tag filter -->
+                <ScrollViewer DockPanel.Dock="Top" HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled" Margin="0,0,0,8">
+                    <StackPanel x:Name="TagFilterPanel" Orientation="Horizontal" />
+                </ScrollViewer>
+
                 <!-- Weekday Headers -->
                 <UniformGrid DockPanel.Dock="Top" Columns="7" Margin="0,0,0,6">
                     <TextBlock Text="日" FontSize="11" Foreground="{DynamicResource AccentRedBrush}" HorizontalAlignment="Center" />
@@ -83,6 +89,40 @@
         <!-- Day Tasks Sidebar -->
         <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="12">
             <DockPanel>
+                <!-- Task Stats (from Dashboard) -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <TextBlock Text="任务统计" FontSize="13" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                    <UniformGrid Columns="3">
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,3,0" Padding="4,8">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="📊" FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,1" />
+                                <TextBlock Text="打卡率" FontSize="9" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="CheckInRateText" Text="0%" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardStyle}" Margin="1,0,1,0" Padding="4,8">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="📅" FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,1" />
+                                <TextBlock Text="剩余天数" FontSize="9" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="RemainingDaysText" Text="0" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentBlueBrush}" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardStyle}" Margin="3,0,0,0" Padding="4,8">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="🔥" FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,1" />
+                                <TextBlock Text="连续打卡" FontSize="9" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="StreakDaysText" Text="0天" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                    <TextBlock x:Name="StatsHint" Text="点击右侧任务卡片查看该任务的统计"
+                               FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"
+                               Margin="0,6,0,0" TextWrapping="Wrap" />
+                </StackPanel>
                 <TextBlock x:Name="SelectedDateTitle" DockPanel.Dock="Top" FontSize="14" FontWeight="Bold"
                            Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10"
                            Text="选择日期查看任务" />

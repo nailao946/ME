@@ -145,7 +145,7 @@ namespace ME.Views
             int completed = 0, total = 0;
             var dailyData = new SortedDictionary<string, DailyData>();
             for (var d = startDate; d <= now; d = d.AddDays(1))
-                dailyData[d.ToString("MM/dd")] = new DailyData { Date = d.ToString("MM/dd") };
+                dailyData[d.ToString("yyyy-MM-dd")] = new DailyData { Date = d.ToString("MM/dd") };
 
             var allCompletions = _completionRepo.GetAll();
             var periodCompletions = allCompletions
@@ -160,7 +160,7 @@ namespace ME.Views
                     .Where(c => c.TaskId == task.Id && c.Date.CompareTo(startStr) >= 0 && c.Date.CompareTo(endStr) <= 0);
                 foreach (var c in taskDayCompletions)
                 {
-                    var dayKey = DateTime.Parse(c.Date).ToString("MM/dd");
+                    var dayKey = DateTime.Parse(c.Date).ToString("yyyy-MM-dd");
                     if (dailyData.ContainsKey(dayKey))
                         dailyData[dayKey].Completed++;
                 }
@@ -232,7 +232,7 @@ namespace ME.Views
             var checkDate = DateTime.Today;
             while (checkDate >= startDate)
             {
-                var dateKey = checkDate.ToString("MM/dd");
+                var dateKey = checkDate.ToString("yyyy-MM-dd");
                 if (dailyData.ContainsKey(dateKey) && dailyData[dateKey].Completed > 0)
                 {
                     streak++;

@@ -17,16 +17,61 @@ namespace ME.Views
     {
         private DateTime _currentMonth;
         private DateTime _selectedDate;
+        private TaskItem _selectedTask;
+        private int? _filterTagId;
 
         public CalendarView()
         {
             InitializeComponent();
             _currentMonth = DateTime.Today;
             _selectedDate = DateTime.Today;
+            BuildTagFilter();
             LoadCalendar();
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) => ThemeService.ThemeChanged -= OnThemeChanged;
             EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
+        }
+
+        private void BuildTagFilter()
+        {
+            TagFilterPanel.Children.Clear();
+            var tagRepo = new TagRepository();
+            var tags = tagRepo.GetAllTags();
+
+            var allBtn = new Button
+            {
+                Content = "全部",
+                Style = (Style)FindResource(_filterTagId == null ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
+                Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 0),
+                FontSize = 11, Tag = (int?)null
+            };
+            allBtn.Click += TagFilter_Click;
+            TagFilterPanel.Children.Add(allBtn);
+
+            foreach (var tag in tags)
+            {
+                var btn = new Button
+                {
+                    Content = tag.Name,
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(tag.Color)),
+                    Foreground = Brushes.White,
+                    Style = (Style)FindResource(_filterTagId == tag.Id ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
+                    Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 0),
+                    FontSize = 11, Tag = (int?)tag.Id
+                };
+                btn.Click += TagFilter_Click;
+                TagFilterPanel.Children.Add(btn);
+            }
+        }
+
+        private void TagFilter_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn)
+            {
+                _filterTagId = (int?)btn.Tag;
+                BuildTagFilter();
+                LoadCalendar();
+            }
         }
 
         private void OnGlobalEvent(string message)
@@ -78,9 +123,18 @@ namespace ME.Views
             MonthTitle.Text = _currentMonth.ToString("yyyy年MM月");
             var taskRepo = new TaskRepository();
             var tagRepo = new TagRepository();
+            var goalRepo = new GoalRepository();
             var taskService = new TaskService();
             var allTasks = taskRepo.GetAllTasks();
             var allTags = tagRepo.GetAllTags();
+
+            // Tag filter (from Dashboard)
+            if (_filterTagId.HasValue)
+            {
+                var allGoals = goalRepo.GetAllGoals();
+                allTasks = allTasks.Where(t => t.GoalId.HasValue &&
+                    allGoals.Any(g => g.Id == t.GoalId.Value && g.TagId == _filterTagId.Value)).ToList();
+            }
 
             var days = new List<CalendarDay>();
             var firstDay = new DateTime(_currentMonth.Year, _currentMonth.Month, 1);
@@ -301,6 +355,13 @@ namespace ME.Views
             var allTags = tagRepo.GetAllTags();
             var allGoals = goalRepo.GetAllGoals();
 
+            // Tag filter (from Dashboard)
+            if (_filterTagId.HasValue)
+            {
+                allTasks = allTasks.Where(t => t.GoalId.HasValue &&
+                    allGoals.Any(g => g.Id == t.GoalId.Value && g.TagId == _filterTagId.Value)).ToList();
+            }
+
             var pendingTasks = new List<(TaskItem task, string tagName, string tagColor)>();
             var completedTasks = new List<(TaskItem task, string tagName, string tagColor)>();
 
@@ -427,8 +488,10 @@ namespace ME.Views
             {
                 Style = (Style)FindResource("CardStyle"),
                 Padding = new Thickness(10, 8, 10, 8),
-                Margin = new Thickness(0, 0, 0, 6)
+                Margin = new Thickness(0, 0, 0, 6),
+                Cursor = Cursors.Hand
             };
+            card.MouseLeftButtonDown += (s, e) => ShowTaskStats(task);
 
             var mainPanel = new StackPanel();
 
@@ -581,6 +644,61 @@ namespace ME.Views
 
             card.Child = mainPanel;
             return card;
+        }
+
+        private void ShowTaskStats(TaskItem task)
+        {
+            _selectedTask = task;
+            var stats = new TaskService().GetTaskCheckInStats(task);
+            CheckInRateText.Text = $"{(int)Math.Round(stats.checkInRate)}%";
+            RemainingDaysText.Text = stats.remainingDays.ToString();
+            StreakDaysText.Text = $"{stats.streakDays}天";
+            StatsHint.Visibility = Visibility.Collapsed;
+            AnimateStatsCards();
+        }
+
+        private void AnimateStatsCards()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var values = new[] { CheckInRateText, RemainingDaysText, StreakDaysText };
+                for (int i = 0; i < values.Length; i++)
+                {
+                    var border = FindVisualParent<Border>(values[i]);
+                    if (border == null) continue;
+                    border.Opacity = 0;
+                    var delay = TimeSpan.FromMilliseconds(i * 70);
+                    var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300))
+                    {
+                        BeginTime = delay,
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    };
+                    border.BeginAnimation(UIElement.OpacityProperty, fade);
+                    var scale = new ScaleTransform(0.9, 0.9);
+                    border.RenderTransform = scale;
+                    border.RenderTransformOrigin = new Point(0.5, 0.5);
+                    var sx = new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(350))
+                    {
+                        BeginTime = delay,
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    };
+                    var sy = new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(350))
+                    {
+                        BeginTime = delay,
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    };
+                    scale.BeginAnimation(ScaleTransform.ScaleXProperty, sx);
+                    scale.BeginAnimation(ScaleTransform.ScaleYProperty, sy);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private static T FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            var parent = VisualTreeHelper.GetParent(child);
+            while (parent != null && !(parent is T))
+                parent = VisualTreeHelper.GetParent(parent);
+            return parent as T;
         }
     }
 

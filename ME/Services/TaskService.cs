@@ -420,5 +420,64 @@ namespace ME.Services
             else
                 return date.Date.AddDays(-(int)date.DayOfWeek);
         }
+
+        /// <summary>
+        /// 计算单个任务的打卡率、剩余天数、连续打卡天数（原数据看板统计逻辑，抽取为共享方法）。
+        /// 定量任务：今天用 IsTaskCompletedForDisplay 判定，历史日期查完成记录；无截止日期时从开始日算起。
+        /// </summary>
+        public (double checkInRate, int remainingDays, int streakDays) GetTaskCheckInStats(TaskItem task)
+        {
+            if (task == null) return (0, 0, 0);
+
+            int totalDays = 0, checkedDays = 0;
+            var startDate = (task.StartDate ?? task.CreatedAt).Date;
+            for (var date = startDate; date <= DateTime.Today; date = date.AddDays(1))
+            {
+                bool shouldShow = false, isCompleted = false;
+                if (task.Type == TaskType.Quantitative)
+                {
+                    shouldShow = date >= startDate &&
+                                 (!task.EndDate.HasValue || date <= task.EndDate.Value.Date);
+                    if (shouldShow)
+                        isCompleted = date == DateTime.Today
+                            ? IsTaskCompletedForDisplay(task, date)
+                            : _completionRepo.IsCompletedOnDate(task.Id, date.ToString("yyyy-MM-dd"));
+                }
+                else if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+                {
+                    shouldShow = ShouldShowRecurringTaskOnDate(task, date);
+                    if (shouldShow) isCompleted = IsRecurringTaskCompletedOnDate(task, date);
+                }
+                if (shouldShow) { totalDays++; if (isCompleted) checkedDays++; }
+            }
+
+            double checkInRate = totalDays > 0 ? (double)checkedDays / totalDays * 100 : 0;
+            int remainingDays = task.EndDate.HasValue ? Math.Max(0, (task.EndDate.Value.Date - DateTime.Today).Days) : 0;
+
+            int streak = 0;
+            var curDate = DateTime.Today;
+            while (curDate >= startDate)
+            {
+                bool shouldShow = false, isCompleted = false;
+                if (task.Type == TaskType.Quantitative)
+                {
+                    shouldShow = curDate >= startDate &&
+                                 (!task.EndDate.HasValue || curDate <= task.EndDate.Value.Date);
+                    if (shouldShow)
+                        isCompleted = curDate == DateTime.Today
+                            ? IsTaskCompletedForDisplay(task, curDate)
+                            : _completionRepo.IsCompletedOnDate(task.Id, curDate.ToString("yyyy-MM-dd"));
+                }
+                else if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
+                {
+                    shouldShow = ShouldShowRecurringTaskOnDate(task, curDate);
+                    if (shouldShow) isCompleted = IsRecurringTaskCompletedOnDate(task, curDate);
+                }
+                if (shouldShow) { if (isCompleted) streak++; else break; }
+                curDate = curDate.AddDays(-1);
+            }
+
+            return (checkInRate, remainingDays, streak);
+        }
     }
 }

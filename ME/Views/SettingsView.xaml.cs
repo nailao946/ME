@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Reflection;
 using Microsoft.Win32;
 using ME.Data;
@@ -52,6 +53,41 @@ namespace ME.Views
                     VersionText.Text = $"版本 {ver.Major}.{ver.Minor}.{ver.Build}";
             }
             catch { }
+            AnimateSettingCards();
+        }
+
+        private void AnimateSettingCards()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (this.Content is ScrollViewer sv && sv.Content is Panel panel)
+                {
+                    int idx = 0;
+                    foreach (var child in panel.Children)
+                    {
+                        if (child is FrameworkElement el)
+                        {
+                            el.Opacity = 0;
+                            var delay = TimeSpan.FromMilliseconds(idx * 60);
+                            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300))
+                            {
+                                BeginTime = delay,
+                                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                            };
+                            el.BeginAnimation(UIElement.OpacityProperty, fade);
+                            var slide = new TranslateTransform(0, 12);
+                            el.RenderTransform = slide;
+                            var slideAnim = new DoubleAnimation(12, 0, TimeSpan.FromMilliseconds(300))
+                            {
+                                BeginTime = delay,
+                                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                            };
+                            slide.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+                        }
+                        idx++;
+                    }
+                }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void BuildColorBalls()

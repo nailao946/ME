@@ -16,8 +16,8 @@ namespace ME.Models
             get
             {
                 if (EndTime.HasValue)
-                    return EndTime.Value - StartTime;
-                return DateTime.Now - StartTime;
+                    return TimeSpan.FromTicks(Math.Max(0, (EndTime.Value - StartTime).Ticks));
+                return TimeSpan.FromTicks(Math.Max(0, (DateTime.Now - StartTime).Ticks));
             }
         }
 

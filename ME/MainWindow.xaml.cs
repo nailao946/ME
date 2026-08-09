@@ -22,7 +22,6 @@ namespace ME
         private GoalsView _goalsView;
         private TasksView _tasksView;
         private CalendarView _calendarView;
-        private DashboardView _dashboardView;
         private ReviewView _reviewView;
         private SettingsView _settingsView;
         private TimeTrackView _timeTrackView;
@@ -464,10 +463,9 @@ namespace ME
                 case 0: ShowView(ref _tasksView, () => new TasksView(), "任务列表"); break;
                 case 1: ShowView(ref _goalsView, () => new GoalsView(), "目标管理"); break;
                 case 2: ShowView(ref _calendarView, () => new CalendarView(), "日历视图"); break;
-                case 3: ShowView(ref _dashboardView, () => new DashboardView(), "数据看板"); break;
-                case 4: ShowView(ref _reviewView, () => new ReviewView(), "定期盘点"); break;
-                case 5: ShowView(ref _timeTrackView, () => new TimeTrackView(), "时间追踪"); break;
-                case 6: ShowView(ref _settingsView, () => new SettingsView(), "设置"); break;
+                case 3: ShowView(ref _reviewView, () => new ReviewView(), "定期盘点"); break;
+                case 4: ShowView(ref _timeTrackView, () => new TimeTrackView(), "时间追踪"); break;
+                case 5: ShowView(ref _settingsView, () => new SettingsView(), "设置"); break;
             }
         }
 

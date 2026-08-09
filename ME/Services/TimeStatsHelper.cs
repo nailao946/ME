@@ -34,7 +34,7 @@ namespace ME.Services
             var tagTimes = new Dictionary<int, TimeSpan>();
             foreach (var r in filtered)
             {
-                var dur = (r.EndTime ?? DateTime.Now) - r.StartTime;
+                var dur = TimeSpan.FromTicks(Math.Max(0, ((r.EndTime ?? DateTime.Now) - r.StartTime).Ticks));
                 if (!tagTimes.ContainsKey(r.TagId))
                     tagTimes[r.TagId] = TimeSpan.Zero;
                 tagTimes[r.TagId] += dur;

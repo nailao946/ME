@@ -1478,10 +1478,11 @@ namespace ME.Views
                 VerticalAlignment = VerticalAlignment.Center
             });
 
-            var tagTimeDay = GetTagTotalTime(tag?.Id ?? 0, -1);
-            var tagTimeWeek = GetTagTotalTime(tag?.Id ?? 0, -7);
-            var tagTimeMonth = GetTagTotalTime(tag?.Id ?? 0, -30);
-            var tagTimeYear = GetTagTotalTime(tag?.Id ?? 0, -365);
+            var sel = _selectedDate.Date;
+            var tagTimeDay = GetTagTotalTime(tag?.Id ?? 0, sel, sel);
+            var tagTimeWeek = GetTagTotalTime(tag?.Id ?? 0, TaskService.GetWeekStartForDate(sel), sel);
+            var tagTimeMonth = GetTagTotalTime(tag?.Id ?? 0, new DateTime(sel.Year, sel.Month, 1), sel);
+            var tagTimeYear = GetTagTotalTime(tag?.Id ?? 0, new DateTime(sel.Year, 1, 1), sel);
 
             var totalsGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             totalsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1689,14 +1690,14 @@ namespace ME.Views
             }
         }
 
-        private TimeSpan GetTagTotalTime(int tagId, int days)
+        private TimeSpan GetTagTotalTime(int tagId, DateTime startDate, DateTime endDate)
         {
-            var start = _selectedDate.Date.AddDays(days);
-            var end = _selectedDate.Date;
+            var start = startDate.Date;
+            var end = endDate.Date;
             var records = _recordRepo.GetRecordsByDateRange(start.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"));
             TimeSpan total = TimeSpan.Zero;
             foreach (var r in records.Where(r => r.TagId == tagId))
-                total += (r.EndTime ?? DateTime.Now) - r.StartTime;
+                total += TimeSpan.FromTicks(Math.Max(0, ((r.EndTime ?? DateTime.Now) - r.StartTime).Ticks));
             return total;
         }
 
