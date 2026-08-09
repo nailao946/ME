@@ -18,6 +18,9 @@ namespace ME.Views
             set => SetValue(SelectedDateProperty, value);
         }
 
+        /// <summary>选择日期变化时触发（含用户选择与代码赋值）</summary>
+        public event EventHandler SelectedDateChanged;
+
         private DateTime _displayMonth;
         private bool _suppressUpdate;
 
@@ -36,6 +39,7 @@ namespace ME.Views
                 if (date.HasValue) picker._displayMonth = date.Value;
                 picker.UpdateDateText();
                 picker.BuildCalendar();
+                picker.SelectedDateChanged?.Invoke(picker, EventArgs.Empty);
             }
         }
 

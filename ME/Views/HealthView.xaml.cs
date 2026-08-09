@@ -38,6 +38,10 @@ namespace ME.Views
             SleepDatePicker.SelectedDate = DateTime.Today;
             WeightDatePicker.SelectedDate = DateTime.Today;
             UricAcidDatePicker.SelectedDate = DateTime.Today;
+            WeightFromPicker.SelectedDateChanged += (s, ev) => OnWeightRangePicked();
+            WeightToPicker.SelectedDateChanged += (s, ev) => OnWeightRangePicked();
+            SleepDatePicker.SelectedDateChanged += (s, ev) => LoadSleep(); // 切换日期回填该天入睡/起床
+            UricTargetBox.Text = _settingsRepo.GetValue(SettingsKeys.UricTarget, "");
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) => ThemeService.ThemeChanged -= OnThemeChanged;
             EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
@@ -47,6 +51,17 @@ namespace ME.Views
             LoadMood();
             LoadUricAcid();
             LoadCompare();
+        }
+
+        private void OnWeightRangePicked()
+        {
+            if (!_weightRangeInit) return; // 初始赋值阶段，EnsureWeightRange 会处理
+            // 与当前值相同（初始化赋值）时不重复刷新
+            if (WeightFromPicker.SelectedDate == _weightFrom && WeightToPicker.SelectedDate == _weightTo) return;
+            _weightFrom = WeightFromPicker.SelectedDate;
+            _weightTo = WeightToPicker.SelectedDate;
+            UpdateWeightRangeButtons(-1); // 手动选择日期，取消快捷按钮高亮
+            LoadWeight();
         }
 
         private void OnGlobalEvent(string message)
@@ -134,13 +149,27 @@ namespace ME.Views
         }
 
         // ============ 睡眠 ============
-        private static bool TryParseTime(string text, out TimeSpan time)
+        private void DigitOnly_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            foreach (var c in e.Text)
+            {
+                if (!char.IsDigit(c))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
+        private static bool TryGetTime(TextBox hourBox, TextBox minBox, out TimeSpan time)
         {
             time = TimeSpan.Zero;
-            var t = (text ?? "").Trim();
-            if (TimeSpan.TryParse(t, out var ts)) { time = ts; return true; }
-            if (DateTime.TryParse(t, out var dt)) { time = dt.TimeOfDay; return true; }
-            return false;
+            if (!int.TryParse(hourBox.Text, out var h) || !int.TryParse(minBox.Text, out var m))
+                return false;
+            if (h < 0 || h > 23 || m < 0 || m > 59)
+                return false;
+            time = new TimeSpan(h, m, 0);
+            return true;
         }
 
         private static TimeSpan SleepDuration(TimeSpan sleep, TimeSpan wake)
@@ -153,9 +182,10 @@ namespace ME.Views
         private void SaveSleep_Click(object sender, RoutedEventArgs e)
         {
             var date = SleepDatePicker.SelectedDate ?? DateTime.Today;
-            if (!TryParseTime(SleepTimeBox.Text, out var sleep) || !TryParseTime(WakeTimeBox.Text, out var wake))
+            if (!TryGetTime(SleepHourBox, SleepMinBox, out var sleep) ||
+                !TryGetTime(WakeHourBox, WakeMinBox, out var wake))
             {
-                SleepCalcText.Text = "时间格式不正确，请使用 HH:mm（如 23:00）";
+                SleepCalcText.Text = "请填写有效的时间（时 0-23，分 0-59）";
                 return;
             }
             if (sleep == wake)
@@ -187,6 +217,30 @@ namespace ME.Views
         {
             var all = _repo.GetByType("sleep");
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
+
+            // 回填所选日期（默认今天）的入睡/起床时间到输入框；无记录则重置默认，避免误存上一天的值
+            var selDateStr = (SleepDatePicker.SelectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+            var selRec = all.FirstOrDefault(r => r.Date == selDateStr);
+            bool filled = false;
+            if (selRec != null && !string.IsNullOrEmpty(selRec.Detail))
+            {
+                var parts = selRec.Detail.Split('|');
+                if (parts.Length == 2 && TimeSpan.TryParse(parts[0], out var sl) && TimeSpan.TryParse(parts[1], out var wk))
+                {
+                    SleepHourBox.Text = sl.Hours.ToString("D2");
+                    SleepMinBox.Text = sl.Minutes.ToString("D2");
+                    WakeHourBox.Text = wk.Hours.ToString("D2");
+                    WakeMinBox.Text = wk.Minutes.ToString("D2");
+                    filled = true;
+                }
+            }
+            if (!filled)
+            {
+                SleepHourBox.Text = "23";
+                SleepMinBox.Text = "00";
+                WakeHourBox.Text = "07";
+                WakeMinBox.Text = "00";
+            }
 
             // 统计
             var today = all.FirstOrDefault(r => r.Date == todayStr);
@@ -363,7 +417,42 @@ namespace ME.Views
                 WeightChangeText.Foreground = (Brush)FindResource("AccentGreenBrush");
             }
 
-            DrawWeightChart(all);
+            // 身体成分分析（中国成人标准：偏瘦<18.5 / 正常18.5-24 / 超重24-28 / 肥胖≥28）
+            UpdateBodyComposition(latest, heightCm);
+
+            // 趋势图按所选范围
+            EnsureWeightRange();
+            var from = _weightFrom;
+            if (!from.HasValue)
+            {
+                // "全部"：从最早记录到最近
+                from = all.Count > 0
+                    ? DateTime.ParseExact(all.First().Date, "yyyy-MM-dd", CultureInfo.InvariantCulture)
+                    : DateTime.Today.AddDays(-29);
+            }
+            var to = _weightTo ?? DateTime.Today;
+            var fromVal = from.Value;
+            var inRange = all.Where(r => string.CompareOrdinal(r.Date, fromVal.ToString("yyyy-MM-dd")) >= 0 &&
+                                         string.CompareOrdinal(r.Date, to.ToString("yyyy-MM-dd")) <= 0).ToList();
+            WeightChartTitle.Text = $"体重趋势（{fromVal:yyyy/MM/dd} ~ {to:yyyy/MM/dd}）";
+            DrawWeightChart(all, fromVal, to);
+
+            // 较 N 天前变化
+            if (inRange.Count >= 2)
+            {
+                var firstDate = DateTime.ParseExact(inRange.First().Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var lastDate = DateTime.ParseExact(inRange.Last().Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var daysBetween = (lastDate - firstDate).Days;
+                var delta = inRange.Last().Value - inRange.First().Value;
+                WeightDeltaText.Text = daysBetween > 0
+                    ? $"较 {daysBetween} 天前 {(delta >= 0 ? "+" : "")}{delta:F1} kg"
+                    : "";
+                WeightDeltaText.Foreground = (Brush)FindResource(delta <= 0 ? "AccentGreenBrush" : "AccentRedBrush");
+            }
+            else
+            {
+                WeightDeltaText.Text = "";
+            }
 
             WeightRecordsPanel.Children.Clear();
             var recent = all.OrderByDescending(r => r.Date).Take(14).ToList();
@@ -380,7 +469,90 @@ namespace ME.Views
                 WeightRecordsPanel.Children.Add(BuildEmptyHint("还没有体重记录"));
         }
 
-        private void DrawWeightChart(List<HealthRecord> all)
+        private DateTime? _weightFrom;
+        private DateTime? _weightTo;
+        private bool _weightRangeInit;
+
+        private void EnsureWeightRange()
+        {
+            if (_weightRangeInit) return;
+            _weightRangeInit = true;
+            _weightFrom = DateTime.Today.AddDays(-29);
+            _weightTo = DateTime.Today;
+            WeightFromPicker.SelectedDate = _weightFrom;
+            WeightToPicker.SelectedDate = _weightTo;
+            UpdateWeightRangeButtons(30);
+        }
+
+        private void WeightRange_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is Button btn)) return;
+            var days = int.Parse((string)btn.Tag);
+            var to = DateTime.Today;
+            var from = days > 0 ? to.AddDays(-(days - 1)) : DateTime.MinValue;
+            _weightFrom = from == DateTime.MinValue ? (DateTime?)null : from;
+            _weightTo = to;
+            if (_weightFrom.HasValue) WeightFromPicker.SelectedDate = _weightFrom;
+            else WeightFromPicker.SelectedDate = null;
+            WeightToPicker.SelectedDate = to;
+            UpdateWeightRangeButtons(days);
+            LoadWeight();
+        }
+
+        private void UpdateWeightRangeButtons(int days)
+        {
+            WRange7Btn.Style = (Style)FindResource(days == 7 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            WRange30Btn.Style = (Style)FindResource(days == 30 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            WRange90Btn.Style = (Style)FindResource(days == 90 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            WRange365Btn.Style = (Style)FindResource(days == 365 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            WRangeAllBtn.Style = (Style)FindResource(days == 0 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+        }
+
+        private void UpdateBodyComposition(HealthRecord latest, double heightCm)
+        {
+            if (latest == null || heightCm <= 0)
+            {
+                BodyCompGradeText.Text = "记录体重并填写身高后，可查看身体成分分析";
+                BodyCompGradeText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+                BodyCompSuggestionText.Text = "";
+                BodyCompTargetText.Text = "";
+                return;
+            }
+
+            var bmi = CalcBmi(latest.Value, heightCm);
+            string grade, gradeBrush;
+            if (bmi < 18.5) { grade = "偏瘦（体重过低）"; gradeBrush = "AccentBlueBrush"; }
+            else if (bmi < 24) { grade = "正常"; gradeBrush = "AccentGreenBrush"; }
+            else if (bmi < 28) { grade = "超重"; gradeBrush = "AccentYellowBrush"; }
+            else { grade = "肥胖"; gradeBrush = "AccentRedBrush"; }
+
+            BodyCompGradeText.Text = $"当前 BMI {bmi:F1} → {grade}";
+            BodyCompGradeText.Foreground = (Brush)FindResource(gradeBrush);
+
+            var low = 18.5 * heightCm / 100.0 * heightCm / 100.0;
+            var high = 23.9 * heightCm / 100.0 * heightCm / 100.0;
+            BodyCompSuggestionText.Text = $"建议体重范围：{low:F1} ~ {high:F1} kg（BMI 18.5~23.9）";
+            BodyCompTargetText.Text = latest.Value < low
+                ? $"距建议体重下限还差 {low - latest.Value:F1} kg"
+                : latest.Value > high
+                    ? $"比建议体重上限多 {latest.Value - high:F1} kg"
+                    : "体重处于健康范围，继续保持";
+
+            // 标记 BMI 在区间条上的位置（映射 14~32 → 0~1）
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var pos = (bmi - 14.0) / (32.0 - 14.0);
+                pos = Math.Max(0, Math.Min(1, pos));
+                var host = (FrameworkElement)BmiMarker.Parent;
+                if (host != null && host.ActualWidth > 0)
+                {
+                    var x = pos * host.ActualWidth;
+                    BmiMarker.Margin = new Thickness(Math.Max(0, x - 1.5), 0, 0, 0);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void DrawWeightChart(List<HealthRecord> all, DateTime from, DateTime to)
         {
             WeightChartCanvas.Children.Clear();
             var w = WeightChartCanvas.ActualWidth;
@@ -391,14 +563,30 @@ namespace ME.Views
             var textBrush = (Brush)FindResource("SecondaryTextBrush");
             var lineBrush = (Brush)FindResource("AccentBlueBrush");
 
-            var days = Enumerable.Range(0, 30).Select(i => DateTime.Today.AddDays(-(29 - i))).ToList();
+            var days = new List<DateTime>();
+            for (var d = from.Date; d <= to.Date; d = d.AddDays(1))
+                days.Add(d);
+            if (days.Count > 366) days = days.Where((_, i) => i % (days.Count / 366 + 1) == 0).ToList();
+            if (days.Count == 0) return;
+
             var values = days.Select(d => all.FirstOrDefault(r => r.Date == d.ToString("yyyy-MM-dd"))?.Value)
                              .ToList();
 
             WeightChartCanvas.Children.Add(new Line { X1 = 0, Y1 = h - 20, X2 = w, Y2 = h - 20, Stroke = axisBrush, StrokeThickness = 1 });
 
             var valid = values.Where(v => v.HasValue).ToList();
-            if (valid.Count == 0) return;
+            if (valid.Count == 0)
+            {
+                WeightChartCanvas.Children.Add(new TextBlock
+                {
+                    Text = "该时间段暂无体重数据",
+                    FontSize = 11,
+                    Foreground = textBrush
+                });
+                Canvas.SetLeft(WeightChartCanvas.Children[WeightChartCanvas.Children.Count - 1], w / 2 - 60);
+                Canvas.SetTop(WeightChartCanvas.Children[WeightChartCanvas.Children.Count - 1], h / 2 - 8);
+                return;
+            }
 
             var minV = Math.Min(valid.Min().Value - 1, 40);
             var maxV = Math.Max(valid.Max().Value + 1, minV + 5);
@@ -849,6 +1037,23 @@ namespace ME.Views
             LoadUricAcid();
         }
 
+        private void SaveUricTarget_Click(object sender, RoutedEventArgs e)
+        {
+            if (double.TryParse(UricTargetBox.Text, out var target) && target > 0 && target < 1200)
+            {
+                _settingsRepo.SetValue(SettingsKeys.UricTarget, target.ToString(CultureInfo.InvariantCulture));
+                LoadUricAcid();
+                UricAcidHint.Text = $"目标已设为 {target:F0} μmol/L";
+            }
+            else
+            {
+                UricTargetBox.Text = "";
+                _settingsRepo.SetValue(SettingsKeys.UricTarget, "");
+                LoadUricAcid();
+                UricAcidHint.Text = "已清除目标值";
+            }
+        }
+
         private void ClearUricAcid_Click(object sender, RoutedEventArgs e)
         {
             var date = UricAcidDatePicker.SelectedDate ?? DateTime.Today;
@@ -931,12 +1136,26 @@ namespace ME.Views
             var values = days.Select(d => all.FirstOrDefault(r => r.Date == d.ToString("yyyy-MM-dd"))?.Value).ToList();
             var vals = values.Where(v => v.HasValue).Select(v => v.Value).ToList();
 
+            double target = 0;
+            double.TryParse(_settingsRepo.GetValue(SettingsKeys.UricTarget, ""), NumberStyles.Any, CultureInfo.InvariantCulture, out target);
+
             var minV = Math.Min(lower, vals.Count > 0 ? vals.Min() : lower) - 20;
             var maxV = Math.Max(upper, vals.Count > 0 ? vals.Max() : upper) + 20;
+            if (target > 0) { minV = Math.Min(minV, target - 20); maxV = Math.Max(maxV, target + 20); }
             var range = maxV - minV;
             if (range <= 0) range = 1;
 
             double Y(double v) => h - 20 - (v - minV) / range * (h - 40);
+
+            // 目标线（黄色点线）
+            if (target > 0)
+            {
+                var targetLine = new Line { X1 = 0, X2 = w, Y1 = Y(target), Y2 = Y(target), Stroke = new SolidColorBrush(Color.FromRgb(255, 204, 0)), StrokeThickness = 1.5, StrokeDashArray = new DoubleCollection { 6, 3 }, Opacity = 0.9 };
+                UricChartCanvas.Children.Add(targetLine);
+                var targetLabel = new TextBlock { Text = $"目标 {target:F0}", FontSize = 9, Foreground = new SolidColorBrush(Color.FromRgb(255, 204, 0)) };
+                Canvas.SetLeft(targetLabel, 2); Canvas.SetTop(targetLabel, Math.Max(0, Y(target) - 14));
+                UricChartCanvas.Children.Add(targetLabel);
+            }
 
             // 参考线：上限（红虚线）、下限（绿虚线）
             var upLine = new Line { X1 = 0, X2 = w, Y1 = Y(upper), Y2 = Y(upper), Stroke = new SolidColorBrush(Color.FromRgb(255, 59, 48)), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, Opacity = 0.7 };
@@ -1000,7 +1219,7 @@ namespace ME.Views
             if (CmpWater.IsChecked == true) list.Add(("water", "喝水(ml)", "💧"));
             if (CmpSleep.IsChecked == true) list.Add(("sleep", "睡眠(h)", "😴"));
             if (CmpWeight.IsChecked == true) list.Add(("weight", "体重(kg)", "⚖️"));
-            if (CmpUric.IsChecked == true) list.Add(("uric_acid", "尿酸(μmol/L)", "🩸"));
+            if (CmpUric.IsChecked == true) list.Add(("uric_acid", "尿酸(μmol/L)", "💉"));
             if (CmpMood.IsChecked == true) list.Add(("mood", "心情(0好-3差)", "😊"));
             return list;
         }
@@ -1037,6 +1256,25 @@ namespace ME.Views
             var axisBrush = (Brush)FindResource("BorderBrush");
             var textBrush = (Brush)FindResource("SecondaryTextBrush");
 
+            // 网格线 + Y 轴归一化刻度
+            for (int g = 1; g <= 3; g++)
+            {
+                var gy = h - 20 - (h - 40) * g / 4.0;
+                CompareChartCanvas.Children.Add(new Line
+                {
+                    X1 = 0, X2 = w, Y1 = gy, Y2 = gy,
+                    Stroke = axisBrush, StrokeThickness = 0.6, Opacity = 0.5
+                });
+                var gl = new TextBlock
+                {
+                    Text = $"{100 - g * 25}%",
+                    FontSize = 8,
+                    Foreground = textBrush
+                };
+                Canvas.SetLeft(gl, 2); Canvas.SetTop(gl, gy - 8);
+                CompareChartCanvas.Children.Add(gl);
+            }
+
             var colors = new[]
             {
                 (Brush)FindResource("PrimaryBrush"),
@@ -1046,10 +1284,12 @@ namespace ME.Views
                 (Brush)FindResource("AccentYellowBrush")
             };
 
+            int seriesWithData = 0;
             for (int s = 0; s < series.Count; s++)
             {
                 var vals = series[s].values.Where(v => v.HasValue).Select(v => v.Value).ToList();
                 if (vals.Count == 0) continue;
+                seriesWithData++;
                 var minV = vals.Min();
                 var maxV = vals.Max();
                 var range = maxV - minV;
@@ -1063,10 +1303,25 @@ namespace ME.Views
                     if (has && segStart < 0) segStart = i;
                     if (!has && segStart >= 0)
                     {
-                        DrawCompareSegment(colors[s % colors.Length], days, series[s].values, segStart, i - 1, w, h, minV, range);
+                        DrawCompareSegment(colors[s % colors.Length], days, series[s].values, segStart, i - 1, w, h, minV, range, series[s].name);
                         segStart = -1;
                     }
                 }
+            }
+
+            if (seriesWithData == 0)
+            {
+                var empty = new TextBlock
+                {
+                    Text = "所选时间段暂无数据，请先在 睡眠/喝水/尿酸/体重/心情 中记录",
+                    FontSize = 11,
+                    Foreground = textBrush,
+                    TextWrapping = TextWrapping.Wrap,
+                    Width = w - 40
+                };
+                Canvas.SetLeft(empty, 20);
+                Canvas.SetTop(empty, h / 2 - 10);
+                CompareChartCanvas.Children.Add(empty);
             }
 
             // 日期标签（首/中/尾）
@@ -1085,7 +1340,7 @@ namespace ME.Views
             CompareChartCanvas.Children.Add(new Line { X1 = 0, Y1 = h - 20, X2 = w, Y2 = h - 20, Stroke = axisBrush, StrokeThickness = 1 });
         }
 
-        private void DrawCompareSegment(Brush brush, List<DateTime> days, List<double?> values, int start, int end, double w, double h, double minV, double range)
+        private void DrawCompareSegment(Brush brush, List<DateTime> days, List<double?> values, int start, int end, double w, double h, double minV, double range, string seriesName)
         {
             double Norm(double v) => (v - minV) / range * 100.0;
 
@@ -1102,14 +1357,28 @@ namespace ME.Views
                 CompareChartCanvas.Children.Add(new Line
                 {
                     X1 = pts[i - 1].X, Y1 = pts[i - 1].Y, X2 = pts[i].X, Y2 = pts[i].Y,
-                    Stroke = brush, StrokeThickness = 2, Opacity = 0.85
+                    Stroke = brush, StrokeThickness = 2.5, Opacity = 0.9
                 });
             }
-            foreach (var p in pts)
+            for (int i = 0; i < pts.Count; i++)
             {
-                CompareChartCanvas.Children.Add(new Ellipse { Width = 4, Height = 4, Fill = brush });
-                Canvas.SetLeft(CompareChartCanvas.Children[CompareChartCanvas.Children.Count - 1], p.X - 2);
-                Canvas.SetTop(CompareChartCanvas.Children[CompareChartCanvas.Children.Count - 1], p.Y - 2);
+                var dot = new Ellipse { Width = 7, Height = 7, Fill = brush, Stroke = Brushes.White, StrokeThickness = 1.5 };
+                var idx = start + i; // 该点在 days 中的下标（可能跨空位，pts 顺序对应非空值）
+                // 精确下标：重新从 start 数非空
+                int realIdx = start;
+                int count = -1;
+                for (int j = start; j <= end; j++)
+                {
+                    if (values[j].HasValue)
+                    {
+                        count++;
+                        if (count == i) { realIdx = j; break; }
+                    }
+                }
+                dot.ToolTip = $"{seriesName}\n{days[realIdx]:yyyy-MM-dd}  值 {values[realIdx]:F1}";
+                CompareChartCanvas.Children.Add(dot);
+                Canvas.SetLeft(dot, pts[i].X - 3.5);
+                Canvas.SetTop(dot, pts[i].Y - 3.5);
             }
         }
 

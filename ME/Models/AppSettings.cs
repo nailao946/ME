@@ -27,6 +27,7 @@ namespace ME.Models
         public const string HealthHeight = "HealthHeight";
         public const string HealthGender = "HealthGender";
         public const string HealthWaterMigrated = "HealthWaterMigrated";
+        public const string UricTarget = "UricTarget";
         public const string DeepSeekApiKey = "DeepSeekApiKey";
     }
 

@@ -20,7 +20,7 @@
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="MoodTabBtn" Content="😊 心情" Tag="mood" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
-                <Button x:Name="UricAcidTabBtn" Content="🩸 尿酸" Tag="uric_acid" Click="Tab_Click"
+                <Button x:Name="UricAcidTabBtn" Content="💉 尿酸" Tag="uric_acid" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="CompareTabBtn" Content="📊 对比" Tag="compare" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
@@ -51,12 +51,28 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="入睡" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBox x:Name="SleepTimeBox" Width="64" Text="23:00" TextAlignment="Center"
-                                     Margin="6,0,0,0" VerticalContentAlignment="Center" />
+                            <TextBox x:Name="SleepHourBox" Width="44" Height="34" MaxLength="2"
+                                     Text="23" TextAlignment="Center" Margin="6,0,0,0"
+                                     VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
+                            <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="3,0,0,0" />
+                            <TextBox x:Name="SleepMinBox" Width="44" Height="34" MaxLength="2"
+                                     Text="00" TextAlignment="Center" Margin="3,0,0,0"
+                                     VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
+                            <TextBlock Text="分" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="3,0,0,0" />
                             <TextBlock Text="起床" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                       VerticalAlignment="Center" Margin="14,0,0,0" />
-                            <TextBox x:Name="WakeTimeBox" Width="64" Text="07:00" TextAlignment="Center"
-                                     Margin="6,0,0,0" VerticalContentAlignment="Center" />
+                                       VerticalAlignment="Center" Margin="16,0,0,0" />
+                            <TextBox x:Name="WakeHourBox" Width="44" Height="34" MaxLength="2"
+                                     Text="07" TextAlignment="Center" Margin="6,0,0,0"
+                                     VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
+                            <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="3,0,0,0" />
+                            <TextBox x:Name="WakeMinBox" Width="44" Height="34" MaxLength="2"
+                                     Text="00" TextAlignment="Center" Margin="3,0,0,0"
+                                     VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
+                            <TextBlock Text="分" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="3,0,0,0" />
                         </StackPanel>
                         <TextBlock x:Name="SleepCalcText" FontSize="11"
                                    Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
@@ -126,6 +142,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Border Style="{StaticResource CardStyle}" Padding="12">
                     <StackPanel>
@@ -136,14 +153,14 @@
                                        VerticalAlignment="Center" />
                             <local:CustomDatePicker x:Name="WeightDatePicker" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                             <TextBlock Text="体重(kg)" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBox x:Name="WeightBox" Width="90" TextAlignment="Center"
+                            <TextBox x:Name="WeightBox" Width="110" Height="34" TextAlignment="Center"
                                      VerticalContentAlignment="Center" Margin="6,0,0,0" />
                             <TextBlock Text="身高(cm)" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" Margin="14,0,0,0" />
-                            <TextBox x:Name="HeightBox" Width="70" TextAlignment="Center"
+                            <TextBox x:Name="HeightBox" Width="80" Height="34" TextAlignment="Center"
                                      VerticalContentAlignment="Center" Margin="6,0,0,0" />
                         </StackPanel>
                         <TextBlock x:Name="BmiText" FontSize="11"
@@ -178,6 +195,54 @@
                         </StackPanel>
                     </UniformGrid>
                 </Border>
+                <!-- 身体成分分析 -->
+                <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="身体成分分析" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock x:Name="BodyCompGradeText" FontSize="13" FontWeight="SemiBold"
+                                   Margin="0,8,0,0" />
+                        <TextBlock x:Name="BodyCompSuggestionText" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="BMI 区间（中国成人标准）" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,10,0,4" />
+                        <Grid Height="16" Margin="0,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.25*" />
+                                <ColumnDefinition Width="0.297*" />
+                                <ColumnDefinition Width="0.25*" />
+                                <ColumnDefinition Width="0.203*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="#5AC8FA" CornerRadius="4,0,0,4" />
+                            <Border Grid.Column="1" Background="#34C759" />
+                            <Border Grid.Column="2" Background="#FFCC00" />
+                            <Border Grid.Column="3" Background="#FF3B30" CornerRadius="0,4,4,0" />
+                            <Border x:Name="BmiMarker" Width="3" Height="18"
+                                    HorizontalAlignment="Left" Background="Black"
+                                    Margin="-1.5,0,0,0" />
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.25*" />
+                                <ColumnDefinition Width="0.297*" />
+                                <ColumnDefinition Width="0.25*" />
+                                <ColumnDefinition Width="0.203*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="偏瘦 &lt;18.5" FontSize="9"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                            <TextBlock Grid.Column="1" Text="正常 18.5-24" FontSize="9"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                            <TextBlock Grid.Column="2" Text="超重 24-28" FontSize="9"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                            <TextBlock Grid.Column="3" Text="肥胖 ≥28" FontSize="9"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                        </Grid>
+                        <TextBlock x:Name="BodyCompTargetText" FontSize="11"
+                                   Foreground="{DynamicResource PrimaryBrush}" Margin="0,8,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
             </Grid>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
@@ -186,8 +251,36 @@
                 </Grid.RowDefinitions>
                 <Border Style="{StaticResource CardStyle}" Padding="12">
                     <StackPanel>
-                        <TextBlock Text="近 30 天体重趋势" FontSize="14" FontWeight="Bold"
+                        <TextBlock x:Name="WeightChartTitle" Text="体重趋势" FontSize="14" FontWeight="Bold"
                                    Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="从" FontSize="11" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <local:CustomDatePicker x:Name="WeightFromPicker" Margin="4,0,0,0" />
+                            <TextBlock Text="到" FontSize="11" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <local:CustomDatePicker x:Name="WeightToPicker" Margin="4,0,0,0" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button x:Name="WRange7Btn" Content="近7天" Tag="7" Click="WeightRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="24" FontSize="10"
+                                    Padding="8,0" />
+                            <Button x:Name="WRange30Btn" Content="近1月" Tag="30" Click="WeightRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="24" FontSize="10"
+                                    Padding="8,0" Margin="4,0,0,0" />
+                            <Button x:Name="WRange90Btn" Content="近3月" Tag="90" Click="WeightRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="24" FontSize="10"
+                                    Padding="8,0" Margin="4,0,0,0" />
+                            <Button x:Name="WRange365Btn" Content="近1年" Tag="365" Click="WeightRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="24" FontSize="10"
+                                    Padding="8,0" Margin="4,0,0,0" />
+                            <Button x:Name="WRangeAllBtn" Content="全部" Tag="0" Click="WeightRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="24" FontSize="10"
+                                    Padding="8,0" Margin="4,0,0,0" />
+                            <TextBlock x:Name="WeightDeltaText" FontSize="11"
+                                       Foreground="{DynamicResource AccentGreenBrush}"
+                                       VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </StackPanel>
                         <Canvas x:Name="WeightChartCanvas" Height="170" Margin="0,8,0,0" />
                     </StackPanel>
                 </Border>
@@ -434,6 +527,17 @@
                                 <ComboBoxItem Content="女" Tag="female" />
                             </ComboBox>
                         </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="目标尿酸" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="UricTargetBox" Width="90" Height="34" TextAlignment="Center"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0" />
+                            <TextBlock Text="μmol/L" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="6,0,0,0" />
+                            <Button Content="保存目标" Click="SaveUricTarget_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="30"
+                                    Margin="8,0,0,0" FontSize="11" />
+                        </StackPanel>
                         <TextBlock x:Name="UricAcidHint" FontSize="11"
                                    Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -511,7 +615,7 @@
                         <CheckBox x:Name="CmpWeight" Content="⚖️ 体重" IsChecked="False"
                                   Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
-                        <CheckBox x:Name="CmpUric" Content="🩸 尿酸" IsChecked="True"
+                        <CheckBox x:Name="CmpUric" Content="💉 尿酸" IsChecked="True"
                                   Checked="CompareParam_Changed" Unchecked="CompareParam_Changed"
                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
                         <CheckBox x:Name="CmpMood" Content="😊 心情" IsChecked="False"

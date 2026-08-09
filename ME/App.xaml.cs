@@ -42,6 +42,24 @@ namespace ME
 
             if (window.AllowsTransparency)
             {
+                // 渲染完成后（ContentRendered）再设置 RenderTransform：
+                // Window.CoerceRenderTransform 要求 AllowsTransparency 已生效，
+                // Loaded 阶段分层窗口可能尚未就绪，直接设置会抛 InvalidOperationException。
+                // 一次性订阅，执行后退订避免累积。
+                EventHandler handler = null;
+                handler = (s2, e2) =>
+                {
+                    window.ContentRendered -= handler;
+                    ApplyWindowScaleIn(window);
+                };
+                window.ContentRendered += handler;
+            }
+        }
+
+        private static void ApplyWindowScaleIn(Window window)
+        {
+            try
+            {
                 var st = new ScaleTransform(0.96, 0.96);
                 window.RenderTransform = st;
                 window.RenderTransformOrigin = new Point(0.5, 0.5);
@@ -51,6 +69,11 @@ namespace ME
                 };
                 st.BeginAnimation(ScaleTransform.ScaleXProperty, scale);
                 st.BeginAnimation(ScaleTransform.ScaleYProperty, scale);
+            }
+            catch (InvalidOperationException)
+            {
+                // 窗口不允许变换时退化为纯淡入
+                window.RenderTransform = null;
             }
         }
 
