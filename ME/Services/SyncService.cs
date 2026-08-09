@@ -7,8 +7,27 @@ using ME.Data;
 
 namespace ME.Services
 {
+    /// <summary>
+    /// 云同步提供者接口（预留）。
+    /// 未来接入云端/网盘/自建服务器时实现该接口并在 SyncService.Provider 注册，
+    /// 安卓端可复用同一套 JSON 数据格式实现双向同步。
+    /// </summary>
+    public interface ISyncProvider
+    {
+        /// <summary>上传全量 JSON 数据，返回远端版本号</summary>
+        Task<string> PushAsync(string json);
+
+        /// <summary>拉取远端数据，返回 JSON；无数据时返回 null</summary>
+        Task<string> PullAsync();
+
+        Task<bool> TestConnectionAsync();
+    }
+
     public static class SyncService
     {
+        /// <summary>当前同步后端（默认未配置 = 仅本地）</summary>
+        public static ISyncProvider Provider { get; set; }
+
         public static readonly Dictionary<string, string> DataFiles = new()
         {
             ["tasks"] = "tasks",
@@ -21,6 +40,8 @@ namespace ME.Services
             ["settings"] = "settings",
             ["visions"] = "visions",
             ["reviews"] = "reviews",
+            ["health_records"] = "health_records",
+            ["water_containers"] = "water_containers",
         };
 
         public static string ExportAllAsJson()
@@ -59,9 +80,14 @@ namespace ME.Services
             repo.SetValue("LastSyncTime", time.ToString("o"));
         }
 
-        public static Task SyncAsync()
+        public static async Task SyncAsync()
         {
-            return Task.CompletedTask;
+            if (Provider == null)
+                return; // 未配置云端后端，仅本地
+
+            var json = ExportAllAsJson();
+            await Provider.PushAsync(json);
+            SetLastSyncTime(DateTime.Now);
         }
     }
 }

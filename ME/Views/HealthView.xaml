@@ -62,9 +62,9 @@
                                    Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button Content="保存" Click="SaveSleep_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Width="80" />
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="96" />
                             <Button Content="清除当天" Click="ClearSleep_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="8,0,0,0" />
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="96" Margin="8,0,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -150,9 +150,9 @@
                                    Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button Content="保存" Click="SaveWeight_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Width="80" />
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="96" />
                             <Button Content="清除当天" Click="ClearWeight_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="8,0,0,0" />
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="96" Margin="8,0,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -360,7 +360,7 @@
                                    Foreground="{DynamicResource PrimaryBrush}" Margin="0,12,0,0" />
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button Content="清除今天" Click="ClearMood_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="90" />
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="100" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -438,9 +438,9 @@
                                    Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button Content="保存" Click="SaveUricAcid_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Width="80" />
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="96" />
                             <Button Content="清除当天" Click="ClearUricAcid_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="8,0,0,0" />
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="96" Margin="8,0,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

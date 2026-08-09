@@ -634,6 +634,29 @@ namespace ME.Views
             }
         }
 
+        private void ImportXiaomi_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "选择小米运动健康导出文件（zip 或 csv）",
+                Filter = "小米导出文件|*.zip;*.csv|压缩包|*.zip|CSV 文件|*.csv"
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+            try
+            {
+                var result = XiaomiImportService.ImportFile(dlg.FileName);
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"导入完成：睡眠 {result.SleepImported} 条，体重 {result.WeightImported} 条，覆盖已有 {result.Overwritten} 条，跳过 {result.SkippedRows} 行");
+                foreach (var m in result.Messages.Take(6))
+                    sb.AppendLine("· " + m);
+                ConfirmDialog.Show(Window.GetWindow(this), "小米健康导入", sb.ToString(), "确定");
+            }
+            catch (Exception ex)
+            {
+                ConfirmDialog.Show(Window.GetWindow(this), "导入失败", ex.Message, "确定");
+            }
+        }
+
         private class ColorBallDef
         {
             public string Color { get; set; }

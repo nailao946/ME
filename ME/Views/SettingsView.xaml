@@ -215,9 +215,13 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Button Content="导出数据" Click="ExportSyncData_Click"
                                 Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
+                        <Button Content="导入小米健康数据" Click="ImportXiaomi_Click" Margin="8,0,0,0"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
                     </StackPanel>
                     <TextBlock Text="数据格式兼容Web版目标地图" FontSize="11"
                                Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
+                    <TextBlock Text="小米健康导入：登录 account.xiaomi.com → 隐私中心 → 管理您的数据 → 小米运动健康 → 申请导出，下载 zip 后在此导入（解析睡眠与体重）。小米未开放实时接口，此为官方唯一数据通道。" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
 
