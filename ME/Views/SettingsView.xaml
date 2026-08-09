@@ -225,27 +225,29 @@
                 </StackPanel>
             </Border>
 
-            <!-- AI Analysis (DeepSeek) -->
+            <!-- AI Analysis (multi-provider) -->
             <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
                 <StackPanel>
-                    <TextBlock Text="AI 分析（DeepSeek）" FontSize="16" FontWeight="Bold"
+                    <TextBlock Text="AI 分析（多供应商）" FontSize="16" FontWeight="Bold"
                                Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
-                    <TextBlock Text="在健康 → 对比 页面使用 AI 分析健康数据相关性。填写 DeepSeek API Key 后即可调用。" FontSize="12"
+                    <TextBlock Text="在健康 → 对比 页面使用 AI 分析健康数据。支持 DeepSeek、通义、智谱等任意 OpenAI 兼容或 Anthropic 服务。" FontSize="12"
                                Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,10" TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="API Key" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                        <TextBlock Text="当前供应商" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                    VerticalAlignment="Center" Width="100" />
-                        <PasswordBox x:Name="DeepSeekKeyBox" Width="300" VerticalContentAlignment="Center"
-                                     PasswordChar="●" />
+                        <ComboBox x:Name="AiProviderCombo" Width="220" Style="{StaticResource MacComboBoxStyle}"
+                                  SelectionChanged="AiProviderCombo_Changed" />
                     </StackPanel>
-                    <TextBlock Text="获取方式：platform.deepseek.com → API Keys 创建。Key 仅保存在本机设置中。" FontSize="11"
-                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="保存 API Key" Click="SaveDeepSeekKey_Click"
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="＋ 添加供应商" Click="AddAiProvider_Click"
                                 Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
+                        <Button x:Name="EditAiProviderBtn" Content="编辑当前" Click="EditAiProvider_Click"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
                         <Button x:Name="TestDeepSeekKeyBtn" Content="测试连接" Click="TestDeepSeekKey_Click"
                                 Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
                     </StackPanel>
+                    <TextBlock Text="供应商信息（名称、API Key、请求地址、模型名、格式）在弹窗中配置，Key 用 DPAPI 加密保存。DeepSeek 官方 Key 获取：platform.deepseek.com → API Keys。" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
                     <TextBlock x:Name="DeepSeekStatusText" FontSize="11"
                                Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
                 </StackPanel>

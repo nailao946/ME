@@ -32,6 +32,7 @@ namespace ME.Views
         private readonly HealthRepository _repo = new HealthRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private readonly MedicationRepository _medRepo = new MedicationRepository();
+        private readonly AiProviderRepository _aiProviderRepo = new AiProviderRepository();
         private string _currentTab = "sleep";
         private bool _loadingUric;
 
@@ -1429,10 +1430,10 @@ namespace ME.Views
 
         private async void AiAnalyze_Click(object sender, RoutedEventArgs e)
         {
-            var apiKey = SecureStore.Decrypt(_settingsRepo.GetValue(SettingsKeys.DeepSeekApiKey, ""));
-            if (string.IsNullOrWhiteSpace(apiKey))
+            var provider = _aiProviderRepo.GetDefault();
+            if (provider == null || string.IsNullOrWhiteSpace(AiProviderRepository.GetApiKey(provider)))
             {
-                AiStatusText.Text = "未配置 DeepSeek API Key，请到 设置 → AI 分析 中填写";
+                AiStatusText.Text = "未配置 AI 供应商 API Key，请到 设置 → AI 分析 中填写";
                 return;
             }
             var selected = GetSelectedCompareParams();
@@ -1442,14 +1443,14 @@ namespace ME.Views
                 return;
             }
             AiAnalyzeBtn.IsEnabled = false;
-            AiStatusText.Text = "正在请求 DeepSeek 分析…";
+            AiStatusText.Text = $"正在请求 {provider.Name} 分析…";
             AiResultText.Text = "";
             try
             {
                 var dataText = BuildCompareDataText(selected);
                 var system = "你是一名健康数据分析助手。用户会提供若干健康指标按日期的数据（数值越大代表量越多；心情 0=开心、3=难过）。" +
                              "请分析这些指标之间可能存在的相关性、趋势规律，给出可执行的健康建议。用简体中文回答，分点列出，不超过 400 字。";
-                var result = await DeepSeekService.ChatAsync(apiKey, system, dataText);
+                var result = await LlmService.ChatAsync(provider, system, dataText);
                 AiResultText.Text = result;
                 AiStatusText.Text = "分析完成";
             }

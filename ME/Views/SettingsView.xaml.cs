@@ -275,8 +275,8 @@ namespace ME.Views
             var lastSync = SyncService.GetLastSyncTime();
             LastSyncTimeText.Text = lastSync.HasValue ? $"上次同步: {lastSync:yyyy-MM-dd HH:mm:ss}" : "未同步";
 
-            // DeepSeek API Key（DPAPI 解密）
-            DeepSeekKeyBox.Password = SecureStore.Decrypt(_settingsRepo.GetValue(SettingsKeys.DeepSeekApiKey, ""));
+            // DeepSeek API Key → 多供应商
+            LoadAiProviders();
         }
 
         private void WeekStart_Changed(object sender, SelectionChangedEventArgs e)
@@ -591,36 +591,86 @@ namespace ME.Views
             }
         }
 
-        private void SaveDeepSeekKey_Click(object sender, RoutedEventArgs e)
+        private readonly AiProviderRepository _aiProviderRepo = new AiProviderRepository();
+        private int _selectedProviderId;
+
+        private void LoadAiProviders()
         {
-            var key = DeepSeekKeyBox.Password?.Trim() ?? "";
-            _settingsRepo.SetValue(SettingsKeys.DeepSeekApiKey, SecureStore.Encrypt(key));
-            if (string.IsNullOrEmpty(key))
+            var providers = _aiProviderRepo.EnsureDefaultDeepSeek();
+            var selId = _selectedProviderId;
+            AiProviderCombo.Items.Clear();
+            foreach (var p in providers)
             {
-                DeepSeekStatusText.Text = "已清除 API Key";
-                DeepSeekStatusText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+                var item = new ComboBoxItem
+                {
+                    Content = p.IsDefault ? $"{p.Name}（默认）" : p.Name,
+                    Tag = p.Id
+                };
+                AiProviderCombo.Items.Add(item);
             }
-            else
+            var sel = providers.Find(p => p.Id == selId) ?? providers.Find(p => p.IsDefault) ?? providers.FirstOrDefault();
+            if (sel != null)
             {
-                DeepSeekStatusText.Text = "API Key 已保存（DPAPI 加密）";
-                DeepSeekStatusText.Foreground = (Brush)FindResource("AccentGreenBrush");
+                _selectedProviderId = sel.Id;
+                foreach (ComboBoxItem it in AiProviderCombo.Items)
+                    if (it.Tag is int id && id == sel.Id) { AiProviderCombo.SelectedItem = it; break; }
+            }
+            DeepSeekStatusText.Text = sel != null && !string.IsNullOrEmpty(AiProviderRepository.GetApiKey(sel))
+                ? $"当前供应商：{sel.Name}（{sel.Model}）"
+                : $"当前供应商：{sel?.Name}（未填 API Key）";
+            DeepSeekStatusText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+        }
+
+        private void AiProviderCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (AiProviderCombo.SelectedItem is ComboBoxItem it && it.Tag is int id)
+            {
+                _selectedProviderId = id;
+                var p = _aiProviderRepo.GetAll().Find(x => x.Id == id);
+                DeepSeekStatusText.Text = p != null && !string.IsNullOrEmpty(AiProviderRepository.GetApiKey(p))
+                    ? $"当前供应商：{p.Name}（{p.Model}）"
+                    : $"当前供应商：{p?.Name}（未填 API Key）";
+            }
+        }
+
+        private void AddAiProvider_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new AiProviderDialog { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                LoadAiProviders();
+            }
+        }
+
+        private void EditAiProvider_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedProviderId <= 0) return;
+            var dlg = new AiProviderDialog(_selectedProviderId) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                LoadAiProviders();
             }
         }
 
         private async void TestDeepSeekKey_Click(object sender, RoutedEventArgs e)
         {
-            var key = DeepSeekKeyBox.Password?.Trim() ?? "";
-            if (string.IsNullOrEmpty(key))
+            var p = _aiProviderRepo.GetAll().Find(x => x.Id == _selectedProviderId);
+            if (p == null)
             {
-                DeepSeekStatusText.Text = "请先输入 API Key";
+                DeepSeekStatusText.Text = "请先选择供应商";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(AiProviderRepository.GetApiKey(p)))
+            {
+                DeepSeekStatusText.Text = $"供应商「{p.Name}」未填写 API Key";
                 return;
             }
             TestDeepSeekKeyBtn.IsEnabled = false;
-            DeepSeekStatusText.Text = "测试中…";
+            DeepSeekStatusText.Text = $"正在测试 {p.Name}…";
             try
             {
-                var reply = await DeepSeekService.ChatAsync(key, "你是一个测试助手", "请只回复：连接成功", 0);
-                DeepSeekStatusText.Text = $"✅ {reply}（测试成功，请点\"保存 API Key\"写入）";
+                var reply = await LlmService.ChatAsync(p, "你是一个测试助手", "请只回复：连接成功", 0);
+                DeepSeekStatusText.Text = $"✅ {reply}（{p.Name} 连接成功）";
                 DeepSeekStatusText.Foreground = (Brush)FindResource("AccentGreenBrush");
             }
             catch (Exception ex)

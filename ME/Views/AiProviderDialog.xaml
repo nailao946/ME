@@ -1,0 +1,106 @@
+<Window x:Class="ME.Views.AiProviderDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Title="AI 供应商" Height="440" Width="460"
+        KeyDown="Window_KeyDown">
+    <Border CornerRadius="14" Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Opacity="0.25" BlurRadius="24" ShadowDepth="2" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <Border Grid.Row="0" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseDown"
+                    Background="{DynamicResource CardBrush}">
+                <Grid Margin="16,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="12" Height="12" CornerRadius="3"
+                                Background="{DynamicResource PrimaryBrush}"
+                                VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="TitleText" Text="添加 AI 供应商" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <Button Content="✕" Click="Cancel_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"
+                            Padding="8,2" FontSize="12"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Content -->
+            <StackPanel Grid.Row="1" Margin="20,14,20,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="供应商名称" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="100" VerticalAlignment="Center" />
+                    <TextBox x:Name="NameBox" Style="{StaticResource InputTextBoxStyle}"
+                             Width="240" FontSize="13" />
+                </StackPanel>
+                <TextBlock Text="如：DeepSeek、通义千问、智谱清言、Kimi、OpenAI" FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,2,0,0" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="API Key" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="100" VerticalAlignment="Center" />
+                    <PasswordBox x:Name="ApiKeyBox" Width="240" VerticalContentAlignment="Center"
+                                 PasswordChar="●" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="请求地址" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="100" VerticalAlignment="Center" />
+                    <TextBox x:Name="BaseUrlBox" Style="{StaticResource InputTextBoxStyle}"
+                             Width="300" FontSize="13" />
+                </StackPanel>
+                <TextBlock Text="如：https://api.deepseek.com（会自动补 /chat/completions）" FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,2,0,0" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="模型名称" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="100" VerticalAlignment="Center" />
+                    <TextBox x:Name="ModelBox" Style="{StaticResource InputTextBoxStyle}"
+                             Width="240" FontSize="13" />
+                </StackPanel>
+                <TextBlock Text="如：deepseek-chat、qwen-plus、glm-4、gpt-4o-mini" FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,2,0,0" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="API 格式" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                               Width="100" VerticalAlignment="Center" />
+                    <ComboBox x:Name="FormatCombo" Width="240" Style="{StaticResource MacComboBoxStyle}">
+                        <ComboBoxItem Content="OpenAI 兼容" Tag="OpenAI" />
+                        <ComboBoxItem Content="Anthropic" Tag="Anthropic" />
+                    </ComboBox>
+                </StackPanel>
+
+                <CheckBox x:Name="SetDefaultCheck" Content="设为默认供应商" Margin="100,12,0,0"
+                          Foreground="{DynamicResource TextBrush}" />
+                <TextBlock x:Name="HintText" FontSize="11"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,8,20,16">
+                <Button x:Name="DeleteBtn" Content="删除" Click="Delete_Click"
+                        Style="{DynamicResource DangerButtonStyle}"
+                        Padding="16,8" Margin="0,0,10,0" FontSize="13" Visibility="Collapsed" />
+                <Button Content="取消" Click="Cancel_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"
+                        Padding="20,8" Margin="0,0,10,0" FontSize="13" />
+                <Button Content="保存" Click="Save_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"
+                        Padding="20,8" FontSize="13" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
