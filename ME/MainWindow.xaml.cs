@@ -325,6 +325,21 @@ namespace ME
         }
 
         // ========== TRAY ICON ==========
+        /// <summary>供 AppNotifier 借用主窗口托盘图标弹气泡（单图标模式）。主图标未启用时返回 false。</summary>
+        public bool TryShowBalloon(string title, string text)
+        {
+            if (_notifyIcon == null || !_notifyIcon.Visible) return false;
+            try
+            {
+                _notifyIcon.ShowBalloonTip(6000, title, text, Forms.ToolTipIcon.Info);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private void SetupTrayIcon()
         {
             try
