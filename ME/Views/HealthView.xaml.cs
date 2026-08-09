@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
@@ -28,6 +31,7 @@ namespace ME.Views
 
         private readonly HealthRepository _repo = new HealthRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
+        private readonly MedicationRepository _medRepo = new MedicationRepository();
         private string _currentTab = "sleep";
         private bool _loadingUric;
 
@@ -50,7 +54,9 @@ namespace ME.Views
             LoadWater();
             LoadMood();
             LoadUricAcid();
+            LoadMedications();
             LoadCompare();
+            LoadOverview();
         }
 
         private void OnWeightRangePicked()
@@ -79,7 +85,9 @@ namespace ME.Views
                         LoadWater();
                         LoadMood();
                         LoadUricAcid();
+                        LoadMedications();
                         LoadCompare();
+                        LoadOverview();
                     }
                 }));
             }
@@ -96,7 +104,9 @@ namespace ME.Views
                     LoadWater();
                     LoadMood();
                     LoadUricAcid();
+                    LoadMedications();
                     LoadCompare();
+                    LoadOverview();
                 }
             });
         }
@@ -110,7 +120,9 @@ namespace ME.Views
                 LoadWater();
                 LoadMood();
                 LoadUricAcid();
+                LoadMedications();
                 LoadCompare();
+                LoadOverview();
             }
         }
 
@@ -119,18 +131,22 @@ namespace ME.Views
         {
             if (!(sender is Button btn)) return;
             _currentTab = (string)btn.Tag;
+            OverviewPanel.Visibility = _currentTab == "overview" ? Visibility.Visible : Visibility.Collapsed;
             SleepPanel.Visibility = _currentTab == "sleep" ? Visibility.Visible : Visibility.Collapsed;
             WeightPanel.Visibility = _currentTab == "weight" ? Visibility.Visible : Visibility.Collapsed;
             WaterPanel.Visibility = _currentTab == "water" ? Visibility.Visible : Visibility.Collapsed;
             MoodPanel.Visibility = _currentTab == "mood" ? Visibility.Visible : Visibility.Collapsed;
             UricAcidPanel.Visibility = _currentTab == "uric_acid" ? Visibility.Visible : Visibility.Collapsed;
+            MedicationPanel.Visibility = _currentTab == "medication" ? Visibility.Visible : Visibility.Collapsed;
             ComparePanel.Visibility = _currentTab == "compare" ? Visibility.Visible : Visibility.Collapsed;
 
+            OverviewTabBtn.Style = (Style)FindResource(_currentTab == "overview" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             SleepTabBtn.Style = (Style)FindResource(_currentTab == "sleep" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             WeightTabBtn.Style = (Style)FindResource(_currentTab == "weight" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             WaterTabBtn.Style = (Style)FindResource(_currentTab == "water" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             MoodTabBtn.Style = (Style)FindResource(_currentTab == "mood" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             UricAcidTabBtn.Style = (Style)FindResource(_currentTab == "uric_acid" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            MedicationTabBtn.Style = (Style)FindResource(_currentTab == "medication" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             CompareTabBtn.Style = (Style)FindResource(_currentTab == "compare" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
 
             // 面板刚变为可见，按真实宽度重绘图表
@@ -138,11 +154,13 @@ namespace ME.Views
             {
                 switch (_currentTab)
                 {
+                    case "overview": LoadOverview(); break;
                     case "sleep": LoadSleep(); break;
                     case "weight": LoadWeight(); break;
                     case "water": LoadWater(); break;
                     case "mood": LoadMood(); break;
                     case "uric_acid": LoadUricAcid(); break;
+                    case "medication": LoadMedications(); break;
                     case "compare": LoadCompare(); break;
                 }
             }), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -1465,7 +1483,530 @@ namespace ME.Views
             return sb.ToString();
         }
 
-        // ============ 通用 ============
+        // ============ 总览 ============
+        private void LoadOverview()
+        {
+            BuildOverviewCards();
+            DrawBodyFigure();
+            ShowBodyPartDetail("睡眠");
+        }
+
+        private (string title, string value, string sub, string brushKey) GetOverviewCardData(string key)
+        {
+            var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
+            switch (key)
+            {
+                case "睡眠":
+                {
+                    var rec = _repo.GetByTypeAndDate("sleep", todayStr);
+                    if (rec == null) return (key, "--", "今日未记录", "SecondaryTextBrush");
+                    var dur = TimeSpan.FromMinutes(rec.Value);
+                    var ok = dur.TotalHours >= 7 && dur.TotalHours <= 9;
+                    return (key, FormatDuration(dur), ok ? "睡眠充足" : "建议 7-9 小时", ok ? "AccentGreenBrush" : "AccentYellowBrush");
+                }
+                case "体重":
+                {
+                    var all = _repo.GetByType("weight").OrderBy(r => r.Date).ToList();
+                    var rec = all.LastOrDefault();
+                    if (rec == null) return (key, "--", "暂无记录", "SecondaryTextBrush");
+                    double h = 0; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthHeight), out h);
+                    if (h <= 0) return (key, $"{rec.Value:F1} kg", "未填身高", "PrimaryBrush");
+                    var bmi = CalcBmi(rec.Value, h);
+                    string g, brush;
+                    if (bmi < 18.5) { g = $"BMI {bmi:F1} 偏瘦"; brush = "AccentBlueBrush"; }
+                    else if (bmi < 24) { g = $"BMI {bmi:F1} 正常"; brush = "AccentGreenBrush"; }
+                    else if (bmi < 28) { g = $"BMI {bmi:F1} 超重"; brush = "AccentYellowBrush"; }
+                    else { g = $"BMI {bmi:F1} 肥胖"; brush = "AccentRedBrush"; }
+                    return (key, $"{rec.Value:F1} kg", g, brush);
+                }
+                case "喝水":
+                {
+                    var rec = _repo.GetByTypeAndDate("water", todayStr);
+                    if (rec == null) return (key, "0 ml", "今日未记录", "SecondaryTextBrush");
+                    double goal = 2000; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "2000"), out goal);
+                    var pct = goal > 0 ? rec.Value / goal : 0;
+                    var brush = pct >= 0.8 ? "AccentGreenBrush" : pct >= 0.5 ? "AccentYellowBrush" : "AccentRedBrush";
+                    return (key, $"{rec.Value:F0} ml", $"目标 {goal:F0} ml", brush);
+                }
+                case "心情":
+                {
+                    var rec = _repo.GetByTypeAndDate("mood", todayStr);
+                    if (rec == null) return (key, "--", "今日未记录", "SecondaryTextBrush");
+                    var idx = (int)rec.Value;
+                    if (idx < 0 || idx >= 4) return (key, "--", "未知", "SecondaryTextBrush");
+                    return (key, MoodEmojis[idx], MoodNames[idx], idx <= 1 ? "AccentGreenBrush" : "AccentYellowBrush");
+                }
+                case "尿酸":
+                {
+                    var rec = _repo.GetByTypeAndDate("uric_acid", todayStr);
+                    if (rec == null) return (key, "--", "今日未记录", "SecondaryTextBrush");
+                    var (lower, upper) = GetUricRange();
+                    var (text, brush) = ClassifyUric(rec.Value, lower, upper);
+                    return (key, $"{rec.Value:F0}", text, brush);
+                }
+                case "用药":
+                {
+                    var meds = _medRepo.GetActive();
+                    return (key, meds.Count.ToString(), meds.Count > 0 ? "种在用药物" : "暂无用药", meds.Count > 0 ? "PrimaryBrush" : "SecondaryTextBrush");
+                }
+                default:
+                    return (key, "--", "", "SecondaryTextBrush");
+            }
+        }
+
+        private void BuildOverviewCards()
+        {
+            OverviewCardsPanel.Children.Clear();
+            foreach (var key in new[] { "睡眠", "体重", "喝水", "心情", "尿酸", "用药" })
+            {
+                var (title, value, sub, brushKey) = GetOverviewCardData(key);
+                var card = new Border
+                {
+                    Style = (Style)FindResource("CardStyle"),
+                    Width = 150,
+                    Margin = new Thickness(0, 0, 10, 10),
+                    Padding = new Thickness(12, 10, 12, 10),
+                    Cursor = Cursors.Hand
+                };
+                var keyCopy = key;
+                card.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail(keyCopy);
+                var panel = new StackPanel();
+                panel.Children.Add(new TextBlock { Text = key, FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush") });
+                panel.Children.Add(new TextBlock { Text = value, FontSize = 18, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource(brushKey), Margin = new Thickness(0, 2, 0, 0) });
+                panel.Children.Add(new TextBlock { Text = sub, FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+                card.Child = panel;
+                OverviewCardsPanel.Children.Add(card);
+            }
+        }
+
+        private void DrawBodyFigure()
+        {
+            BodyCanvas.Children.Clear();
+            var w = BodyCanvas.ActualWidth;
+            var h = BodyCanvas.ActualHeight;
+            if (w < 50) w = 276;
+            if (h < 50) h = 360;
+
+            var cx = w / 2.0;
+            var outlineBrush = new SolidColorBrush(Color.FromRgb(90, 90, 100));
+
+            // 头部（睡眠/心情）
+            var head = new Ellipse
+            {
+                Width = 56, Height = 56,
+                Stroke = outlineBrush, StrokeThickness = 2,
+                Cursor = Cursors.Hand,
+                ToolTip = "头部：睡眠 / 心情"
+            };
+            Canvas.SetLeft(head, cx - 28); Canvas.SetTop(head, 8);
+            head.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("头部");
+            BodyCanvas.Children.Add(head);
+            AddBodyLabel("头", cx - 28, 8, 56);
+
+            // 躯干（体重/尿酸）
+            var torso = new System.Windows.Shapes.Path
+            {
+                Stroke = outlineBrush, StrokeThickness = 2,
+                Fill = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                ToolTip = "躯干：体重 / 尿酸",
+                Data = Geometry.Parse($"M {cx - 40},72 C {cx - 46},120 {cx - 50},180 {cx - 48},236 L {cx - 36},236 L {cx - 30},150 C {cx - 30},110 {cx - 22},80 {cx},80 C {cx + 22},80 {cx + 30},110 {cx + 30},150 L {cx + 36},236 L {cx + 48},236 C {cx + 50},180 {cx + 46},120 {cx + 40},72 Z")
+            };
+            torso.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("躯干");
+            BodyCanvas.Children.Add(torso);
+            AddBodyLabel("躯干", cx - 40, 150, 80);
+
+            // 左臂
+            var arm = new System.Windows.Shapes.Path
+            {
+                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
+                Cursor = Cursors.Hand, ToolTip = "左臂：喝水",
+                Data = Geometry.Parse($"M {cx - 40},90 C {cx - 70},110 {cx - 82},150 {cx - 80},200 L {cx - 66},198 C {cx - 68},160 {cx - 56},126 {cx - 32},104 Z")
+            };
+            arm.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("喝水");
+            BodyCanvas.Children.Add(arm);
+
+            // 右臂
+            var arm2 = new System.Windows.Shapes.Path
+            {
+                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
+                Cursor = Cursors.Hand, ToolTip = "右臂：用药",
+                Data = Geometry.Parse($"M {cx + 40},90 C {cx + 70},110 {cx + 82},150 {cx + 80},200 L {cx + 66},198 C {cx + 68},160 {cx + 56},126 {cx + 32},104 Z")
+            };
+            arm2.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("用药");
+            BodyCanvas.Children.Add(arm2);
+
+            // 左腿
+            var leg = new System.Windows.Shapes.Path
+            {
+                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
+                Cursor = Cursors.Hand, ToolTip = "左腿：尿酸",
+                Data = Geometry.Parse($"M {cx - 40},236 L {cx - 26},236 L {cx - 22},300 C {cx - 30},340 {cx - 36},352 {cx - 40},352 L {cx - 48},352 C {cx - 46},330 {cx - 48},290 {cx - 46},250 Z")
+            };
+            leg.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("尿酸");
+            BodyCanvas.Children.Add(leg);
+
+            // 右腿
+            var leg2 = new System.Windows.Shapes.Path
+            {
+                Stroke = outlineBrush, StrokeThickness = 2, Fill = Brushes.Transparent,
+                Cursor = Cursors.Hand, ToolTip = "右腿：体重",
+                Data = Geometry.Parse($"M {cx + 40},236 L {cx + 26},236 L {cx + 22},300 C {cx + 30},340 {cx + 36},352 {cx + 40},352 L {cx + 48},352 C {cx + 46},330 {cx + 48},290 {cx + 46},250 Z")
+            };
+            leg2.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail("体重");
+            BodyCanvas.Children.Add(leg2);
+        }
+
+        private void AddBodyLabel(string text, double x, double y, double width)
+        {
+            var lbl = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(lbl, x + width / 2 - 10);
+            Canvas.SetTop(lbl, y + 2);
+            BodyCanvas.Children.Add(lbl);
+        }
+
+        private void ShowBodyPartDetail(string part)
+        {
+            OverviewDetailPanel.Children.Clear();
+            var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
+
+            void AddRow(string label, string value, string brushKey)
+            {
+                var row = new Border
+                {
+                    Style = (Style)FindResource("CardStyle"),
+                    Padding = new Thickness(12, 8, 12, 8),
+                    Margin = new Thickness(0, 0, 0, 6)
+                };
+                var dock = new DockPanel();
+                var valueText = new TextBlock
+                {
+                    Text = value,
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource(brushKey),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                DockPanel.SetDock(valueText, Dock.Right);
+                dock.Children.Add(valueText);
+                dock.Children.Add(new TextBlock
+                {
+                    Text = label,
+                    FontSize = 12,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                row.Child = dock;
+                OverviewDetailPanel.Children.Add(row);
+            }
+
+            OverviewDetailPanel.Children.Add(new TextBlock
+            {
+                Text = part,
+                FontSize = 14,
+                FontWeight = FontWeights.Bold,
+                Foreground = (Brush)FindResource("TextBrush"),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            switch (part)
+            {
+                case "头部":
+                case "睡眠":
+                {
+                    var rec = _repo.GetByTypeAndDate("sleep", todayStr);
+                    AddRow("今日睡眠", rec != null ? FormatDuration(TimeSpan.FromMinutes(rec.Value)) : "未记录", rec != null ? "PrimaryBrush" : "SecondaryTextBrush");
+                    var mood = _repo.GetByTypeAndDate("mood", todayStr);
+                    var mi = mood != null ? (int)mood.Value : -1;
+                    AddRow("今日心情", mi >= 0 && mi < 4 ? $"{MoodEmojis[mi]} {MoodNames[mi]}" : "未记录", mi >= 0 && mi <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush");
+                    break;
+                }
+                case "躯干":
+                case "体重":
+                case "右腿":
+                {
+                    var all = _repo.GetByType("weight").OrderBy(r => r.Date).ToList();
+                    var rec = all.LastOrDefault();
+                    if (rec == null) { AddRow("最新体重", "未记录", "SecondaryTextBrush"); break; }
+                    double h = 0; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthHeight), out h);
+                    AddRow("最新体重", $"{rec.Value:F1} kg", "PrimaryBrush");
+                    AddRow("记录日期", rec.Date, "SecondaryTextBrush");
+                    if (h > 0)
+                    {
+                        var bmi = CalcBmi(rec.Value, h);
+                        string g, brush;
+                        if (bmi < 18.5) { g = "偏瘦"; brush = "AccentBlueBrush"; }
+                        else if (bmi < 24) { g = "正常"; brush = "AccentGreenBrush"; }
+                        else if (bmi < 28) { g = "超重"; brush = "AccentYellowBrush"; }
+                        else { g = "肥胖"; brush = "AccentRedBrush"; }
+                        AddRow("BMI", $"{bmi:F1}（{g}）", brush);
+                    }
+                    break;
+                }
+                case "左臂":
+                case "喝水":
+                {
+                    var rec = _repo.GetByTypeAndDate("water", todayStr);
+                    double goal = 2000; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "2000"), out goal);
+                    AddRow("今日喝水", rec != null ? $"{rec.Value:F0} ml" : "0 ml", rec != null ? "AccentBlueBrush" : "SecondaryTextBrush");
+                    AddRow("目标", $"{goal:F0} ml", "SecondaryTextBrush");
+                    var all = _repo.GetByType("water");
+                    var week = all.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
+                    AddRow("近 7 天日均", week.Count > 0 ? $"{week.Average(r => r.Value):F0} ml" : "暂无数据", "SecondaryTextBrush");
+                    break;
+                }
+                case "右臂":
+                case "用药":
+                {
+                    var meds = _medRepo.GetAll();
+                    if (meds.Count == 0) { AddRow("用药", "暂无用药记录", "SecondaryTextBrush"); break; }
+                    AddRow("在用药物", $"{_medRepo.GetActive().Count} 种", "PrimaryBrush");
+                    foreach (var m in _medRepo.GetActive())
+                        AddRow(m.Name, FormatMedicationSummary(m), "AccentBlueBrush");
+                    break;
+                }
+                case "左腿":
+                case "尿酸":
+                {
+                    var rec = _repo.GetByTypeAndDate("uric_acid", todayStr);
+                    if (rec == null) { AddRow("今日尿酸", "未记录", "SecondaryTextBrush"); break; }
+                    var (lower, upper) = GetUricRange();
+                    var (text, brush) = ClassifyUric(rec.Value, lower, upper);
+                    AddRow("今日尿酸", $"{rec.Value:F0} μmol/L", brush);
+                    AddRow("正常范围", $"{lower:F0} ~ {upper:F0}", "SecondaryTextBrush");
+                    break;
+                }
+                default:
+                    AddRow("信息", "点击人体部位查看对应数据", "SecondaryTextBrush");
+                    break;
+            }
+        }
+
+        private void ExportReport_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "导出健康报告",
+                Filter = "HTML 文件|*.html",
+                FileName = $"健康报告_{DateTime.Today:yyyyMMdd}.html"
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+            try
+            {
+                var html = BuildHealthReportHtml();
+                File.WriteAllText(dlg.FileName, html, Encoding.UTF8);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                ConfirmDialog.Show(Window.GetWindow(this), "导出失败", ex.Message, "确定");
+            }
+        }
+
+        private string BuildHealthReportHtml()
+        {
+            var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">");
+            sb.AppendLine("<title>健康报告</title>");
+            sb.AppendLine("<style>body{font-family:'Microsoft YaHei',sans-serif;padding:24px;color:#1C1C1E}h1{font-size:22px}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px;text-align:left}th{background:#f2f2f7}.ok{color:#34C759;font-weight:bold}.warn{color:#FF9500;font-weight:bold}.bad{color:#FF3B30;font-weight:bold}.sec{font-size:16px;font-weight:bold;margin:20px 0 6px;border-bottom:2px solid #007AFF;padding-bottom:4px}</style></head><body>");
+            sb.AppendLine($"<h1>健康报告</h1><p>生成时间：{DateTime.Now:yyyy-MM-dd HH:mm}</p>");
+
+            sb.AppendLine("<div class=\"sec\">今日概况</div><table>");
+            foreach (var key in new[] { "睡眠", "体重", "喝水", "心情", "尿酸", "用药" })
+            {
+                var (title, value, sub, brushKey) = GetOverviewCardData(key);
+                var cls = brushKey == "AccentGreenBrush" ? "ok" : brushKey == "AccentYellowBrush" ? "warn" : brushKey == "AccentRedBrush" ? "bad" : "";
+                sb.AppendLine($"<tr><td>{title}</td><td>{value}</td><td>{sub}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+
+            // 用药信息
+            sb.AppendLine("<div class=\"sec\">用药记录</div>");
+            var meds = _medRepo.GetAll();
+            if (meds.Count == 0)
+            {
+                sb.AppendLine("<p>暂无用药记录</p>");
+            }
+            else
+            {
+                sb.AppendLine("<table><tr><th>药名</th><th>类型</th><th>规格</th><th>频率</th><th>用药时间</th><th>持续时间</th><th>备注</th></tr>");
+                foreach (var m in meds)
+                {
+                    sb.AppendLine($"<tr><td>{m.Name}</td><td>{MedicationRepository.MedicationTypeName(m.Type)}</td><td>{FormatSpec(m)}</td><td>{FormatFrequency(m)}</td><td>{FormatTimes(m)}</td><td>{FormatDuration(m)}</td><td>{m.Note ?? ""}</td></tr>");
+                }
+                sb.AppendLine("</table>");
+            }
+
+            // 最近睡眠/体重趋势摘要
+            sb.AppendLine("<div class=\"sec\">近 14 天体重记录</div>");
+            var weights = _repo.GetByType("weight").OrderByDescending(r => r.Date).Take(14).ToList();
+            if (weights.Count == 0) sb.AppendLine("<p>暂无体重记录</p>");
+            else
+            {
+                sb.AppendLine("<table><tr><th>日期</th><th>体重(kg)</th></tr>");
+                foreach (var r in weights) sb.AppendLine($"<tr><td>{r.Date}</td><td>{r.Value:F1}</td></tr>");
+                sb.AppendLine("</table>");
+            }
+
+            sb.AppendLine("<p style=\"margin-top:30px;color:#8E8E93;font-size:11px\">本报告由目标地图生成，仅供健康参考，不构成医疗建议。</p>");
+            sb.AppendLine("</body></html>");
+            return sb.ToString();
+        }
+
+        // ============ 用药 ============
+        private string FormatMedicationSummary(MedicationRecord m)
+        {
+            var parts = new List<string>
+            {
+                m.SpecValue > 0 ? $"{m.SpecValue:0.##} {MedicationRepository.MedicationUnitAbbr(m.Unit)}" : MedicationRepository.MedicationUnitName(m.Unit),
+                MedicationRepository.FrequencyName(m.Frequency)
+            };
+            if (!string.IsNullOrEmpty(m.Times))
+                parts.Add(string.Join("/", m.Times.Split(',')));
+            return string.Join(" · ", parts);
+        }
+
+        private string FormatSpec(MedicationRecord m)
+        {
+            return m.SpecValue > 0 ? $"{m.SpecValue:0.##} {MedicationRepository.MedicationUnitName(m.Unit)}" : MedicationRepository.MedicationUnitName(m.Unit);
+        }
+
+        private string FormatFrequency(MedicationRecord m)
+        {
+            switch (m.Frequency)
+            {
+                case MedicationFrequency.Daily: return "每天";
+                case MedicationFrequency.EveryNDays: return $"每隔 {m.FrequencyN} 天";
+                case MedicationFrequency.WeeklyDays:
+                {
+                    var names = new[] { "周一", "周二", "周三", "周四", "周五", "周六", "周日" };
+                    return string.Join("、", (m.WeeklyDays ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => int.TryParse(s, out var d) && d >= 1 && d <= 7 ? names[d - 1] : s));
+                }
+                case MedicationFrequency.Interval: return $"每 {m.FrequencyN} 小时";
+                default: return "按需";
+            }
+        }
+
+        private string FormatTimes(MedicationRecord m)
+        {
+            if (string.IsNullOrEmpty(m.Times)) return "--";
+            return string.Join("、", m.Times.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()));
+        }
+
+        private string FormatDuration(MedicationRecord m)
+        {
+            if (!m.StartDate.HasValue && !m.EndDate.HasValue) return "长期";
+            var s = m.StartDate.HasValue ? m.StartDate.Value.ToString("yyyy-MM-dd") : "？";
+            var e = m.EndDate.HasValue ? m.EndDate.Value.ToString("yyyy-MM-dd") : "至今";
+            return $"{s} ~ {e}";
+        }
+
+        private void LoadMedications()
+        {
+            MedicationRecordsPanel.Children.Clear();
+            var meds = _medRepo.GetAll();
+            if (meds.Count == 0)
+            {
+                MedicationRecordsPanel.Children.Add(BuildEmptyHint("还没有用药记录，点击右上角 + 添加"));
+                return;
+            }
+            foreach (var m in meds)
+            {
+                var card = new Border
+                {
+                    Style = (Style)FindResource("CardStyle"),
+                    Padding = new Thickness(12, 8, 12, 8),
+                    Margin = new Thickness(0, 0, 0, 6)
+                };
+                var dock = new DockPanel();
+                var btnPanel = new StackPanel { Orientation = Orientation.Horizontal };
+                DockPanel.SetDock(btnPanel, Dock.Right);
+                var editBtn = new Button
+                {
+                    Content = "✎",
+                    Style = (Style)FindResource("SecondaryButtonStyle"),
+                    Width = 28, Height = 24, FontSize = 10, Padding = new Thickness(0),
+                    Margin = new Thickness(4, 0, 0, 0)
+                };
+                var mid = m.Id;
+                editBtn.Click += (s, ev) => EditMedication(mid);
+                var delBtn = new Button
+                {
+                    Content = "✕",
+                    Style = (Style)FindResource("SecondaryButtonStyle"),
+                    Width = 28, Height = 24, FontSize = 10, Padding = new Thickness(0),
+                    Margin = new Thickness(4, 0, 0, 0)
+                };
+                delBtn.Click += (s, ev) =>
+                {
+                    _medRepo.Delete(mid);
+                    LoadMedications();
+                    LoadOverview();
+                };
+                btnPanel.Children.Add(editBtn);
+                btnPanel.Children.Add(delBtn);
+                dock.Children.Add(btnPanel);
+                var info = new StackPanel();
+                info.Children.Add(new TextBlock
+                {
+                    Text = m.Name,
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("TextBrush")
+                });
+                info.Children.Add(new TextBlock
+                {
+                    Text = $"{MedicationRepository.MedicationTypeName(m.Type)} · {FormatSpec(m)} · {FormatFrequency(m)} · {FormatTimes(m)} · {FormatDuration(m)}",
+                    FontSize = 11,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                });
+                if (!string.IsNullOrEmpty(m.Note))
+                {
+                    info.Children.Add(new TextBlock
+                    {
+                        Text = m.Note,
+                        FontSize = 10,
+                        Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                        Margin = new Thickness(0, 2, 0, 0)
+                    });
+                }
+                dock.Children.Add(info);
+                card.Child = dock;
+                MedicationRecordsPanel.Children.Add(card);
+            }
+        }
+
+        private void AddMedication_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new MedicationEditDialog { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                LoadMedications();
+                LoadOverview();
+            }
+        }
+
+        private void EditMedication(int id)
+        {
+            var dlg = new MedicationEditDialog(id) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                LoadMedications();
+                LoadOverview();
+            }
+        }
+
         private static string FormatDuration(TimeSpan ts)
         {
             if (ts.TotalHours >= 1)
