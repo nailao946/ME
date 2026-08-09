@@ -29,6 +29,7 @@ namespace ME.Models
         public const string HealthWaterMigrated = "HealthWaterMigrated";
         public const string UricTarget = "UricTarget";
         public const string DeepSeekApiKey = "DeepSeekApiKey";
+        public const string AiSystemPrompt = "AiSystemPrompt";
     }
 
     public enum AppTheme

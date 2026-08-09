@@ -1,0 +1,70 @@
+<Window x:Class="ME.Views.AiPromptDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Title="AI 分析提示词" Height="460" Width="560"
+        KeyDown="Window_KeyDown">
+    <Border CornerRadius="14" Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Opacity="0.25" BlurRadius="24" ShadowDepth="2" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <Border Grid.Row="0" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseDown"
+                    Background="{DynamicResource CardBrush}">
+                <Grid Margin="16,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="12" Height="12" CornerRadius="3"
+                                Background="{DynamicResource PrimaryBrush}"
+                                VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="AI 分析提示词" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <Button Content="✕" Click="Cancel_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"
+                            Padding="8,2" FontSize="12"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Content -->
+            <Grid Grid.Row="1" Margin="20,14,20,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="该提示词会随每次分析一起发送给 AI，可自由修改；恢复默认可重置为内置预设。"
+                           FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                           TextWrapping="Wrap" Margin="0,0,0,8" />
+                <TextBox x:Name="PromptBox" Grid.Row="1"
+                         Style="{StaticResource InputTextBoxStyle}"
+                         TextWrapping="Wrap" AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                         VerticalContentAlignment="Top" Padding="10" FontSize="12" />
+            </Grid>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,8,20,16">
+                <Button Content="↺ 恢复默认提示词" Click="RestoreDefault_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"
+                        Padding="14,8" Margin="0,0,10,0" FontSize="12" />
+                <Button Content="取消" Click="Cancel_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"
+                        Padding="20,8" Margin="0,0,10,0" FontSize="13" />
+                <Button Content="保存" Click="Save_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"
+                        Padding="20,8" FontSize="13" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

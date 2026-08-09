@@ -60,32 +60,42 @@ namespace ME.Views
             }
             CalendarPopup.IsOpen = true;
             BuildCalendar();
-            // 点击日历以外区域（主窗口/其它界面）时自动关闭
+            // 不再用“点击主窗口任意处即关闭”（会导致刚打开/点边缘就消失），
+            // 改为：再点输入框收起 / 选择日期或今天收起 / 窗口失活收起 / Esc 收起
             var win = Window.GetWindow(this);
             if (win != null)
-                win.PreviewMouseDown -= Window_PreviewMouseDown;
-            if (win != null)
-                win.PreviewMouseDown += Window_PreviewMouseDown;
+            {
+                win.Deactivated -= Window_Deactivated;
+                win.Deactivated += Window_Deactivated;
+                win.PreviewKeyDown -= Window_PreviewKeyDown;
+                win.PreviewKeyDown += Window_PreviewKeyDown;
+            }
         }
 
         private void ClosePopup()
         {
-            if (CalendarPopup.IsOpen)
+            if (!CalendarPopup.IsOpen) return;
+            var win = Window.GetWindow(this);
+            if (win != null)
             {
-                var win = Window.GetWindow(this);
-                if (win != null)
-                    win.PreviewMouseDown -= Window_PreviewMouseDown;
-                CalendarPopup.IsOpen = false;
+                win.Deactivated -= Window_Deactivated;
+                win.PreviewKeyDown -= Window_PreviewKeyDown;
             }
+            CalendarPopup.IsOpen = false;
         }
 
-        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        private void Window_Deactivated(object sender, EventArgs e)
         {
-            // Popup 内的元素不属于任何 Window（Window.GetWindow 返回 null），点击其内部不关闭；
-            // 点击主窗口/对话框等其它区域则关闭日历
-            var src = e.OriginalSource as DependencyObject;
-            if (src != null && Window.GetWindow(src) != null)
+            ClosePopup();
+        }
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape && CalendarPopup.IsOpen)
+            {
                 ClosePopup();
+                e.Handled = true;
+            }
         }
 
         private void Popup_GotMouseCapture(object sender, MouseEventArgs e)
@@ -113,7 +123,7 @@ namespace ME.Views
             _suppressUpdate = false;
             BuildCalendar();
             UpdateDateText();
-            CalendarPopup.IsOpen = false;
+            ClosePopup();
         }
 
         private void BuildCalendar()
@@ -128,7 +138,7 @@ namespace ME.Views
             // Empty cells for offset
             for (int i = 0; i < startOffset; i++)
             {
-                DaysGrid.Children.Add(new Border { Height = 32 });
+                DaysGrid.Children.Add(new Border { Height = 36 });
             }
 
             for (int day = 1; day <= daysInMonth; day++)
@@ -140,10 +150,10 @@ namespace ME.Views
                 var btn = new Button
                 {
                     Content = day.ToString(),
-                    FontSize = 12,
+                    FontSize = 13,
                     Padding = new Thickness(0),
-                    Height = 32,
-                    Width = 32,
+                    Height = 36,
+                    Width = 36,
                     Tag = date,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -180,7 +190,7 @@ namespace ME.Views
             var template = new ControlTemplate(typeof(Button));
             var border = new FrameworkElementFactory(typeof(Border));
             border.Name = "bd";
-            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(16));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(18));
             border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
             border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
             border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
@@ -212,7 +222,7 @@ namespace ME.Views
                 SelectedDate = date;
                 _suppressUpdate = false;
                 UpdateDateText();
-                CalendarPopup.IsOpen = false;
+                ClosePopup();
             }
         }
     }

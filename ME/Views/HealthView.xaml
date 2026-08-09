@@ -49,6 +49,8 @@
                                Foreground="{DynamicResource TextBrush}" />
                 </DockPanel>
             </Border>
+            <!-- 汇总卡片（睡眠/体重/喝水等，上提到显眼位置） -->
+            <WrapPanel x:Name="OverviewCardsPanel" Margin="0,10,0,0" />
             <!-- 主体：人体图（左）+ 详细信息（右） -->
             <Grid Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>
@@ -96,8 +98,6 @@
                     </DockPanel>
                 </Border>
             </Grid>
-            <!-- 底部：汇总卡片 -->
-            <WrapPanel x:Name="OverviewCardsPanel" Margin="0,10,0,0" />
             </StackPanel>
             </ScrollViewer>
         </Grid>
@@ -126,13 +126,13 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="入睡" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" Width="40" />
-                            <TextBox x:Name="SleepHourBox" Width="60" Height="36" MaxLength="2"
+                            <TextBox x:Name="SleepHourBox" Width="76" Height="36" MaxLength="2"
                                      Text="23" TextAlignment="Center" Margin="6,0,0,0"
                                      Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
-                            <TextBox x:Name="SleepMinBox" Width="60" Height="36" MaxLength="2"
+                            <TextBox x:Name="SleepMinBox" Width="76" Height="36" MaxLength="2"
                                      Text="00" TextAlignment="Center" Margin="3,0,0,0"
                                      Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
@@ -142,13 +142,13 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="起床" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" Width="40" />
-                            <TextBox x:Name="WakeHourBox" Width="60" Height="36" MaxLength="2"
+                            <TextBox x:Name="WakeHourBox" Width="76" Height="36" MaxLength="2"
                                      Text="07" TextAlignment="Center" Margin="6,0,0,0"
                                      Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
-                            <TextBox x:Name="WakeMinBox" Width="60" Height="36" MaxLength="2"
+                            <TextBox x:Name="WakeMinBox" Width="76" Height="36" MaxLength="2"
                                      Text="00" TextAlignment="Center" Margin="3,0,0,0"
                                      Style="{StaticResource InputTextBoxStyle}"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
@@ -613,13 +613,13 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="测量时间" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBox x:Name="UricHourBox" Width="60" MaxLength="2"
+                            <TextBox x:Name="UricHourBox" Width="76" MaxLength="2"
                                      Style="{StaticResource InputTextBoxStyle}"
                                      TextAlignment="Center" Margin="6,0,0,0"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
                             <TextBlock Text="时" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Center" Margin="3,0,0,0" />
-                            <TextBox x:Name="UricMinBox" Width="60" MaxLength="2"
+                            <TextBox x:Name="UricMinBox" Width="76" MaxLength="2"
                                      Style="{StaticResource InputTextBoxStyle}"
                                      TextAlignment="Center" Margin="3,0,0,0"
                                      VerticalContentAlignment="Center" PreviewTextInput="DigitOnly_PreviewTextInput" />
@@ -843,6 +843,9 @@
                                     Padding="10,0" Margin="10,0,4,0" />
                             <Button x:Name="CmpRange30Btn" Content="近 30 天" Tag="30" Click="CompareRange_Click"
                                     Style="{StaticResource PrimaryButtonStyle}" Height="26" FontSize="11"
+                                    Padding="10,0" Margin="0,0,4,0" />
+                            <Button x:Name="CmpRangeAllBtn" Content="全部" Tag="0" Click="CompareRange_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="26" FontSize="11"
                                     Padding="10,0" />
                         </StackPanel>
                     </StackPanel>
@@ -854,6 +857,14 @@
                         <TextBlock Text="把所选参数这段时间的数据发给 AI 分析相关性（使用 设置 → AI 分析 中的默认供应商）"
                                    FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                    Margin="0,4,0,8" TextWrapping="Wrap" />
+                        <TextBlock Text="发送给 AI 的数据" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <RadioButton x:Name="AiScopeSelected" GroupName="AiScope" Content="仅上方勾选的参数"
+                                     IsChecked="True" Margin="0,4,0,2" FontSize="12"
+                                     Foreground="{DynamicResource TextBrush}" />
+                        <RadioButton x:Name="AiScopeAll" GroupName="AiScope"
+                                     Content="全部数据（含用药、锻炼、久坐等）" Margin="0,0,0,8" FontSize="12"
+                                     Foreground="{DynamicResource TextBrush}" />
                         <Button x:Name="AiAnalyzeBtn" Content="🤖 开始 AI 分析" Click="AiAnalyze_Click"
                                 Style="{StaticResource PrimaryButtonStyle}" Padding="14,6" FontSize="12" />
                         <TextBlock x:Name="AiStatusText" FontSize="11"

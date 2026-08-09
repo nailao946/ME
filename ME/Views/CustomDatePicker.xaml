@@ -19,7 +19,7 @@
 
         <Popup x:Name="CalendarPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=DropDownBorder}"
                AllowsTransparency="True" StaysOpen="True" IsOpen="False"
-               HorizontalOffset="-20" VerticalOffset="4">
+               HorizontalOffset="0" VerticalOffset="4">
             <Border CornerRadius="12" Background="{DynamicResource CardBrush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     MinWidth="280" Padding="12"

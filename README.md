@@ -2,7 +2,7 @@
 
 > 一款纯本地运行的 WPF 桌面应用，帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
 
-![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.9.24-orange)
+![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.9.25-orange)
 
 ---
 

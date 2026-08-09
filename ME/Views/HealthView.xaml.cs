@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -36,11 +37,13 @@ namespace ME.Views
         private readonly AiProviderRepository _aiProviderRepo = new AiProviderRepository();
         private string _currentTab = "sleep";
         private bool _loadingUric;
+        private string _aiSystemPrompt = AiPromptDialog.DefaultAiSystemPrompt;
 
         public HealthView()
         {
             InitializeComponent();
             _compareInitializing = false; // XAML 加载完成，控件已全部创建
+            _aiSystemPrompt = _settingsRepo.GetValue(SettingsKeys.AiSystemPrompt, AiPromptDialog.DefaultAiSystemPrompt);
             SleepDatePicker.SelectedDate = DateTime.Today;
             WeightDatePicker.SelectedDate = DateTime.Today;
             UricAcidDatePicker.SelectedDate = DateTime.Today;
@@ -63,7 +66,8 @@ namespace ME.Views
             LoadMedications();
             LoadCompare();
             LoadOverview();
-            AiPromptPreview.Text = AiSystemPrompt.Length > 14 ? AiSystemPrompt.Substring(0, 14) + "…" : AiSystemPrompt;
+            AiPromptPreview.Text = _aiSystemPrompt.Length > 14 ? _aiSystemPrompt.Substring(0, 14) + "…" : _aiSystemPrompt;
+            AiPromptPreview.ToolTip = _aiSystemPrompt;
         }
 
         private void OnWeightRangePicked()
@@ -1283,10 +1287,6 @@ namespace ME.Views
         }
 
         // ============ 对比 + AI 分析 ============
-        /// <summary>AI 分析使用的 system 提示词（在界面"查看提示词"中可查看）</summary>
-        private const string AiSystemPrompt =
-            "你是一名健康数据分析助手。用户会提供若干健康指标按日期的数据（数值越大代表量越多；心情 0=开心、3=难过）。" +
-            "请分析这些指标之间可能存在的相关性、趋势规律，给出可执行的健康建议。用简体中文回答，分点列出，不超过 400 字。";
         private int _compareDays = 30;
         private bool _compareInitializing = true;
 
@@ -1296,6 +1296,7 @@ namespace ME.Views
             _compareDays = int.Parse((string)btn.Tag);
             CmpRange7Btn.Style = (Style)FindResource(_compareDays == 7 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             CmpRange30Btn.Style = (Style)FindResource(_compareDays == 30 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            CmpRangeAllBtn.Style = (Style)FindResource(_compareDays == 0 ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             LoadCompare();
         }
 
@@ -1319,7 +1320,9 @@ namespace ME.Views
         private void LoadCompare()
         {
             var all = _repo.GetAll();
-            var days = Enumerable.Range(0, _compareDays).Select(i => DateTime.Today.AddDays(-(_compareDays - 1 - i))).ToList();
+            var days = _compareDays > 0
+                ? Enumerable.Range(0, _compareDays).Select(i => DateTime.Today.AddDays(-(_compareDays - 1 - i))).ToList()
+                : BuildAllDateRange(all);
             var selected = GetSelectedCompareParams();
 
             // 每个参数按天取值
@@ -1336,6 +1339,23 @@ namespace ME.Views
 
             DrawCompareCharts(days, series);
             BuildCompareLegend(series);
+        }
+
+        /// <summary>"全部"时间范围：从最早记录日期到今天（无记录时回退近 30 天）</summary>
+        private List<DateTime> BuildAllDateRange(List<HealthRecord> all)
+        {
+            var dates = all
+                .Select(r => DateTime.TryParseExact(r.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? (DateTime?)d : null)
+                .Where(d => d.HasValue)
+                .Select(d => d.Value.Date)
+                .ToList();
+            if (dates.Count == 0)
+                return Enumerable.Range(0, 30).Select(i => DateTime.Today.AddDays(-(29 - i))).ToList();
+            var min = dates.Min();
+            var max = dates.Max();
+            var list = new List<DateTime>();
+            for (var d = min; d <= max; d = d.AddDays(1)) list.Add(d);
+            return list;
         }
 
         private void DrawCompareCharts(List<DateTime> days, List<(string key, string name, string emoji, List<double?> values)> series)
@@ -1577,9 +1597,9 @@ namespace ME.Views
                 return;
             }
             var selected = GetSelectedCompareParams();
-            if (selected.Count < 2)
+            if (selected.Count < 2 && AiScopeSelected.IsChecked == true)
             {
-                AiStatusText.Text = "请至少勾选 2 个参数再分析";
+                AiStatusText.Text = "请至少勾选 2 个参数再分析（或切换为发送全部数据）";
                 return;
             }
             AiAnalyzeBtn.IsEnabled = false;
@@ -1588,7 +1608,7 @@ namespace ME.Views
             try
             {
                 var dataText = BuildCompareDataText(selected);
-                var result = await LlmService.ChatAsync(provider, AiSystemPrompt, dataText);
+                var result = await LlmService.ChatAsync(provider, _aiSystemPrompt, dataText);
                 AiResultText.Text = result;
                 AiStatusText.Text = $"分析完成（{provider.Name}）";
             }
@@ -1604,19 +1624,56 @@ namespace ME.Views
 
         private void ShowAiPrompt_Click(object sender, RoutedEventArgs e)
         {
-            AiPromptPreview.Text = AiSystemPrompt;
-            AiPromptPreview.MaxWidth = 500;
-            AiPromptPreview.ToolTip = AiSystemPrompt;
-            MessageBox.Show(Window.GetWindow(this), AiSystemPrompt, "AI 分析提示词",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            var dlg = new AiPromptDialog(_aiSystemPrompt) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                _aiSystemPrompt = dlg.Prompt;
+                _settingsRepo.SetValue(SettingsKeys.AiSystemPrompt, _aiSystemPrompt);
+                AiPromptPreview.Text = _aiSystemPrompt.Length > 14 ? _aiSystemPrompt.Substring(0, 14) + "…" : _aiSystemPrompt;
+                AiPromptPreview.ToolTip = _aiSystemPrompt;
+            }
         }
 
         private string BuildCompareDataText(List<(string key, string name, string emoji)> selected)
         {
             var all = _repo.GetAll();
-            var days = Enumerable.Range(0, _compareDays).Select(i => DateTime.Today.AddDays(-(_compareDays - 1 - i))).ToList();
+            var days = _compareDays > 0
+                ? Enumerable.Range(0, _compareDays).Select(i => DateTime.Today.AddDays(-(_compareDays - 1 - i))).ToList()
+                : BuildAllDateRange(all);
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"以下为近 {_compareDays} 天健康数据（日期, " + string.Join(", ", selected.Select(p => p.name)) + "）：");
+
+            // 模式一：发送全部数据（含用药、锻炼、久坐等）
+            if (AiScopeAll.IsChecked == true)
+            {
+                sb.AppendLine($"以下为全部健康数据（共 {days.Count} 天；心情 0=开心、1=平静、2=低落、3=难过）：");
+                foreach (var d in days)
+                {
+                    var dateStr = d.ToString("yyyy-MM-dd");
+                    var parts = all.Where(r => r.Date == dateStr).Select(DescribeHealthRecord).ToList();
+                    sb.AppendLine(dateStr + (parts.Count > 0 ? ": " + string.Join("，", parts) : ": （无记录）"));
+                }
+
+                var meds = _medRepo.GetAll();
+                sb.AppendLine();
+                sb.AppendLine(meds.Count > 0 ? "用药记录：" : "用药记录：无");
+                foreach (var m in meds)
+                {
+                    sb.AppendLine($"- {m.Name}（{MedicationRepository.MedicationTypeName(m.Type)}，{FormatSpec(m)}，{FormatFrequency(m)}，时间 {FormatTimes(m)}，{FormatDuration(m)}）");
+                }
+
+                var items = _exerciseRepo.GetAll();
+                sb.AppendLine();
+                sb.AppendLine(items.Count > 0 ? "锻炼项目：" : "锻炼项目：无");
+                foreach (var it in items)
+                {
+                    sb.AppendLine($"- {it.Name}：目标 {ExerciseRepository.TargetText(it)}，频率 {ExerciseRepository.FrequencyName(it.Frequency)}");
+                }
+                return sb.ToString();
+            }
+
+            // 模式二：仅发送上方勾选的参数（逐日）
+            var rangeLabel = _compareDays > 0 ? $"近 {_compareDays} 天" : "全部记录";
+            sb.AppendLine($"以下为{rangeLabel}健康数据（日期, " + string.Join(", ", selected.Select(p => p.name)) + "）：");
             foreach (var d in days)
             {
                 var dateStr = d.ToString("yyyy-MM-dd");
@@ -1629,6 +1686,44 @@ namespace ME.Views
                 sb.AppendLine(dateStr + ": " + string.Join(", ", parts));
             }
             return sb.ToString();
+        }
+
+        /// <summary>把一条健康记录转成便于 AI 阅读的文字</summary>
+        private string DescribeHealthRecord(HealthRecord rec)
+        {
+            switch (rec.Type)
+            {
+                case "sleep":
+                {
+                    var dur = FormatDuration(TimeSpan.FromMinutes(rec.Value));
+                    var detail = string.Empty;
+                    if (!string.IsNullOrEmpty(rec.Detail))
+                    {
+                        var parts = rec.Detail.Split('|');
+                        if (parts.Length >= 2)
+                            detail = $"（入睡{parts[0]}，起床{parts[1]}）";
+                    }
+                    return $"睡眠={dur}{detail}";
+                }
+                case "weight": return $"体重={rec.Value:F1}kg";
+                case "water": return $"喝水={rec.Value:F0}ml";
+                case "mood":
+                {
+                    var idx = (int)rec.Value;
+                    var name = idx >= 0 && idx < MoodNames.Length ? MoodNames[idx] : "未知";
+                    return $"心情={idx}({name})";
+                }
+                case "uric_acid": return $"尿酸={rec.Value:F0}μmol/L";
+                case "sedentary": return $"久坐活动={rec.Value:F0}次";
+                case "exercise":
+                {
+                    var item = _exerciseRepo.GetById(int.TryParse(rec.Detail, out var itemId) ? itemId : 0);
+                    var name = item != null ? item.Name : "锻炼";
+                    var unit = item != null && !string.IsNullOrEmpty(item.Unit) ? item.Unit : "次";
+                    return $"{name}={rec.Value:0.##}{unit}";
+                }
+                default: return $"{rec.Type}={rec.Value:F0}";
+            }
         }
 
         // ============ 总览 ============
@@ -1648,50 +1743,90 @@ namespace ME.Views
             OverviewInfoPanel.Children.Clear();
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
 
-            void AddRow(string label, string value, string brushKey)
+            void AddGroup(string title, params (string label, string value, string brushKey)[] items)
             {
-                var row = new Border
+                var group = new Border
                 {
                     Style = (Style)FindResource("CardStyle"),
-                    Padding = new Thickness(12, 8, 12, 8),
-                    Margin = new Thickness(0, 0, 0, 6)
+                    Padding = new Thickness(12, 10, 12, 10),
+                    Margin = new Thickness(0, 0, 0, 8)
                 };
-                var dock = new DockPanel();
-                var valueText = new TextBlock
+                var panel = new StackPanel();
+                panel.Children.Add(new TextBlock
                 {
-                    Text = value,
+                    Text = title,
                     FontSize = 13,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource(brushKey),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 420
-                };
-                DockPanel.SetDock(valueText, Dock.Right);
-                dock.Children.Add(valueText);
-                dock.Children.Add(new TextBlock
-                {
-                    Text = label,
-                    FontSize = 12,
+                    FontWeight = FontWeights.Bold,
                     Foreground = (Brush)FindResource("TextBrush"),
-                    VerticalAlignment = VerticalAlignment.Center
+                    Margin = new Thickness(0, 0, 0, 6)
                 });
-                row.Child = dock;
-                OverviewInfoPanel.Children.Add(row);
+                var grid = new UniformGrid { Columns = 2 };
+                foreach (var (label, value, brushKey) in items)
+                {
+                    var cell = new Border
+                    {
+                        CornerRadius = new CornerRadius(8),
+                        Padding = new Thickness(10, 8, 10, 8),
+                        Margin = new Thickness(0, 0, 6, 6)
+                    };
+                    var sp = new StackPanel();
+                    sp.Children.Add(new TextBlock
+                    {
+                        Text = label,
+                        FontSize = 10,
+                        Foreground = (Brush)FindResource("SecondaryTextBrush")
+                    });
+                    sp.Children.Add(new TextBlock
+                    {
+                        Text = value,
+                        FontSize = 14,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = (Brush)FindResource(brushKey),
+                        Margin = new Thickness(0, 2, 0, 0),
+                        TextWrapping = TextWrapping.Wrap
+                    });
+                    cell.Child = sp;
+                    grid.Children.Add(cell);
+                }
+                panel.Children.Add(grid);
+                group.Child = panel;
+                OverviewInfoPanel.Children.Add(group);
             }
 
-            // 身高 / 体重 / BMI
-            double h = 0; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthHeight), out h);
-            if (h > 0)
-                AddRow("身高", $"{h:0.#} cm", "PrimaryBrush");
-            else
-                AddRow("身高", "未填写（身体测量处可填）", "SecondaryTextBrush");
+            // ===== 睡眠组 =====
+            var sleeps = _repo.GetByType("sleep").Where(r => string.CompareOrdinal(r.Date, todayStr) <= 0).ToList();
+            var sleep7 = sleeps.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
+            var sleep30 = sleeps.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-29).ToString("yyyy-MM-dd")) >= 0).ToList();
+            var sleepItems = new List<(string, string, string)>();
+            var sleepRec = sleeps.LastOrDefault();
+            if (sleepRec != null)
+            {
+                sleepItems.Add(("最近睡眠", FormatDuration(TimeSpan.FromMinutes(sleepRec.Value)), "PrimaryBrush"));
+                if (!string.IsNullOrEmpty(sleepRec.Detail))
+                {
+                    var parts = sleepRec.Detail.Split('|');
+                    if (parts.Length >= 2)
+                        sleepItems.Add(("入睡 / 起床", parts[0] + " / " + parts[1], "SecondaryTextBrush"));
+                }
+                sleepItems.Add(("记录日期", sleepRec.Date, "SecondaryTextBrush"));
+            }
+            if (sleep7.Count > 0) sleepItems.Add(("近 7 天平均", FormatDuration(TimeSpan.FromMinutes(sleep7.Average(r => r.Value))), "AccentBlueBrush"));
+            if (sleep30.Count > 0) sleepItems.Add(("近 30 天平均", FormatDuration(TimeSpan.FromMinutes(sleep30.Average(r => r.Value))), "AccentGreenBrush"));
+            if (sleepItems.Count == 0) sleepItems.Add(("睡眠", "暂无记录", "SecondaryTextBrush"));
+            AddGroup("😴 睡眠", sleepItems.ToArray());
 
+            // ===== 身体组 =====
+            double h = 0; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthHeight), out h);
             var weights = _repo.GetByType("weight").OrderBy(r => r.Date).ToList();
             var latestW = weights.LastOrDefault();
+            var bodyItems = new List<(string, string, string)>
+            {
+                ("身高", h > 0 ? h.ToString("0.#") + " cm" : "未填写", h > 0 ? "PrimaryBrush" : "SecondaryTextBrush")
+            };
             if (latestW != null)
             {
-                AddRow("最新体重", $"{latestW.Value:F1} kg（{latestW.Date}）", "PrimaryBrush");
+                bodyItems.Add(("最新体重", latestW.Value.ToString("F1") + " kg", "PrimaryBrush"));
+                bodyItems.Add(("记录日期", latestW.Date, "SecondaryTextBrush"));
                 if (h > 0)
                 {
                     var bmi = CalcBmi(latestW.Value, h);
@@ -1700,52 +1835,64 @@ namespace ME.Views
                     else if (bmi < 24) { g = "正常"; brush = "AccentGreenBrush"; }
                     else if (bmi < 28) { g = "超重"; brush = "AccentYellowBrush"; }
                     else { g = "肥胖"; brush = "AccentRedBrush"; }
-                    AddRow("BMI", $"{bmi:F1}（{g}）", brush);
+                    bodyItems.Add(("BMI", bmi.ToString("F1") + "（" + g + "）", brush));
                 }
             }
             else
-                AddRow("最新体重", "暂无记录", "SecondaryTextBrush");
+            {
+                bodyItems.Add(("最新体重", "暂无记录", "SecondaryTextBrush"));
+            }
+            AddGroup("⚖️ 身体", bodyItems.ToArray());
 
-            // 平均睡眠（近 7 天 / 近 30 天）
-            var sleeps = _repo.GetByType("sleep").Where(r => string.CompareOrdinal(r.Date, todayStr) <= 0).ToList();
-            var sleep7 = sleeps.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
-            var sleep30 = sleeps.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-29).ToString("yyyy-MM-dd")) >= 0).ToList();
-            if (sleep7.Count > 0)
-                AddRow("近 7 天平均睡眠", FormatDuration(TimeSpan.FromMinutes(sleep7.Average(r => r.Value))), "AccentBlueBrush");
-            if (sleep30.Count > 0)
-                AddRow("近 30 天平均睡眠", FormatDuration(TimeSpan.FromMinutes(sleep30.Average(r => r.Value))), "PrimaryBrush");
-            if (sleep7.Count == 0 && sleep30.Count == 0)
-                AddRow("平均睡眠", "暂无记录", "SecondaryTextBrush");
-
-            // 喝水
+            // ===== 喝水组 =====
             var waters = _repo.GetByType("water").Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
             double goal = 2000; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "2000"), out goal);
-            if (waters.Count > 0)
-                AddRow("近 7 天日均喝水", $"{waters.Average(r => r.Value):F0} ml（目标 {goal:F0} ml）", "AccentGreenBrush");
-            else
-                AddRow("近 7 天日均喝水", $"暂无记录（目标 {goal:F0} ml）", "SecondaryTextBrush");
+            var waterRec = _repo.GetByTypeAndDate("water", todayStr);
+            AddGroup("💧 喝水",
+                ("今日喝水", waterRec != null ? waterRec.Value.ToString("F0") + " ml" : "0 ml", waterRec != null ? "AccentBlueBrush" : "SecondaryTextBrush"),
+                ("每日目标", goal.ToString("F0") + " ml", "SecondaryTextBrush"),
+                ("近 7 天日均", waters.Count > 0 ? waters.Average(r => r.Value).ToString("F0") + " ml" : "暂无数据", "AccentGreenBrush"));
 
-            // 最新尿酸
+            // ===== 尿酸组 =====
             var uricAll = _repo.GetByType("uric_acid").OrderBy(r => r.Date).ToList();
             var latestUric = uricAll.LastOrDefault();
             if (latestUric != null)
             {
                 var (lower, upper) = GetUricRange();
                 var (text, brush) = ClassifyUric(latestUric.Value, lower, upper);
-                AddRow("最新尿酸", $"{latestUric.Value:F0} μmol/L（{latestUric.Date}）", brush);
-                AddRow("正常范围", $"{lower:F0} ~ {upper:F0} μmol/L", "SecondaryTextBrush");
+                AddGroup("💉 尿酸",
+                    ("最新值", latestUric.Value.ToString("F0") + " μmol/L", brush),
+                    ("状态", text, brush),
+                    ("正常范围", lower.ToString("F0") + " ~ " + upper.ToString("F0"), "SecondaryTextBrush"),
+                    ("记录日期", latestUric.Date, "SecondaryTextBrush"));
             }
             else
-                AddRow("最新尿酸", "暂无记录", "SecondaryTextBrush");
+            {
+                AddGroup("💉 尿酸", ("最新值", "暂无记录", "SecondaryTextBrush"));
+            }
 
-            // 用药
-            var activeMeds = _medRepo.GetActive();
-            AddRow("在用药物", activeMeds.Count > 0 ? $"{activeMeds.Count} 种" : "无", activeMeds.Count > 0 ? "AccentYellowBrush" : "SecondaryTextBrush");
-
-            // 今日心情
+            // ===== 心情组 =====
             var mood = _repo.GetByTypeAndDate("mood", todayStr);
             var mi = mood != null ? (int)mood.Value : -1;
-            AddRow("今日心情", mi >= 0 && mi < 4 ? $"{MoodEmojis[mi]} {MoodNames[mi]}" : "未记录", mi >= 0 && mi <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush");
+            var allMoods = _repo.GetByType("mood");
+            var weekMoods = allMoods.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
+            var moodItems = new List<(string, string, string)>
+            {
+                ("今日心情", mi >= 0 && mi < 4 ? MoodEmojis[mi] + " " + MoodNames[mi] : "未记录", mi >= 0 && mi <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush")
+            };
+            if (weekMoods.Count > 0)
+            {
+                var avg = (int)Math.Round(weekMoods.Average(r => r.Value));
+                if (avg < 0 || avg > 3) avg = 1;
+                moodItems.Add(("近 7 天平均", MoodEmojis[avg] + " " + MoodNames[avg], "SecondaryTextBrush"));
+            }
+            AddGroup("😊 心情", moodItems.ToArray());
+
+            // ===== 用药组 =====
+            var activeMeds = _medRepo.GetActive();
+            AddGroup("💊 用药",
+                ("在用药物", activeMeds.Count > 0 ? activeMeds.Count.ToString() + " 种" : "无", activeMeds.Count > 0 ? "AccentYellowBrush" : "SecondaryTextBrush"),
+                ("提醒", activeMeds.Any(m => m.Remind) ? "已开启" : "未开启", activeMeds.Any(m => m.Remind) ? "AccentGreenBrush" : "SecondaryTextBrush"));
         }
 
         private (string title, string value, string sub, string brushKey) GetOverviewCardData(string key)
