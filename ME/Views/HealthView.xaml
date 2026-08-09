@@ -20,6 +20,8 @@
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
                 <Button x:Name="MoodTabBtn" Content="😊 心情" Tag="mood" Click="Tab_Click"
                         Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
+                <Button x:Name="UricAcidTabBtn" Content="🩸 尿酸" Tag="uric_acid" Click="Tab_Click"
+                        Style="{StaticResource SecondaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" FontSize="12" />
             </StackPanel>
         </Border>
 
@@ -210,6 +212,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Border Style="{StaticResource CardStyle}" Padding="12">
                     <StackPanel>
@@ -218,7 +221,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                             <TextBlock x:Name="WaterTodayCountText" Text="0" FontSize="40" FontWeight="Bold"
                                        Foreground="{DynamicResource AccentBlueBrush}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="WaterTargetText" Text="/ 8 杯" FontSize="14"
+                            <TextBlock x:Name="WaterTargetText" Text="/ 2000 ml" FontSize="14"
                                        Foreground="{DynamicResource SecondaryTextBrush}"
                                        VerticalAlignment="Bottom" Margin="4,0,0,8" />
                         </StackPanel>
@@ -226,15 +229,28 @@
                                      Background="{DynamicResource BackgroundBrush}"
                                      Foreground="{DynamicResource AccentBlueBrush}" />
                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                            <Button Content="−1" Click="WaterMinus_Click"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="56" Height="34" />
-                            <Button Content="+1" Click="WaterPlus_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Width="56" Height="34" Margin="8,0,0,0" />
-                            <TextBlock Text="目标杯数：" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                       VerticalAlignment="Center" Margin="16,0,0,0" />
-                            <TextBox x:Name="WaterGoalBox" Width="48" Text="8" TextAlignment="Center"
-                                     VerticalContentAlignment="Center" Margin="6,0,0,0"
-                                     TextChanged="WaterGoalBox_TextChanged" />
+                            <TextBlock Text="选择容器" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <ComboBox x:Name="WaterContainerCombo" Width="130" Margin="6,0,0,0"
+                                      Style="{StaticResource MacComboBoxStyle}" SelectionChanged="WaterContainerCombo_Changed" />
+                            <Button Content="管理容器" Click="ManageContainers_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="30"
+                                    Margin="8,0,0,0" FontSize="11" Padding="10,0" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="− 1" Click="WaterMinus_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="64" Height="34" />
+                            <Button Content="+ 1" Click="WaterPlus_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="64" Height="34" Margin="8,0,0,0" />
+                            <TextBlock x:Name="WaterStepText" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="12,0,0,0" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <TextBlock Text="目标(ml)：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="WaterGoalBox" Width="64" Text="2000" TextAlignment="Center"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0" />
                             <Button Content="保存目标" Click="SaveWaterGoal_Click"
                                     Style="{StaticResource SecondaryButtonStyle}" Height="30"
                                     Margin="8,0,0,0" FontSize="11" />
@@ -242,20 +258,44 @@
                     </StackPanel>
                 </Border>
                 <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
-                    <UniformGrid Columns="2">
-                        <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Text="今日" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                                       HorizontalAlignment="Center" />
-                            <TextBlock x:Name="WaterTodayStatText" Text="0 杯" FontSize="18" FontWeight="Bold"
-                                       Foreground="{DynamicResource AccentBlueBrush}" HorizontalAlignment="Center" />
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="统计" FontSize="13" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                            <Button x:Name="WaterPeriodTodayBtn" Content="今日" Tag="today" Click="WaterPeriod_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Height="26" FontSize="11"
+                                    Padding="10,0" Margin="14,0,4,0" />
+                            <Button x:Name="WaterPeriodWeekBtn" Content="本周" Tag="week" Click="WaterPeriod_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="26" FontSize="11"
+                                    Padding="10,0" Margin="0,0,4,0" />
+                            <Button x:Name="WaterPeriodMonthBtn" Content="本月" Tag="month" Click="WaterPeriod_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Height="26" FontSize="11"
+                                    Padding="10,0" Margin="0,0,0,0" />
                         </StackPanel>
-                        <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Text="近 7 天平均" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                                       HorizontalAlignment="Center" />
-                            <TextBlock x:Name="WaterAvgText" Text="0 杯" FontSize="18" FontWeight="Bold"
-                                       Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" />
-                        </StackPanel>
-                    </UniformGrid>
+                        <UniformGrid Columns="3" Margin="0,10,0,0">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock x:Name="WaterPeriodLabel" Text="平均" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock x:Name="WaterAvgText" Text="0 ml" FontSize="16" FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="达标率" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock x:Name="WaterRateText" Text="0%" FontSize="16" FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentBlueBrush}" HorizontalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="合计" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock x:Name="WaterTotalText" Text="0 ml" FontSize="16" FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentRedBrush}" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
                 </Border>
             </Grid>
             <Grid Grid.Column="2">
@@ -265,7 +305,7 @@
                 </Grid.RowDefinitions>
                 <Border Style="{StaticResource CardStyle}" Padding="12">
                     <StackPanel>
-                        <TextBlock Text="近 7 天喝水" FontSize="14" FontWeight="Bold"
+                        <TextBlock x:Name="WaterChartTitle" Text="近 7 天喝水" FontSize="14" FontWeight="Bold"
                                    Foreground="{DynamicResource TextBrush}" />
                         <Canvas x:Name="WaterChartCanvas" Height="150" Margin="0,8,0,0" />
                     </StackPanel>
@@ -348,6 +388,93 @@
                                    Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="MoodRecordsPanel" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 尿酸面板 ============ -->
+        <Grid Grid.Row="1" x:Name="UricAcidPanel" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="记录尿酸" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="日期：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <local:CustomDatePicker x:Name="UricAcidDatePicker" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="尿酸值" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="UricAcidBox" Width="90" TextAlignment="Center"
+                                     VerticalContentAlignment="Center" Margin="6,0,0,0" />
+                            <TextBlock Text="μmol/L" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <TextBlock Text="性别（用于判断范围）" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <ComboBox x:Name="UricGenderCombo" Width="100" Margin="6,0,0,0"
+                                      Style="{StaticResource MacComboBoxStyle}" SelectionChanged="UricGenderCombo_Changed">
+                                <ComboBoxItem Content="男" Tag="male" />
+                                <ComboBoxItem Content="女" Tag="female" />
+                            </ComboBox>
+                        </StackPanel>
+                        <TextBlock x:Name="UricAcidHint" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="保存" Click="SaveUricAcid_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Width="80" />
+                            <Button Content="清除当天" Click="ClearUricAcid_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="80" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="正常范围参考（μmol/L）" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                        <TextBlock Text="男性：149 ~ 416　女性：89 ~ 357" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <TextBlock Text="高于上限为高尿酸血症，低于下限需关注营养状况" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" />
+                        <TextBlock x:Name="UricLatestText" Text="--" FontSize="18" FontWeight="Bold"
+                                   Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource CardStyle}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="近 30 天尿酸趋势" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock x:Name="UricRangeText" FontSize="10"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" />
+                        <Canvas x:Name="UricChartCanvas" Height="170" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,10,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="尿酸记录" FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="UricRecordsPanel" />
                         </ScrollViewer>
                     </DockPanel>
                 </Border>

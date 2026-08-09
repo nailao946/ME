@@ -25,6 +25,9 @@ namespace ME.Models
         public const string PomodoroAutoStart = "PomodoroAutoStart";
         public const string HealthWaterGoal = "HealthWaterGoal";
         public const string HealthHeight = "HealthHeight";
+        public const string HealthGender = "HealthGender";
+        public const string HealthWaterMigrated = "HealthWaterMigrated";
+        public const string DeepSeekApiKey = "DeepSeekApiKey";
     }
 
     public enum AppTheme

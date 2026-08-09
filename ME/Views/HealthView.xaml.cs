@@ -29,12 +29,14 @@ namespace ME.Views
         private readonly HealthRepository _repo = new HealthRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private string _currentTab = "sleep";
+        private bool _loadingUric;
 
         public HealthView()
         {
             InitializeComponent();
             SleepDatePicker.SelectedDate = DateTime.Today;
             WeightDatePicker.SelectedDate = DateTime.Today;
+            UricAcidDatePicker.SelectedDate = DateTime.Today;
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) => ThemeService.ThemeChanged -= OnThemeChanged;
             EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
@@ -42,6 +44,7 @@ namespace ME.Views
             LoadWeight();
             LoadWater();
             LoadMood();
+            LoadUricAcid();
         }
 
         private void OnGlobalEvent(string message)
@@ -58,6 +61,7 @@ namespace ME.Views
                         LoadWeight();
                         LoadWater();
                         LoadMood();
+                        LoadUricAcid();
                     }
                 }));
             }
@@ -73,6 +77,7 @@ namespace ME.Views
                     LoadWeight();
                     LoadWater();
                     LoadMood();
+                    LoadUricAcid();
                 }
             });
         }
@@ -85,6 +90,7 @@ namespace ME.Views
                 LoadWeight();
                 LoadWater();
                 LoadMood();
+                LoadUricAcid();
             }
         }
 
@@ -97,11 +103,13 @@ namespace ME.Views
             WeightPanel.Visibility = _currentTab == "weight" ? Visibility.Visible : Visibility.Collapsed;
             WaterPanel.Visibility = _currentTab == "water" ? Visibility.Visible : Visibility.Collapsed;
             MoodPanel.Visibility = _currentTab == "mood" ? Visibility.Visible : Visibility.Collapsed;
+            UricAcidPanel.Visibility = _currentTab == "uric_acid" ? Visibility.Visible : Visibility.Collapsed;
 
             SleepTabBtn.Style = (Style)FindResource(_currentTab == "sleep" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             WeightTabBtn.Style = (Style)FindResource(_currentTab == "weight" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             WaterTabBtn.Style = (Style)FindResource(_currentTab == "water" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
             MoodTabBtn.Style = (Style)FindResource(_currentTab == "mood" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            UricAcidTabBtn.Style = (Style)FindResource(_currentTab == "uric_acid" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
 
             // 面板刚变为可见，按真实宽度重绘图表
             Dispatcher.BeginInvoke(new Action(() =>
@@ -112,6 +120,7 @@ namespace ME.Views
                     case "weight": LoadWeight(); break;
                     case "water": LoadWater(); break;
                     case "mood": LoadMood(); break;
+                    case "uric_acid": LoadUricAcid(); break;
                 }
             }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
@@ -429,69 +438,185 @@ namespace ME.Views
         }
 
         // ============ 喝水 ============
+        private readonly WaterContainerRepository _containerRepo = new WaterContainerRepository();
+        private string _waterPeriod = "week";
+
+        /// <summary>旧版本按"杯"记录（默认 250ml/杯），首次启动迁移为 ml</summary>
+        private void EnsureWaterMigrated()
+        {
+            var migrated = _settingsRepo.GetValue(SettingsKeys.HealthWaterMigrated, "0");
+            if (migrated == "1") return;
+            // 必须基于全部记录保存，避免覆盖掉 sleep/weight/mood 等其它类型
+            var all = _repo.GetAll();
+            var waterRecords = all.Where(r => r.Type == "water").ToList();
+            bool changed = false;
+            foreach (var r in waterRecords)
+            {
+                // 旧杯数：正整数且 <= 50 杯；已迁移的 ml 值通常 >= 100
+                if (r.Value > 0 && r.Value <= 50 && r.Value % 1 == 0)
+                {
+                    r.Value = Math.Round(r.Value * 250);
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                // all 的元素即磁盘反序列化对象引用，直接全量保存
+                JsonStore.Save("health_records", all);
+            }
+            _settingsRepo.SetValue(SettingsKeys.HealthWaterMigrated, "1");
+        }
+
+        private void WaterContainerCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateWaterStepText();
+        }
+
+        private void UpdateWaterStepText()
+        {
+            var c = GetSelectedContainer();
+            WaterStepText.Text = c != null ? $"每次 +{c.CapacityMl:0} ml" : "请先添加容器";
+        }
+
+        private WaterContainer GetSelectedContainer()
+        {
+            if (WaterContainerCombo.SelectedItem is WaterContainer c) return c;
+            if (WaterContainerCombo.Items.Count > 0)
+            {
+                // 未显式选中时自动选中第一个，保证 +1/-1 始终可用
+                WaterContainerCombo.SelectedIndex = 0;
+                return WaterContainerCombo.SelectedItem as WaterContainer;
+            }
+            var items = _containerRepo.EnsureDefaults();
+            return items.FirstOrDefault();
+        }
+
+        private void ManageContainers_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new WaterContainerDialog { Owner = Window.GetWindow(this) };
+            dlg.ShowDialog();
+            ReloadWaterContainers();
+        }
+
+        private void ReloadWaterContainers()
+        {
+            var items = _containerRepo.EnsureDefaults();
+            var selId = (WaterContainerCombo.SelectedItem as WaterContainer)?.Id ?? 0;
+            WaterContainerCombo.Items.Clear();
+            foreach (var c in items)
+                WaterContainerCombo.Items.Add(c);
+            var sel = items.FirstOrDefault(c => c.Id == selId) ?? items.FirstOrDefault();
+            WaterContainerCombo.SelectedItem = sel;
+            UpdateWaterStepText();
+        }
+
+        private void WaterPeriod_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is Button btn)) return;
+            _waterPeriod = (string)btn.Tag;
+            WaterPeriodTodayBtn.Style = (Style)FindResource(_waterPeriod == "today" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            WaterPeriodWeekBtn.Style = (Style)FindResource(_waterPeriod == "week" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            WaterPeriodMonthBtn.Style = (Style)FindResource(_waterPeriod == "month" ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
+            LoadWater();
+        }
+
         private void WaterPlus_Click(object sender, RoutedEventArgs e)
         {
+            var container = GetSelectedContainer();
+            if (container == null) return;
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
             var rec = _repo.GetByTypeAndDate("water", todayStr);
-            var count = rec != null ? (int)rec.Value : 0;
-            _repo.Upsert(new HealthRecord { Type = "water", Date = todayStr, Value = count + 1 });
+            var ml = rec != null ? rec.Value : 0;
+            _repo.Upsert(new HealthRecord { Type = "water", Date = todayStr, Value = ml + container.CapacityMl });
             LoadWater();
         }
 
         private void WaterMinus_Click(object sender, RoutedEventArgs e)
         {
+            var container = GetSelectedContainer();
+            if (container == null) return;
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
             var rec = _repo.GetByTypeAndDate("water", todayStr);
-            var count = rec != null ? (int)rec.Value : 0;
-            if (count <= 0) { LoadWater(); return; }
-            _repo.Upsert(new HealthRecord { Type = "water", Date = todayStr, Value = count - 1 });
+            var ml = rec != null ? rec.Value : 0;
+            if (ml <= 0) { LoadWater(); return; }
+            _repo.Upsert(new HealthRecord { Type = "water", Date = todayStr, Value = Math.Max(0, ml - container.CapacityMl) });
             LoadWater();
-        }
-
-        private void WaterGoalBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            // 仅预览，点击"保存目标"才写入设置
         }
 
         private void SaveWaterGoal_Click(object sender, RoutedEventArgs e)
         {
-            if (int.TryParse(WaterGoalBox.Text, out var goal) && goal > 0 && goal <= 99)
+            if (double.TryParse(WaterGoalBox.Text, out var goal) && goal > 0 && goal <= 20000)
             {
-                _settingsRepo.SetValue(SettingsKeys.HealthWaterGoal, goal.ToString());
+                _settingsRepo.SetValue(SettingsKeys.HealthWaterGoal, goal.ToString(CultureInfo.InvariantCulture));
                 LoadWater();
+            }
+            else
+            {
+                WaterTargetText.Text = "目标无效";
             }
         }
 
         private void LoadWater()
         {
+            EnsureWaterMigrated();
+            if (WaterContainerCombo.Items.Count == 0)
+                ReloadWaterContainers();
+            else
+                UpdateWaterStepText();
+
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
-            int goal = 8;
-            int.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "8"), out goal);
-            if (goal <= 0) goal = 8;
-            WaterGoalBox.Text = goal.ToString();
+            double goal = 2000;
+            double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "2000"), NumberStyles.Any, CultureInfo.InvariantCulture, out goal);
+            if (goal <= 0) goal = 2000;
+            WaterGoalBox.Text = goal.ToString("F0");
 
             var rec = _repo.GetByTypeAndDate("water", todayStr);
-            var count = rec != null ? (int)rec.Value : 0;
-            WaterTodayCountText.Text = count.ToString();
-            WaterTodayStatText.Text = $"{count} 杯";
-            WaterTargetText.Text = $"/ {goal} 杯";
+            var todayMl = rec != null ? rec.Value : 0;
+            WaterTodayCountText.Text = todayMl.ToString("F0");
+            WaterTargetText.Text = $"/ {goal:F0} ml";
             WaterProgressBar.Maximum = goal;
-            WaterProgressBar.Value = Math.Min(count, goal);
+            WaterProgressBar.Value = Math.Min(todayMl, goal);
 
+            // 周期统计
             var all = _repo.GetByType("water");
-            var weekRecords = all.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
-            WaterAvgText.Text = weekRecords.Count > 0
-                ? $"{weekRecords.Average(r => r.Value):F1} 杯"
-                : "0 杯";
+            DateTime start;
+            if (_waterPeriod == "today")
+            {
+                start = DateTime.Today;
+                WaterPeriodLabel.Text = "今日";
+                WaterChartTitle.Text = "今日喝水";
+            }
+            else if (_waterPeriod == "week")
+            {
+                start = TaskService.GetWeekStartForDate(DateTime.Today);
+                WaterPeriodLabel.Text = "本周平均";
+                WaterChartTitle.Text = "本周喝水";
+            }
+            else
+            {
+                start = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                WaterPeriodLabel.Text = "本月平均";
+                WaterChartTitle.Text = "本月喝水";
+            }
 
-            DrawWaterChart(all);
+            var startStr = start.ToString("yyyy-MM-dd");
+            var records = all.Where(r => string.CompareOrdinal(r.Date, startStr) >= 0 &&
+                                         string.CompareOrdinal(r.Date, todayStr) <= 0).ToList();
+            WaterAvgText.Text = records.Count > 0 ? $"{records.Average(r => r.Value):F0} ml" : "0 ml";
+            WaterTotalText.Text = $"{records.Sum(r => r.Value):F0} ml";
+
+            int totalDays = _waterPeriod == "today" ? 1 : (DateTime.Today - start).Days + 1;
+            var metDays = records.Count(r => r.Value >= goal);
+            WaterRateText.Text = $"{metDays * 100.0 / totalDays:F0}%";
+
+            DrawWaterChart(all, start, _waterPeriod == "today" ? 1 : 0);
 
             WaterRecordsPanel.Children.Clear();
             var recent = all.OrderByDescending(r => r.Date).Take(14).ToList();
             foreach (var r in recent)
             {
                 WaterRecordsPanel.Children.Add(BuildRecordRow(
-                    $"{r.Date}  {r.Value:F0} 杯",
+                    $"{r.Date}  {r.Value:F0} ml",
                     null,
                     (s, ev) => { _repo.Delete(r.Id); LoadWater(); }));
             }
@@ -499,29 +624,44 @@ namespace ME.Views
                 WaterRecordsPanel.Children.Add(BuildEmptyHint("还没有喝水记录"));
         }
 
-        private void DrawWaterChart(List<HealthRecord> all)
+        private void DrawWaterChart(List<HealthRecord> all, DateTime startDate, int isToday)
         {
             WaterChartCanvas.Children.Clear();
             var w = WaterChartCanvas.ActualWidth;
             var h = WaterChartCanvas.ActualHeight;
             if (w < 50) w = 500;
             if (h < 50) h = 150;
-            int goal = 8;
-            int.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "8"), out goal);
+            double goal = 2000;
+            double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthWaterGoal, "2000"), NumberStyles.Any, CultureInfo.InvariantCulture, out goal);
             var axisBrush = (Brush)FindResource("BorderBrush");
             var textBrush = (Brush)FindResource("SecondaryTextBrush");
             var barBrush = (Brush)FindResource("AccentBlueBrush");
 
-            var days = Enumerable.Range(0, 7).Select(i => DateTime.Today.AddDays(-(6 - i))).ToList();
-            var gap = w / 7;
-            var barW = gap * 0.6;
-            double max = Math.Max(goal * 1.2, 8);
+            List<DateTime> days;
+            if (_waterPeriod == "today")
+            {
+                days = new List<DateTime> { DateTime.Today };
+            }
+            else if (_waterPeriod == "week")
+            {
+                var ws = TaskService.GetWeekStartForDate(DateTime.Today);
+                days = Enumerable.Range(0, 7).Select(i => ws.AddDays(i)).Where(d => d <= DateTime.Today).ToList();
+            }
+            else
+            {
+                var ms = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                days = Enumerable.Range(0, DateTime.Today.Day).Select(i => ms.AddDays(i)).ToList();
+            }
+
+            var gap = w / days.Count;
+            var barW = Math.Max(6, gap * 0.6);
+            double max = Math.Max(goal * 1.2, 500);
 
             for (int i = 0; i < days.Count; i++)
             {
                 var rec = all.FirstOrDefault(r => r.Date == days[i].ToString("yyyy-MM-dd"));
-                var count = rec?.Value ?? 0;
-                var barH = h * 0.75 * Math.Min(count / max, 1.0);
+                var ml = rec?.Value ?? 0;
+                var barH = h * 0.75 * Math.Min(ml / max, 1.0);
                 var x = i * gap + (gap - barW) / 2;
                 var y = h - 20 - barH;
                 var rect = new Rectangle
@@ -538,9 +678,9 @@ namespace ME.Views
                 Canvas.SetTop(label, h - 16);
                 WaterChartCanvas.Children.Add(label);
 
-                if (count > 0)
+                if (ml > 0 && gap > 30)
                 {
-                    var val = new TextBlock { Text = $"{count:F0}", FontSize = 9, Foreground = textBrush };
+                    var val = new TextBlock { Text = $"{ml:F0}", FontSize = 9, Foreground = textBrush };
                     Canvas.SetLeft(val, x + (barW - 10) / 2);
                     Canvas.SetTop(val, y - 14);
                     WaterChartCanvas.Children.Add(val);
@@ -671,6 +811,162 @@ namespace ME.Views
                 MoodRecordsPanel.Children.Add(BuildEmptyHint("还没有心情记录"));
         }
 
+        // ============ 尿酸 ============
+        private (double lower, double upper) GetUricRange()
+        {
+            var gender = _settingsRepo.GetValue(SettingsKeys.HealthGender, "male");
+            return gender == "female" ? (89, 357) : (149, 416);
+        }
+
+        private void UricGenderCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loadingUric) return;
+            if (UricGenderCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                _settingsRepo.SetValue(SettingsKeys.HealthGender, tag);
+                LoadUricAcid();
+            }
+        }
+
+        private void SaveUricAcid_Click(object sender, RoutedEventArgs e)
+        {
+            var date = UricAcidDatePicker.SelectedDate ?? DateTime.Today;
+            if (!double.TryParse(UricAcidBox.Text, out var v) || v <= 0)
+            {
+                UricAcidHint.Text = "请输入有效的尿酸值（μmol/L）";
+                return;
+            }
+            _repo.Upsert(new HealthRecord { Type = "uric_acid", Date = date.ToString("yyyy-MM-dd"), Value = v });
+            UricAcidHint.Text = $"已保存：{v:F0} μmol/L";
+            LoadUricAcid();
+        }
+
+        private void ClearUricAcid_Click(object sender, RoutedEventArgs e)
+        {
+            var date = UricAcidDatePicker.SelectedDate ?? DateTime.Today;
+            _repo.DeleteByTypeAndDate("uric_acid", date.ToString("yyyy-MM-dd"));
+            UricAcidHint.Text = "已清除当天记录";
+            LoadUricAcid();
+        }
+
+        private void LoadUricAcid()
+        {
+            var gender = _settingsRepo.GetValue(SettingsKeys.HealthGender, "male");
+            if (!_loadingUric)
+            {
+                _loadingUric = true;
+                foreach (ComboBoxItem it in UricGenderCombo.Items)
+                {
+                    if (it.Tag is string g && g == gender)
+                    {
+                        if (!Equals(UricGenderCombo.SelectedItem, it))
+                            UricGenderCombo.SelectedItem = it;
+                        break;
+                    }
+                }
+                _loadingUric = false;
+            }
+            var all = _repo.GetByType("uric_acid").OrderBy(r => r.Date).ToList();
+            var (lower, upper) = GetUricRange();
+            UricRangeText.Text = $"正常范围：{lower:F0} ~ {upper:F0} μmol/L（参考线）";
+
+            var latest = all.LastOrDefault();
+            if (latest != null)
+            {
+                UricLatestText.Text = $"最新：{latest.Value:F0} μmol/L";
+                var (text, brush) = ClassifyUric(latest.Value, lower, upper);
+                UricLatestText.Text += $"　{text}";
+                UricLatestText.Foreground = (Brush)FindResource(brush);
+            }
+            else
+            {
+                UricLatestText.Text = "--";
+                UricLatestText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+            }
+
+            DrawUricChart(all, lower, upper);
+
+            UricRecordsPanel.Children.Clear();
+            var recent = all.OrderByDescending(r => r.Date).Take(14).ToList();
+            foreach (var r in recent)
+            {
+                var (text, brush) = ClassifyUric(r.Value, lower, upper);
+                UricRecordsPanel.Children.Add(BuildRecordRow(
+                    $"{r.Date}  {r.Value:F0} μmol/L",
+                    text,
+                    (s, ev) => { _repo.Delete(r.Id); LoadUricAcid(); },
+                    brush));
+            }
+            if (recent.Count == 0)
+                UricRecordsPanel.Children.Add(BuildEmptyHint("还没有尿酸记录"));
+        }
+
+        private (string text, string brushKey) ClassifyUric(double v, double lower, double upper)
+        {
+            if (v < lower) return ("偏低", "AccentYellowBrush");
+            if (v > upper) return ("偏高", "AccentRedBrush");
+            return ("正常", "AccentGreenBrush");
+        }
+
+        private void DrawUricChart(List<HealthRecord> all, double lower, double upper)
+        {
+            UricChartCanvas.Children.Clear();
+            var w = UricChartCanvas.ActualWidth;
+            var h = UricChartCanvas.ActualHeight;
+            if (w < 50) w = 500;
+            if (h < 50) h = 170;
+            var axisBrush = (Brush)FindResource("BorderBrush");
+            var textBrush = (Brush)FindResource("SecondaryTextBrush");
+            var lineBrush = (Brush)FindResource("PrimaryBrush");
+
+            var days = Enumerable.Range(0, 30).Select(i => DateTime.Today.AddDays(-(29 - i))).ToList();
+            var values = days.Select(d => all.FirstOrDefault(r => r.Date == d.ToString("yyyy-MM-dd"))?.Value).ToList();
+            var vals = values.Where(v => v.HasValue).Select(v => v.Value).ToList();
+
+            var minV = Math.Min(lower, vals.Count > 0 ? vals.Min() : lower) - 20;
+            var maxV = Math.Max(upper, vals.Count > 0 ? vals.Max() : upper) + 20;
+            var range = maxV - minV;
+            if (range <= 0) range = 1;
+
+            double Y(double v) => h - 20 - (v - minV) / range * (h - 40);
+
+            // 参考线：上限（红虚线）、下限（绿虚线）
+            var upLine = new Line { X1 = 0, X2 = w, Y1 = Y(upper), Y2 = Y(upper), Stroke = new SolidColorBrush(Color.FromRgb(255, 59, 48)), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, Opacity = 0.7 };
+            UricChartCanvas.Children.Add(upLine);
+            var upLabel = new TextBlock { Text = $"上限 {upper:F0}", FontSize = 9, Foreground = textBrush };
+            Canvas.SetLeft(upLabel, 2); Canvas.SetTop(upLabel, Y(upper) - 14);
+            UricChartCanvas.Children.Add(upLabel);
+            var lowLine = new Line { X1 = 0, X2 = w, Y1 = Y(lower), Y2 = Y(lower), Stroke = new SolidColorBrush(Color.FromRgb(52, 199, 89)), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, Opacity = 0.7 };
+            UricChartCanvas.Children.Add(lowLine);
+            var lowLabel = new TextBlock { Text = $"下限 {lower:F0}", FontSize = 9, Foreground = textBrush };
+            Canvas.SetLeft(lowLabel, 2); Canvas.SetTop(lowLabel, Y(lower) - 14);
+            UricChartCanvas.Children.Add(lowLabel);
+
+            // 数据点 + 连线
+            var pts = new List<Point>();
+            for (int i = 0; i < days.Count; i++)
+            {
+                if (!values[i].HasValue) continue;
+                var x = (i + 0.5) * w / days.Count;
+                var y = Y(values[i].Value);
+                pts.Add(new Point(x, y));
+                UricChartCanvas.Children.Add(new Ellipse { Width = 5, Height = 5, Fill = lineBrush });
+                Canvas.SetLeft(UricChartCanvas.Children[UricChartCanvas.Children.Count - 1], x - 2.5);
+                Canvas.SetTop(UricChartCanvas.Children[UricChartCanvas.Children.Count - 1], y - 2.5);
+            }
+            for (int i = 1; i < pts.Count; i++)
+            {
+                UricChartCanvas.Children.Add(new Line { X1 = pts[i - 1].X, Y1 = pts[i - 1].Y, X2 = pts[i].X, Y2 = pts[i].Y, Stroke = lineBrush, StrokeThickness = 1.5, Opacity = 0.8 });
+            }
+
+            var lb = new TextBlock { Text = $"{minV:F0}", FontSize = 9, Foreground = textBrush };
+            Canvas.SetLeft(lb, 2); Canvas.SetTop(lb, 0);
+            UricChartCanvas.Children.Add(lb);
+            var ub = new TextBlock { Text = $"{maxV:F0}", FontSize = 9, Foreground = textBrush };
+            Canvas.SetLeft(ub, 2); Canvas.SetTop(ub, h - 34);
+            UricChartCanvas.Children.Add(ub);
+        }
+
         // ============ 通用 ============
         private static string FormatDuration(TimeSpan ts)
         {
@@ -679,7 +975,7 @@ namespace ME.Views
             return $"{ts.Minutes}m";
         }
 
-        private Border BuildRecordRow(string text, string value, RoutedEventHandler deleteClick)
+        private Border BuildRecordRow(string text, string value, RoutedEventHandler deleteClick, string brushKey = null)
         {
             var border = new Border
             {
@@ -708,7 +1004,7 @@ namespace ME.Views
                     Text = value,
                     FontSize = 12,
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("PrimaryBrush"),
+                    Foreground = (Brush)FindResource(brushKey ?? "PrimaryBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 DockPanel.SetDock(valueText, Dock.Right);
