@@ -327,14 +327,26 @@ namespace ME.Views
 
             foreach (var tag in tags)
             {
+                var isSelected = _filterTagId == tag.Id;
+                Color tagColor;
+                try { tagColor = (Color)ColorConverter.ConvertFromString(tag.Color); }
+                catch { tagColor = Color.FromRgb(128, 128, 128); }
                 var btn = new Button
                 {
-                    Content = tag.Name,
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(tag.Color)),
-                    Foreground = Brushes.White,
-                    Style = (Style)FindResource(_filterTagId == tag.Id ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
+                    Content = (isSelected ? "✓ " : "") + tag.Name,
+                    Background = isSelected
+                        ? new SolidColorBrush(tagColor)
+                        : new SolidColorBrush(Color.FromArgb(38, tagColor.R, tagColor.G, tagColor.B)),
+                    Foreground = isSelected ? Brushes.White : (Brush)FindResource("TextBrush"),
+                    BorderBrush = isSelected
+                        ? new SolidColorBrush(tagColor)
+                        : new SolidColorBrush(Color.FromArgb(70, tagColor.R, tagColor.G, tagColor.B)),
+                    BorderThickness = isSelected ? new Thickness(2) : new Thickness(1),
+                    Style = (Style)FindResource(isSelected ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
                     Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 0, 6, 0),
-                    FontSize = 12, Tag = (int?)tag.Id
+                    FontSize = 12,
+                    FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal,
+                    Tag = (int?)tag.Id
                 };
                 btn.Click += TagFilter_Click;
                 TagFilterPanel.Children.Add(btn);

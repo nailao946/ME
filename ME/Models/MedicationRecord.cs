@@ -70,6 +70,9 @@ namespace ME.Models
 
         public string Note { get; set; }
 
+        /// <summary>是否开启到点用药提醒（系统托盘通知）</summary>
+        public bool Remind { get; set; }
+
         public bool IsDeleted { get; set; }
 
         public DateTime CreatedAt { get; set; }

@@ -77,6 +77,7 @@ namespace ME.Views
             StartDatePicker.SelectedDate = m.StartDate;
             EndDatePicker.SelectedDate = m.EndDate;
             NoteBox.Text = m.Note ?? "";
+            RemindToggle.IsChecked = m.Remind;
         }
 
         private static void SelectCombo(ComboBox combo, object value)
@@ -121,21 +122,22 @@ namespace ME.Views
 
         private void AddTimeRow(string time)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0) };
+            // 每个时间点一行（多行排列，避免一行排不开导致时间显示不全）
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
             var box = new TextBox
             {
                 Style = (Style)FindResource("InputTextBoxStyle"),
-                Width = 64,
+                Width = 90,
                 Text = time,
                 TextAlignment = TextAlignment.Center,
-                FontSize = 12,
-                Margin = new Thickness(0, 0, 4, 0)
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 6, 0)
             };
             var delBtn = new Button
             {
-                Content = "✕",
+                Content = "✕ 删除",
                 Style = (Style)FindResource("SecondaryButtonStyle"),
-                Width = 22, Height = 24, FontSize = 9, Padding = new Thickness(0)
+                Width = 58, Height = 32, FontSize = 10, Padding = new Thickness(0)
             };
             delBtn.Click += (s, ev) => TimesPanel.Children.Remove(row);
             row.Children.Add(box);
@@ -210,7 +212,8 @@ namespace ME.Views
                 Times = times.Count > 0 ? string.Join(",", times) : null,
                 StartDate = StartDatePicker.SelectedDate,
                 EndDate = EndDatePicker.SelectedDate,
-                Note = NoteBox.Text?.Trim()
+                Note = NoteBox.Text?.Trim(),
+                Remind = RemindToggle.IsChecked == true
             };
 
             if (_editId > 0)

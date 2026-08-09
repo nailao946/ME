@@ -99,6 +99,15 @@ namespace ME.Views
                     }
                 }));
             }
+            else if (message == "HealthDataChanged")
+            {
+                // 悬浮窗久坐 +1 等外部写入健康数据时刷新
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (this.IsVisible && _currentTab == "exercise") LoadExercise();
+                    LoadOverview();
+                }));
+            }
         }
 
         private void OnThemeChanged(string theme)
@@ -1395,6 +1404,18 @@ namespace ME.Views
                     continue;
                 }
 
+                // 数据点过少提示（1~2 条折线不成形，仍显示数据点）
+                if (vals.Count < 3)
+                {
+                    canvas.Children.Add(new TextBlock
+                    {
+                        Text = $"该时间段仅 {vals.Count} 天有记录（显示为数据点，多记录几天即可看到折线）",
+                        FontSize = 10,
+                        Foreground = textBrush,
+                        Margin = new Thickness(12, 2, 0, 0)
+                    });
+                }
+
                 // 每个参数按各自数据范围绘制（不归一化到 0-100%，直观显示各自走势）
                 var minV = vals.Min();
                 var maxV = vals.Max();
@@ -1480,9 +1501,11 @@ namespace ME.Views
                     Stroke = brush, StrokeThickness = 2, Opacity = 0.9
                 });
             }
+            var isSingle = pts.Count == 1;
+            var dotSize = isSingle ? 10.0 : 6.0;
             for (int i = 0; i < pts.Count; i++)
             {
-                var dot = new Ellipse { Width = 6, Height = 6, Fill = brush, Stroke = Brushes.White, StrokeThickness = 1.2 };
+                var dot = new Ellipse { Width = dotSize, Height = dotSize, Fill = brush, Stroke = Brushes.White, StrokeThickness = 1.2 };
                 int realIdx = start;
                 int count = -1;
                 for (int j = start; j <= end; j++)
@@ -1495,8 +1518,21 @@ namespace ME.Views
                 }
                 dot.ToolTip = $"{seriesName}\n{days[realIdx]:yyyy-MM-dd}  值 {values[realIdx]:F1}";
                 canvas.Children.Add(dot);
-                Canvas.SetLeft(dot, pts[i].X - 3);
-                Canvas.SetTop(dot, pts[i].Y - 3);
+                Canvas.SetLeft(dot, pts[i].X - dotSize / 2);
+                Canvas.SetTop(dot, pts[i].Y - dotSize / 2);
+                // 单数据点：在点上方标出数值，避免"看不到折线"
+                if (isSingle)
+                {
+                    canvas.Children.Add(new TextBlock
+                    {
+                        Text = $"{values[realIdx]:F1}",
+                        FontSize = 11,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = brush
+                    });
+                    Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], pts[i].X - 10);
+                    Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], pts[i].Y - 24);
+                }
             }
         }
 
@@ -1805,8 +1841,8 @@ namespace ME.Views
             BodyCanvas.Children.Clear();
             var w = BodyCanvas.ActualWidth;
             var h = BodyCanvas.ActualHeight;
-            if (w < 50) w = 276;
-            if (h < 50) h = 360;
+            if (w < 50) w = 220;
+            if (h < 50) h = 340;
 
             var cx = w / 2.0;
             var fillBrush = new SolidColorBrush(Color.FromArgb(36, 0, 122, 255));   // 半透明主题蓝
@@ -1862,17 +1898,17 @@ namespace ME.Views
             }
 
             // 头（睡眠/心情）
-            AddPart("🧠", "睡眠/心情", cx - 28, 6, 56, 56, 28, "头部", "头部：睡眠 / 心情");
+            AddPart("🧠", "睡眠/心情", cx - 26, 4, 52, 52, 26, "头部", "头部：睡眠 / 心情");
             // 躯干（体重）
-            AddPart("🩺", "体重", cx - 42, 74, 84, 150, 22, "躯干", "躯干：体重（尿酸在腿部）");
+            AddPart("🩺", "体重", cx - 38, 66, 76, 130, 22, "躯干", "躯干：体重（尿酸在腿部）");
             // 左臂（喝水）
-            AddPart("💧", "喝水", cx - 88, 92, 36, 112, 18, "喝水", "左臂：喝水");
+            AddPart("💧", "喝水", cx - 76, 82, 32, 100, 16, "喝水", "左臂：喝水");
             // 右臂（用药）
-            AddPart("💊", "用药", cx + 52, 92, 36, 112, 18, "用药", "右臂：用药");
+            AddPart("💊", "用药", cx + 44, 82, 32, 100, 16, "用药", "右臂：用药");
             // 左腿（尿酸）
-            AddPart("💉", "尿酸", cx - 42, 236, 36, 112, 18, "尿酸", "左腿：尿酸");
+            AddPart("💉", "尿酸", cx - 38, 204, 32, 100, 16, "尿酸", "左腿：尿酸");
             // 右腿（体重）
-            AddPart("⚖️", "体重", cx + 6, 236, 36, 112, 18, "体重", "右腿：体重");
+            AddPart("⚖️", "体重", cx + 6, 204, 32, 100, 16, "体重", "右腿：体重");
         }
 
         private void ShowBodyPartDetail(string part)

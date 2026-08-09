@@ -518,13 +518,15 @@ namespace ME.Views
                     var selectedFiles = new List<string>();
                     if (BackupGoals.IsChecked == true) selectedFiles.Add("goals.json");
                     if (BackupTasks.IsChecked == true) selectedFiles.Add("tasks.json");
-                    if (BackupVisions.IsChecked == true) selectedFiles.Add("visions.json");
-                    if (BackupReviews.IsChecked == true) selectedFiles.Add("reviews.json");
                     if (BackupFocus.IsChecked == true) selectedFiles.Add("focus_sessions.json");
                     if (BackupSettings.IsChecked == true) selectedFiles.Add("settings.json");
                     if (BackupTags.IsChecked == true) selectedFiles.Add("tags.json");
                     if (BackupTimeRecords.IsChecked == true) selectedFiles.Add("time_records.json");
                     if (BackupTimeTags.IsChecked == true) selectedFiles.Add("time_tags.json");
+                    if (BackupHealth.IsChecked == true) selectedFiles.Add("health_records.json");
+                    if (BackupMeds.IsChecked == true) selectedFiles.Add("medications.json");
+                    if (BackupContainers.IsChecked == true) selectedFiles.Add("water_containers.json");
+                    if (BackupExerciseItems.IsChecked == true) selectedFiles.Add("exercise_items.json");
 
                     var merged = new Dictionary<string, object>();
                     foreach (var file in selectedFiles)
@@ -716,6 +718,34 @@ namespace ME.Views
             public string Color { get; set; }
             public string Name { get; set; }
             public ColorBallDef(string c, string n) { Color = c; Name = n; }
+        }
+
+        // ========== 关于：GitHub + 微信 ==========
+
+        private void OpenGithub_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://github.com/nailao946/OKR",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                ConfirmDialog.Show(Window.GetWindow(this), "错误", $"无法打开链接: {ex.Message}", "确定");
+            }
+        }
+
+        private void WechatText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                Clipboard.SetText("shuaim888888");
+                ConfirmDialog.Show(Window.GetWindow(this), "已复制", "微信号 shuaim888888 已复制到剪贴板", "确定");
+            }
+            catch { }
         }
     }
 }

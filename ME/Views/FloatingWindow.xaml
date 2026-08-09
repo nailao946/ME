@@ -135,10 +135,21 @@
                         <StackPanel x:Name="TaskListPanel" />
                     </ScrollViewer>
 
-                    <!-- Tag chips row -->
+                    <!-- Tag chips row + 久坐活动 -->
                     <Border Grid.Row="3" Padding="12,8"
                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-                        <WrapPanel x:Name="TagChipsPanel" />
+                        <StackPanel>
+                            <WrapPanel x:Name="TagChipsPanel" />
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,8,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="SedentaryFloatBtn" Content="🚶 久坐 +1" Click="SedentaryFloat_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}" Padding="12,5"
+                                        FontSize="11" Cursor="Hand" ToolTip="起身活动一次点一下，累计今日活动次数" />
+                                <TextBlock x:Name="SedentaryFloatText" Text="今日 0 次" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center" Margin="10,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
                     </Border>
                 </Grid>
             </Border>

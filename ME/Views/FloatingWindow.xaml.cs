@@ -22,6 +22,7 @@ namespace ME.Views
         private readonly SettingsRepository _settingsRepo;
         private readonly TaskRepository _taskRepo;
         private readonly TaskService _taskService;
+        private readonly HealthRepository _healthRepo;
         private bool _isClosingFromCode;
         private bool _isExpanded;
 
@@ -54,6 +55,7 @@ namespace ME.Views
             _settingsRepo = new SettingsRepository();
             _taskRepo = new TaskRepository();
             _taskService = new TaskService();
+            _healthRepo = new HealthRepository();
         }
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -97,6 +99,7 @@ namespace ME.Views
             if (pomoInit.Mode == UnifiedTimerMode.Pomodoro && pomoInit.CycleCount > 0)
                 UpdateCycleDisplay(pomoInit.CycleCount);
             LoadTagChips();
+            LoadSedentaryFloat();
         }
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
@@ -116,6 +119,7 @@ namespace ME.Views
             pomo.StateChanged -= OnPomoStateChanged;
             pomo.PhaseChanged -= OnPomoPhaseChanged;
             pomo.WorkPhaseEnded -= OnPomoWorkPhaseEnded;
+            EventAggregator.Instance.Unsubscribe<string>(OnGlobalEvent);
             SavePosition();
         }
 
@@ -1225,6 +1229,48 @@ namespace ME.Views
                         tb.Foreground = isActive ? Brushes.White : textBrush;
                     }
                 }
+            }
+        }
+
+        // ─── 久坐活动（悬浮窗快捷 +1）─────────────────────────────────
+
+        private void SedentaryFloat_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var today = DateTime.Today.ToString("yyyy-MM-dd");
+                var rec = _healthRepo.GetByTypeAndDate("sedentary", today);
+                if (rec == null)
+                {
+                    rec = new ME.Models.HealthRecord
+                    {
+                        Type = "sedentary",
+                        Date = today,
+                        Value = 0
+                    };
+                }
+                rec.Value += 1;
+                _healthRepo.Upsert(rec);
+                LoadSedentaryFloat();
+                // 若主窗口健康页已打开，同步刷新
+                EventAggregator.Instance.Publish("HealthDataChanged");
+            }
+            catch { }
+        }
+
+        private void LoadSedentaryFloat()
+        {
+            try
+            {
+                var today = DateTime.Today.ToString("yyyy-MM-dd");
+                var rec = _healthRepo.GetByTypeAndDate("sedentary", today);
+                var count = rec != null ? (int)rec.Value : 0;
+                SedentaryFloatText.Text = $"今日 {count} 次";
+                SedentaryFloatBtn.Content = count > 0 ? $"🚶 久坐 +1（今日 {count}）" : "🚶 久坐 +1";
+            }
+            catch
+            {
+                SedentaryFloatText.Text = "今日 0 次";
             }
         }
     }
