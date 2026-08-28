@@ -53,7 +53,79 @@ namespace ME.Views
                     VersionText.Text = $"版本 {ver.Major}.{ver.Minor}.{ver.Build}";
             }
             catch { }
+            LoadSyncConfig();
             AnimateSettingCards();
+        }
+
+        // ========== GitHub 云同步 ==========
+
+        private void LoadSyncConfig()
+        {
+            var c = GitHubSyncService.Load();
+            SyncRepoBox.Text = c.Repo;
+            SyncBranchBox.Text = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch;
+            SyncProxyBox.Text = c.Proxy;
+            if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
+            {
+                try { SyncTokenBox.Password = SecureStore.Decrypt(c.EncryptedToken); } catch { }
+            }
+            var last = "";
+            if (!string.IsNullOrEmpty(c.LastPushAt)) last += $"上次上传 {c.LastPushAt}  ";
+            if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}";
+            SyncLastTimeText.Text = last;
+        }
+
+        private void SaveSyncConfig()
+        {
+            var c = GitHubSyncService.Load();
+            c.Repo = SyncRepoBox.Text.Trim();
+            c.Branch = string.IsNullOrWhiteSpace(SyncBranchBox.Text) ? "main" : SyncBranchBox.Text.Trim();
+            c.Proxy = SyncProxyBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(SyncTokenBox.Password))
+                c.EncryptedToken = SecureStore.Encrypt(SyncTokenBox.Password.Trim());
+            GitHubSyncService.Save(c);
+        }
+
+        private async void SyncPush_Click(object sender, RoutedEventArgs e)
+        {
+            if (SyncRepoBox.Text.Trim() == "" || SyncTokenBox.Password.Trim() == "")
+            {
+                SyncStatusText.Text = "请先填写仓库名和 Token";
+                return;
+            }
+            SaveSyncConfig();
+            SyncPushBtn.IsEnabled = false; SyncPullBtn.IsEnabled = false;
+            SyncStatusText.Text = "上传中…";
+            try
+            {
+                var msg = await GitHubSyncService.PushAsync();
+                SyncStatusText.Text = msg;
+            }
+            catch (Exception ex) { SyncStatusText.Text = "上传失败：" + ex.Message; }
+            SyncPushBtn.IsEnabled = true; SyncPullBtn.IsEnabled = true;
+            LoadSyncConfig();
+        }
+
+        private async void SyncPull_Click(object sender, RoutedEventArgs e)
+        {
+            if (SyncRepoBox.Text.Trim() == "" || SyncTokenBox.Password.Trim() == "")
+            {
+                SyncStatusText.Text = "请先填写仓库名和 Token";
+                return;
+            }
+            if (MessageBox.Show("下载会用仓库数据覆盖本机数据（本机会先自动备份）。继续？", "云同步下载",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            SaveSyncConfig();
+            SyncPushBtn.IsEnabled = false; SyncPullBtn.IsEnabled = false;
+            SyncStatusText.Text = "下载中…";
+            try
+            {
+                var msg = await GitHubSyncService.PullAsync();
+                SyncStatusText.Text = msg;
+            }
+            catch (Exception ex) { SyncStatusText.Text = "下载失败：" + ex.Message; }
+            SyncPushBtn.IsEnabled = true; SyncPullBtn.IsEnabled = true;
+            LoadSyncConfig();
         }
 
         private void AnimateSettingCards()

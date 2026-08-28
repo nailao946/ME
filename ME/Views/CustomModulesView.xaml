@@ -1,0 +1,33 @@
+<UserControl x:Class="ME.Views.CustomModulesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+            <TextBlock Text="自定义模块" FontSize="22" FontWeight="Bold"
+                       Foreground="{DynamicResource TextBrush}" Margin="0,4,0,2" />
+            <TextBlock Text="创建你自己的记录块（PC 与安卓互通），像「健康」一样记录任何事"
+                       FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,12" />
+
+            <!-- 教程 -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="📘 使用教程" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                    <TextBlock Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap"
+                               Text="1. 点「＋ 新建模块」，填名称（如：跑步）、选颜色和图标；&#x0a;2. 添加字段：类型支持 数值（可带单位 km/分钟）、文本、时间、是否、单选（自定义候选值）；&#x0a;3. 保存后在模块卡片上点「记一笔」录入数据，点「历史」查看记录与趋势图；&#x0a;4. 数据保存在 custom_modules.json，随备份/云同步在 PC 与安卓之间互通；&#x0a;5. 随时可点「编辑」增删改字段，已有记录的字段值会保留。" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="我的模块" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" />
+                    <StackPanel x:Name="ModulesPanel" />
+                    <Button x:Name="AddBtn" TextElement.FontWeight="SemiBold" Content="＋ 新建模块"
+                            Style="{DynamicResource PrimaryButtonStyle}" Margin="0,10,0,0"
+                            HorizontalAlignment="Left" Click="AddModule_Click" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

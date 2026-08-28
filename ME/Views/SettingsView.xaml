@@ -229,6 +229,56 @@
                 </StackPanel>
             </Border>
 
+            <!-- GitHub Cloud Sync (PC ↔ Android) -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="GitHub 云同步（PC ↔ 安卓）" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                    <TextBlock Text="把数据上传到自己的 GitHub 私有仓库实现 PC / 安卓免费云同步。Token 需要 repo（Contents 读写）权限，用 DPAPI 加密保存，不会随数据上传。" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center" Width="100" />
+                        <TextBox x:Name="SyncRepoBox" Width="240" FontSize="12" Padding="8,5,8,5"
+                                 ToolTip="owner/name，如 nailao946/ME-Data" />
+                        <TextBlock Text="分支" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center" Margin="16,0,0,0" Width="40" />
+                        <TextBox x:Name="SyncBranchBox" Width="80" FontSize="12" Padding="8,5,8,5" Text="main" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="GitHub Token" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center" Width="100" />
+                        <PasswordBox x:Name="SyncTokenBox" Width="240" FontSize="12" Padding="8,5,8,5"
+                                     ToolTip="ghp_ 开头的 Personal Access Token（需要 repo 权限）" />
+                        <TextBlock Text="代理(可选)" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                   VerticalAlignment="Center" Margin="16,0,0,0" Width="70" />
+                        <TextBox x:Name="SyncProxyBox" Width="130" FontSize="12" Padding="8,5,8,5"
+                                 ToolTip="如 http://127.0.0.1:7897，留空直连" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Button x:Name="SyncPushBtn" Content="上传数据" Click="SyncPush_Click"
+                                Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
+                        <Button x:Name="SyncPullBtn" Content="下载数据" Click="SyncPull_Click"
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
+                        <TextBlock x:Name="SyncStatusText" FontSize="11"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock x:Name="SyncLastTimeText" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Custom Modules hint -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="自定义模块（可扩展记录块）" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                    <TextBlock FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"
+                               Text="教程：在左侧导航打开「自定义模块」→ 点「＋ 新建模块」→ 填名称、选颜色和图标 → 添加字段（如「跑步」类型数值，单位 km）→ 保存。之后在模块卡片上点「记一笔」录入，点「历史」看趋势图。模块数据存于 custom_modules.json，随备份/云同步在 PC 与安卓互通，每个模块可随时编辑。" />
+                </StackPanel>
+            </Border>
+
             <!-- AI Analysis (multi-provider) -->
             <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
                 <StackPanel>

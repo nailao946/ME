@@ -23,6 +23,14 @@ namespace ME.Services
             var app = Application.Current;
             if (app == null) return;
 
+            // WPF-UI (lepoco) Fluent 主题：让默认控件/文字颜色跟随深浅色（修复夜间模式黑字）
+            try
+            {
+                Wpf.Ui.Appearance.ApplicationThemeManager.Apply(
+                    isDark ? Wpf.Ui.Appearance.ApplicationTheme.Dark : Wpf.Ui.Appearance.ApplicationTheme.Light);
+            }
+            catch { /* 主题管理器不可用时退回自绘换色 */ }
+
             var dicts = app.Resources.MergedDictionaries;
 
             foreach (var dict in dicts)

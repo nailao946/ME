@@ -218,6 +218,12 @@ namespace ME.Views
 
         private Color GetGoalColor(Goal goal, List<GoalTag> allTags)
         {
+            // 自定义颜色优先（与安卓端互通）
+            if (!string.IsNullOrWhiteSpace(goal.ColorHex))
+            {
+                try { return (Color)ColorConverter.ConvertFromString(goal.ColorHex); }
+                catch { }
+            }
             if (goal.TagId.HasValue)
             {
                 var tag = allTags.Find(t => t.Id == goal.TagId.Value);

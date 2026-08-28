@@ -40,6 +40,10 @@ namespace ME.Models
         private GoalColor _color;
         public GoalColor Color { get => _color; set { _color = value; OnPropertyChanged(); } }
 
+        private string _colorHex;
+        /// <summary>自定义颜色（扩展字段，与安卓端互通；非空时优先于枚举 Color）</summary>
+        public string ColorHex { get => _colorHex; set { _colorHex = value; OnPropertyChanged(); } }
+
         private GoalTimeFrame _timeFrame;
         public GoalTimeFrame TimeFrame { get => _timeFrame; set { _timeFrame = value; OnPropertyChanged(); } }
 

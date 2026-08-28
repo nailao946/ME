@@ -2,7 +2,7 @@
 
 > 一款纯本地运行的 WPF 桌面应用，帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
 
-![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.9.28-orange)
+![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-2.0.0-orange)
 
 ---
 
@@ -207,3 +207,15 @@ dotnet publish "ME\ME.csproj" -c Release -r win-x64 --self-contained true -p:Pub
 ## License
 
 MIT
+
+
+---
+
+## v2.0.0 更新日志
+
+- **UI 库迁移**：ModernWpf → [WPF-UI (lepoco)](https://github.com/lepoco/wpfui) Fluent 主题，深浅色跟随主题切换，修复夜间模式黑字问题
+- **GitHub 免费云同步**：设置 → GitHub 云同步，数据上传到自己的私有仓库（Token DPAPI 加密保存，支持自定义代理），与安卓端互通
+- **自定义模块**：左侧导航新增「自定义模块」，像「健康」一样创建任意记录块（数值/文本/时间/是否/单选字段），带趋势图，PC 与安卓数据互通，设置内附使用教程
+- **目标自定义颜色**：目标支持 ColorHex 自定义色（与安卓端互通）
+- **任务手动排序修复**：拖拽落点按分区计算，同时保存 Priority + SortOrder，主任务/子任务排序均正常
+- 安卓版：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)
