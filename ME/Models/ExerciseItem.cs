@@ -26,6 +26,12 @@ namespace ME.Models
         /// <summary>weekly_days 时：每周第几天（1=周一 … 7=周日），逗号分隔</summary>
         public string WeeklyDays { get; set; }
 
+        /// <summary>分类标签，如"力量""塑形"（空 = 未分类）</summary>
+        public string Category { get; set; }
+
+        /// <summary>排序序号（越小越靠前，手动排序用）</summary>
+        public int SortOrder { get; set; }
+
         public string Note { get; set; }
 
         public bool IsDeleted { get; set; }

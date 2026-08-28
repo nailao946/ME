@@ -2266,9 +2266,11 @@ namespace ME.Views
 
         // ============ 锻炼 ============
         private List<ExerciseItem> _exerciseItems = new List<ExerciseItem>();
+        private string _exerciseCategory = "全部";
 
         private void LoadExercise()
         {
+            LoadExerciseCategories();
             LoadExerciseItems();
             LoadExerciseToday();
             DrawExerciseChart();
@@ -2369,38 +2371,77 @@ namespace ME.Views
             SedentaryChartCanvas.Children.Add(new Line { X1 = 0, Y1 = h - 18, X2 = w, Y2 = h - 18, Stroke = axisBrush, StrokeThickness = 1 });
         }
 
+        /// <summary>构建分类标签栏：全部 + 各分类（分类来自项目）</summary>
+        private void LoadExerciseCategories()
+        {
+            ExerciseCategoryPanel.Children.Clear();
+            var cats = new List<string> { "全部" };
+            cats.AddRange(_exerciseRepo.GetCategories());
+            foreach (var cat in cats)
+            {
+                var isSel = cat == _exerciseCategory;
+                var btn = new Button
+                {
+                    Content = cat,
+                    Tag = cat,
+                    Style = (Style)FindResource(isSel ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
+                    Padding = new Thickness(10, 3, 10, 3),
+                    FontSize = 11,
+                    Margin = new Thickness(0, 0, 6, 4)
+                };
+                var catCopy = cat;
+                btn.Click += (s, ev) =>
+                {
+                    _exerciseCategory = catCopy;
+                    LoadExerciseItems();
+                    LoadExerciseToday();
+                };
+                ExerciseCategoryPanel.Children.Add(btn);
+            }
+        }
+
+        /// <summary>当前分类下的项目（"全部"时返回全部）</summary>
+        private List<ExerciseItem> GetFilteredExerciseItems()
+        {
+            if (_exerciseCategory == "全部" || string.IsNullOrEmpty(_exerciseCategory))
+                return _exerciseItems;
+            return _exerciseItems.Where(it => string.Equals((it.Category ?? "").Trim(), _exerciseCategory, StringComparison.Ordinal)).ToList();
+        }
+
         private void LoadExerciseItems()
         {
             _exerciseItems = _exerciseRepo.GetAll();
+            var filtered = GetFilteredExerciseItems();
             // 下拉框：记住原选中项目
             int prevId = 0;
             if (ExerciseItemCombo.SelectedItem is ComboBoxItem prevSel &&
                 int.TryParse(prevSel.Tag?.ToString(), out var pv)) prevId = pv;
 
             ExerciseItemCombo.Items.Clear();
-            if (_exerciseItems.Count == 0)
+            if (filtered.Count == 0)
             {
                 ExerciseItemCombo.Items.Add(new ComboBoxItem { Content = "（请先新建项目）", Tag = "0" });
                 ExerciseItemCombo.SelectedIndex = 0;
             }
             else
             {
-                foreach (var it in _exerciseItems)
+                foreach (var it in filtered)
                     ExerciseItemCombo.Items.Add(new ComboBoxItem { Content = it.Name, Tag = it.Id });
-                var idx = _exerciseItems.FindIndex(i => i.Id == prevId);
+                var idx = filtered.FindIndex(i => i.Id == prevId);
                 ExerciseItemCombo.SelectedIndex = idx >= 0 ? idx : 0;
             }
             UpdateExerciseUnit();
 
-            // 项目列表卡片
+            // 项目列表卡片（按当前分类）
             ExerciseItemsPanel.Children.Clear();
-            if (_exerciseItems.Count == 0)
+            if (filtered.Count == 0)
             {
                 ExerciseItemsPanel.Children.Add(BuildEmptyHint("还没有锻炼项目，点击「＋ 新建项目」创建"));
                 return;
             }
-            foreach (var it in _exerciseItems)
+            for (int i = 0; i < filtered.Count; i++)
             {
+                var it = filtered[i];
                 var card = new Border
                 {
                     Style = (Style)FindResource("CardStyle"),
@@ -2410,6 +2451,31 @@ namespace ME.Views
                 var dock = new DockPanel();
                 var btnPanel = new StackPanel { Orientation = Orientation.Horizontal };
                 DockPanel.SetDock(btnPanel, Dock.Right);
+                // 上移
+                var upBtn = new Button
+                {
+                    Content = "▲",
+                    Style = (Style)FindResource("SecondaryButtonStyle"),
+                    Width = 26, Height = 24, FontSize = 9, Padding = new Thickness(0),
+                    Margin = new Thickness(4, 0, 0, 0),
+                    ToolTip = "上移（调整顺序）",
+                    IsEnabled = i > 0
+                };
+                var upId = it.Id;
+                var upIdx = i;
+                upBtn.Click += (s, ev) => MoveExerciseItem(upId, -1);
+                // 下移
+                var downBtn = new Button
+                {
+                    Content = "▼",
+                    Style = (Style)FindResource("SecondaryButtonStyle"),
+                    Width = 26, Height = 24, FontSize = 9, Padding = new Thickness(0),
+                    Margin = new Thickness(4, 0, 0, 0),
+                    ToolTip = "下移（调整顺序）",
+                    IsEnabled = i < filtered.Count - 1
+                };
+                var downId = it.Id;
+                downBtn.Click += (s, ev) => MoveExerciseItem(downId, +1);
                 var editBtn = new Button
                 {
                     Content = "✎",
@@ -2431,17 +2497,38 @@ namespace ME.Views
                     _exerciseRepo.Delete(id);
                     LoadExercise();
                 };
+                btnPanel.Children.Add(upBtn);
+                btnPanel.Children.Add(downBtn);
                 btnPanel.Children.Add(editBtn);
                 btnPanel.Children.Add(delBtn);
                 dock.Children.Add(btnPanel);
                 var info = new StackPanel();
-                info.Children.Add(new TextBlock
+                var nameRow = new StackPanel { Orientation = Orientation.Horizontal };
+                nameRow.Children.Add(new TextBlock
                 {
                     Text = it.Name,
                     FontSize = 13,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = (Brush)FindResource("TextBrush")
                 });
+                if (!string.IsNullOrEmpty(it.Category))
+                {
+                    nameRow.Children.Add(new Border
+                    {
+                        Background = (Brush)FindResource("PrimaryBrush"),
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(6, 1, 6, 1),
+                        Margin = new Thickness(8, 0, 0, 0),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Child = new TextBlock
+                        {
+                            Text = it.Category.Trim(),
+                            FontSize = 9,
+                            Foreground = Brushes.White
+                        }
+                    });
+                }
+                info.Children.Add(nameRow);
                 info.Children.Add(new TextBlock
                 {
                     Text = $"目标 {ExerciseRepository.TargetText(it)} · {ExerciseRepository.FrequencyDesc(it)}",
@@ -2453,6 +2540,17 @@ namespace ME.Views
                 card.Child = dock;
                 ExerciseItemsPanel.Children.Add(card);
             }
+        }
+
+        /// <summary>上移/下移：与当前视图（同分类）中的相邻项目交换 SortOrder</summary>
+        private void MoveExerciseItem(int id, int direction)
+        {
+            var filtered = GetFilteredExerciseItems();
+            var idx = filtered.FindIndex(x => x.Id == id);
+            var target = idx + direction;
+            if (idx < 0 || target < 0 || target >= filtered.Count) return;
+            _exerciseRepo.SwapSort(filtered[idx].Id, filtered[target].Id);
+            LoadExercise();
         }
 
         private void ExerciseItemCombo_Changed(object sender, SelectionChangedEventArgs e)
@@ -2525,7 +2623,7 @@ namespace ME.Views
                 ExerciseTodayPanel.Children.Add(BuildEmptyHint("暂无锻炼项目"));
                 return;
             }
-            foreach (var it in _exerciseItems)
+            foreach (var it in GetFilteredExerciseItems())
             {
                 var todaySum = records.Where(r => r.Date == todayStr && r.Detail == it.Id.ToString()).Sum(r => r.Value);
                 var yesterdaySum = records.Where(r => r.Date == yesterdayStr && r.Detail == it.Id.ToString()).Sum(r => r.Value);
@@ -2567,13 +2665,32 @@ namespace ME.Views
                 };
                 DockPanel.SetDock(statusText, Dock.Right);
                 dock.Children.Add(statusText);
-                dock.Children.Add(new TextBlock
+                var nameRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                nameRow.Children.Add(new TextBlock
                 {
                     Text = $"{it.Name}  {todaySum:0.##} / {it.TargetValue:0.##} {it.Unit}",
                     FontSize = 12,
                     Foreground = (Brush)FindResource("TextBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 });
+                if (!string.IsNullOrEmpty(it.Category))
+                {
+                    nameRow.Children.Add(new Border
+                    {
+                        Background = (Brush)FindResource("SecondaryTextBrush"),
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(6, 1, 6, 1),
+                        Margin = new Thickness(8, 0, 0, 0),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Child = new TextBlock
+                        {
+                            Text = it.Category.Trim(),
+                            FontSize = 9,
+                            Foreground = Brushes.White
+                        }
+                    });
+                }
+                dock.Children.Add(nameRow);
                 row.Child = dock;
                 ExerciseTodayPanel.Children.Add(row);
             }
@@ -2696,13 +2813,32 @@ namespace ME.Views
                 };
                 DockPanel.SetDock(valueText, Dock.Right);
                 dock.Children.Add(valueText);
-                dock.Children.Add(new TextBlock
+                var nameRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                nameRow.Children.Add(new TextBlock
                 {
                     Text = $"{r.Date}  {name}",
                     FontSize = 12,
                     Foreground = (Brush)FindResource("TextBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 });
+                if (it != null && !string.IsNullOrEmpty(it.Category))
+                {
+                    nameRow.Children.Add(new Border
+                    {
+                        Background = (Brush)FindResource("SecondaryTextBrush"),
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(6, 1, 6, 1),
+                        Margin = new Thickness(8, 0, 0, 0),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Child = new TextBlock
+                        {
+                            Text = it.Category.Trim(),
+                            FontSize = 9,
+                            Foreground = Brushes.White
+                        }
+                    });
+                }
+                dock.Children.Add(nameRow);
                 row.Child = dock;
                 ExerciseRecordsPanel.Children.Add(row);
             }

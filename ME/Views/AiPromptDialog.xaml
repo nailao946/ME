@@ -5,7 +5,7 @@
         Background="Transparent"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
-        Title="AI 分析提示词" Height="460" Width="560"
+        Title="AI 分析提示词" Height="640" Width="580"
         KeyDown="Window_KeyDown">
     <Border CornerRadius="14" Background="{DynamicResource BackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
@@ -48,9 +48,11 @@
                            TextWrapping="Wrap" Margin="0,0,0,8" />
                 <TextBox x:Name="PromptBox" Grid.Row="1"
                          Style="{StaticResource InputTextBoxStyle}"
+                         Height="Auto" MinHeight="360"
                          TextWrapping="Wrap" AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                         VerticalContentAlignment="Top" Padding="10" FontSize="12" />
+                         AcceptsTab="True"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         VerticalContentAlignment="Top" Padding="10" FontSize="13" />
             </Grid>
 
             <!-- Buttons -->

@@ -20,6 +20,9 @@ namespace ME.Views
             InitializeComponent();
             _editId = editId;
 
+            // 分类：已有分类 + 可输入自定义
+            CategoryCombo.ItemsSource = _repo.GetCategories();
+
             FreqCombo.ItemsSource = new[]
             {
                 new ComboBoxItem { Content = "每日", Tag = "daily" },
@@ -51,6 +54,10 @@ namespace ME.Views
             SelectComboByTag(UnitCombo, m.Unit);
             TargetValueBox.Text = m.TargetValue.ToString(CultureInfo.InvariantCulture);
             UpdateWeeklyPanel();
+            if (!string.IsNullOrEmpty(m.Category))
+            {
+                CategoryCombo.Text = m.Category.Trim();
+            }
             if (!string.IsNullOrEmpty(m.WeeklyDays))
             {
                 var days = m.WeeklyDays.Split(',').Select(s => int.TryParse(s, out var d) ? d : 0).ToHashSet();
@@ -151,6 +158,7 @@ namespace ME.Views
                 Unit = GetSelectedTag(UnitCombo) ?? "次",
                 Frequency = freq ?? "daily",
                 WeeklyDays = weeklyDays,
+                Category = CategoryCombo.Text?.Trim(),
                 Note = NoteBox.Text?.Trim()
             };
 

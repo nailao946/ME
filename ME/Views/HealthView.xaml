@@ -712,6 +712,11 @@
                     <StackPanel>
                         <TextBlock Text="记录锻炼" FontSize="14" FontWeight="Bold"
                                    Foreground="{DynamicResource TextBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="分类：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" />
+                            <WrapPanel x:Name="ExerciseCategoryPanel" VerticalAlignment="Center" />
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <TextBlock Text="项目：" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                        VerticalAlignment="Center" />

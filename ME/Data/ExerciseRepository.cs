@@ -14,7 +14,31 @@ namespace ME.Data
         {
             return JsonStore.Load<ExerciseItem>(FileName)
                 .Where(m => !m.IsDeleted)
-                .OrderBy(m => m.CreatedAt).ToList();
+                .OrderBy(m => m.SortOrder)
+                .ThenBy(m => m.CreatedAt).ToList();
+        }
+
+        /// <summary>所有分类（去重，去掉空值），保持首次出现顺序</summary>
+        public List<string> GetCategories()
+        {
+            return GetAll()
+                .Select(m => m.Category?.Trim())
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct()
+                .ToList();
+        }
+
+        /// <summary>上移/下移：交换两个项目的 SortOrder</summary>
+        public void SwapSort(int idA, int idB)
+        {
+            var items = JsonStore.Load<ExerciseItem>(FileName);
+            var a = items.FirstOrDefault(m => m.Id == idA && !m.IsDeleted);
+            var b = items.FirstOrDefault(m => m.Id == idB && !m.IsDeleted);
+            if (a == null || b == null) return;
+            var tmp = a.SortOrder;
+            a.SortOrder = b.SortOrder;
+            b.SortOrder = tmp;
+            JsonStore.Save(FileName, items);
         }
 
         public ExerciseItem GetById(int id)
@@ -28,6 +52,8 @@ namespace ME.Data
             var maxId = items.Count > 0 ? items.Max(m => m.Id) : 0;
             item.Id = maxId + 1;
             item.CreatedAt = DateTime.Now;
+            // 新项目排到末尾：SortOrder = 当前最大 + 1（老数据 SortOrder=0 时按 CreatedAt 兜底）
+            item.SortOrder = items.Count > 0 ? items.Max(m => m.SortOrder) + 1 : 0;
             items.Add(item);
             JsonStore.Save(FileName, items);
             return item.Id;
@@ -44,6 +70,7 @@ namespace ME.Data
                 existing.Unit = item.Unit;
                 existing.Frequency = item.Frequency;
                 existing.WeeklyDays = item.WeeklyDays;
+                existing.Category = item.Category;
                 existing.Note = item.Note;
             }
             JsonStore.Save(FileName, items);

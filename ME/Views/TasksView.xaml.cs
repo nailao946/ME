@@ -1282,6 +1282,35 @@ namespace ME.Views
         }
 
         // ============ DRAG AND DROP (matching GoalsView pattern) ============
+        // The tasks panel mixes section headers (TextBlock) and task wrappers (StackPanel),
+        // and the drag source list covers only one section, so the drop position must be
+        // computed among the contiguous wrapper run that contains the dragged card.
+        private List<StackPanel> GetSectionWrappers(StackPanel panel, StackPanel draggedWrapper)
+        {
+            var wrappers = new List<StackPanel>();
+            if (panel == null || draggedWrapper == null) return wrappers;
+            int idx = panel.Children.IndexOf(draggedWrapper);
+            if (idx < 0) return wrappers;
+            int start = idx;
+            while (start > 0 && panel.Children[start - 1] is StackPanel) start--;
+            int end = idx;
+            while (end + 1 < panel.Children.Count && panel.Children[end + 1] is StackPanel) end++;
+            for (int i = start; i <= end; i++)
+                if (panel.Children[i] is StackPanel sp) wrappers.Add(sp);
+            return wrappers;
+        }
+
+        private int ComputeDropIndexInSection(List<StackPanel> wrappers, Point mousePos, StackPanel panel)
+        {
+            for (int i = 0; i < wrappers.Count; i++)
+            {
+                var childPos = wrappers[i].TransformToAncestor(panel).Transform(new Point(0, 0));
+                if (mousePos.Y < childPos.Y + wrappers[i].ActualHeight / 2)
+                    return i;
+            }
+            return wrappers.Count;
+        }
+
         private void SetupDragDrop(Border card, TaskItem task, List<TaskItem> sourceList, StackPanel mainPanel)
         {
             card.PreviewMouseLeftButtonDown += (s, e) =>
@@ -1335,30 +1364,20 @@ namespace ME.Views
                     }
                 }
 
-                if (_isDragging && _dragMainPanel != null)
+                if (_isDragging && _dragMainPanel != null && _dragPanel != null)
                 {
                     bool hadPlaceholder = _placeholderBorder != null && _dragMainPanel.Children.Contains(_placeholderBorder);
                     if (hadPlaceholder) _dragMainPanel.Children.Remove(_placeholderBorder);
 
-                    var mousePos = e.GetPosition(_dragMainPanel);
-                    int dropIndex = 0;
-                    for (int i = 0; i < _dragMainPanel.Children.Count; i++)
+                    var sectionWrappers = GetSectionWrappers(_dragMainPanel, _dragPanel);
+                    int dropIndex = ComputeDropIndexInSection(sectionWrappers, e.GetPosition(_dragMainPanel), _dragMainPanel);
+                    if (_placeholderBorder != null && sectionWrappers.Count > 0)
                     {
-                        var child = _dragMainPanel.Children[i] as FrameworkElement;
-                        if (child == null) continue;
-                        var transform = child.TransformToAncestor(_dragMainPanel);
-                        var childPos = transform.Transform(new Point(0, 0));
-                        if (mousePos.Y < childPos.Y + child.ActualHeight / 2)
-                        {
-                            dropIndex = i;
-                            break;
-                        }
-                        dropIndex = i + 1;
+                        int anchor = dropIndex < sectionWrappers.Count ? dropIndex : sectionWrappers.Count - 1;
+                        int insertAt = _dragMainPanel.Children.IndexOf(sectionWrappers[anchor]);
+                        if (dropIndex >= sectionWrappers.Count) insertAt++;
+                        _dragMainPanel.Children.Insert(insertAt, _placeholderBorder);
                     }
-
-                    int insertIndex = Math.Min(dropIndex, _dragMainPanel.Children.Count);
-                    if (insertIndex >= 0 && _placeholderBorder != null)
-                        _dragMainPanel.Children.Insert(insertIndex, _placeholderBorder);
                 }
             };
 
@@ -1373,33 +1392,27 @@ namespace ME.Views
                     if (_placeholderBorder != null && _dragMainPanel != null && _dragMainPanel.Children.Contains(_placeholderBorder))
                         _dragMainPanel.Children.Remove(_placeholderBorder);
 
-                    var mousePos = e.GetPosition(_dragMainPanel);
-                    int dropIndex = 0;
-                    for (int i = 0; i < _dragMainPanel.Children.Count; i++)
-                    {
-                        var child = _dragMainPanel.Children[i] as FrameworkElement;
-                        if (child == null) continue;
-                        var transform = child.TransformToAncestor(_dragMainPanel);
-                        var childPos = transform.Transform(new Point(0, 0));
-                        if (mousePos.Y < childPos.Y + child.ActualHeight / 2)
-                        {
-                            dropIndex = i;
-                            break;
-                        }
-                        dropIndex = i + 1;
-                    }
+                    var sectionWrappers = _dragMainPanel != null && _dragPanel != null
+                        ? GetSectionWrappers(_dragMainPanel, _dragPanel)
+                        : new List<StackPanel>();
+                    int dropIndex = ComputeDropIndexInSection(sectionWrappers, e.GetPosition(_dragMainPanel), _dragMainPanel);
 
-                    if (dropIndex != _dragSourceIndex)
+                    if (dropIndex != _dragSourceIndex && _dragSourceList != null &&
+                        _dragSourceIndex >= 0 && _dragSourceIndex < _dragSourceList.Count &&
+                        dropIndex >= 0 && dropIndex <= _dragSourceList.Count)
                     {
                         var item = _dragSourceList[_dragSourceIndex];
                         _dragSourceList.RemoveAt(_dragSourceIndex);
                         if (dropIndex > _dragSourceIndex) dropIndex--;
+                        if (dropIndex < 0) dropIndex = 0;
+                        if (dropIndex > _dragSourceList.Count) dropIndex = _dragSourceList.Count;
                         _dragSourceList.Insert(dropIndex, item);
 
                         var repo = new TaskRepository();
                         for (int i = 0; i < _dragSourceList.Count; i++)
                         {
                             _dragSourceList[i].Priority = _dragSourceList.Count - i;
+                            _dragSourceList[i].SortOrder = i;
                             repo.UpdateTask(_dragSourceList[i]);
                         }
                         LoadData();
@@ -1527,6 +1540,8 @@ namespace ME.Views
                         var item = _dragSourceList[_dragSourceIndex];
                         _dragSourceList.RemoveAt(_dragSourceIndex);
                         if (dropIndex > _dragSourceIndex) dropIndex--;
+                        if (dropIndex < 0) dropIndex = 0;
+                        if (dropIndex > _dragSourceList.Count) dropIndex = _dragSourceList.Count;
                         _dragSourceList.Insert(dropIndex, item);
 
                         var repo = new TaskRepository();

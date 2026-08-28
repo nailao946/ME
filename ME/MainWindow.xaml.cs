@@ -38,6 +38,13 @@ namespace ME
             _vm = new MainWindowViewModel();
             DataContext = _vm;
 
+            // AllowsTransparency 窗口无法用 WindowChrome，用 WM_NCHITTEST 钩子实现可靠边缘拉伸
+            SourceInitialized += (s, e) =>
+            {
+                _hwndSource = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                _hwndSource?.AddHook(WindowProc);
+            };
+
             _isDarkTheme = ThemeService.IsDarkMode();
             UpdateThemeButton();
             SetupTrayIcon();
@@ -136,15 +143,53 @@ namespace ME
         // ========== MANUAL WINDOW RESIZE (AllowsTransparency) ==========
         [DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")]
+        private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
         private const uint WM_NCLBUTTONDOWN = 0xA1;
         private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+        private const int WM_NCHITTEST = 0x84;
+        private const int HTCLIENT = 1;
+        private const int HTCAPTION = 2;
+        private const int ResizeEdge = 10;
+
+        private System.Windows.Interop.HwndSource _hwndSource;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int X; public int Y; }
+
+        /// <summary>WM_NCHITTEST：窗口边缘 10px 返回系统拉伸区域，保证 AllowsTransparency 窗口也能自由拉伸</summary>
+        private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_NCHITTEST && WindowState != WindowState.Maximized)
+            {
+                var pt = new POINT
+                {
+                    X = (short)((long)lParam & 0xFFFF),
+                    Y = (short)(((long)lParam >> 16) & 0xFFFF)
+                };
+                ScreenToClient(hwnd, ref pt);
+                var w = ActualWidth;
+                var h = ActualHeight;
+                int ht = HTCLIENT;
+                if (pt.X < ResizeEdge) ht = pt.Y < ResizeEdge ? HTTOPLEFT : pt.Y > h - ResizeEdge ? HTBOTTOMLEFT : HTLEFT;
+                else if (pt.X > w - ResizeEdge) ht = pt.Y < ResizeEdge ? HTTOPRIGHT : pt.Y > h - ResizeEdge ? HTBOTTOMRIGHT : HTRIGHT;
+                else if (pt.Y < ResizeEdge) ht = HTTOP;
+                else if (pt.Y > h - ResizeEdge) ht = HTBOTTOM;
+                if (ht != HTCLIENT)
+                {
+                    handled = true;
+                    return (IntPtr)ht;
+                }
+            }
+            return IntPtr.Zero;
+        }
 
         private void ResizeBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             var pos = e.GetPosition(this);
             var w = ActualWidth;
             var h = ActualHeight;
-            const int edge = 8;
+            const int edge = ResizeEdge;
             int ht = 0;
             if (pos.X < edge) ht = pos.Y < edge ? HTTOPLEFT : pos.Y > h - edge ? HTBOTTOMLEFT : HTLEFT;
             else if (pos.X > w - edge) ht = pos.Y < edge ? HTTOPRIGHT : pos.Y > h - edge ? HTBOTTOMRIGHT : HTRIGHT;
@@ -560,6 +605,7 @@ namespace ME
 
         protected override void OnClosed(EventArgs e)
         {
+            _hwndSource?.RemoveHook(WindowProc);
             SharedTimerService.StopCurrent();
             CloseFloatingWindowPermanent();
             _notifyIcon?.Dispose();

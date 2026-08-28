@@ -11,7 +11,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <DisableHardwareAcceleration>true</DisableHardwareAcceleration>
     <ApplicationIcon>hobby_working_dailyroutine_life_time_management_icon_142245.ico</ApplicationIcon>
-    <Version>1.9.27.0</Version>
+    <Version>1.9.28.0</Version>
     <StartupObject>ME.App</StartupObject>
     <Authors>JOE</Authors>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
+    <PackageReference Include="WPF-UI" Version="3.0.5" />
   </ItemGroup>
 
 </Project>
