@@ -83,9 +83,19 @@
 
                 <!-- Nav: same background as workspace, no border -->
                 <Border Grid.Column="0" Background="{DynamicResource BackgroundBrush}">
-                    <ListBox x:Name="NavList" ItemsSource="{Binding NavItems}"
-                             SelectionChanged="NavList_SelectionChanged"
-                             Background="Transparent" BorderThickness="0" Margin="10,10,10,10">
+                    <DockPanel>
+                        <!-- 左下角云同步状态球：灰=未绑定/未同步，呼吸绿=同步中，绿=已同步，红=失败；点击重同步 -->
+                        <Border x:Name="SyncBallBtn" DockPanel.Dock="Bottom" Background="Transparent" Cursor="Hand"
+                                MouseLeftButtonUp="SyncBall_Click" Margin="16,0,10,12" Padding="2,4">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="SyncDot" Width="11" Height="11" VerticalAlignment="Center" Fill="#9CA3AF" />
+                                <TextBlock x:Name="SyncBallText" Text="云同步" FontSize="11" Margin="8,0,0,0"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" Opacity="0.7" />
+                            </StackPanel>
+                        </Border>
+                        <ListBox x:Name="NavList" ItemsSource="{Binding NavItems}"
+                                 SelectionChanged="NavList_SelectionChanged"
+                                 Background="Transparent" BorderThickness="0" Margin="10,10,10,4">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="12,10" />
@@ -129,11 +139,23 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                    </DockPanel>
                 </Border>
 
                 <!-- Workspace: same background, cards provide visual separation -->
                 <Grid Grid.Column="1" x:Name="ContentGrid" Margin="16,0,16,16" />
             </Grid>
+
+            <!-- 云同步轻提示（HUD）：左下角自动淡出，不遮挡不抢占界面 -->
+            <Border x:Name="SyncToast" Grid.Row="0" Grid.RowSpan="2" Panel.ZIndex="99"
+                    HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="18,0,0,44"
+                    MaxWidth="380" Visibility="Collapsed" IsHitTestVisible="False"
+                    Background="#E62E2E2E" CornerRadius="10" Padding="12,9">
+                <StackPanel Orientation="Horizontal" MaxWidth="356">
+                    <Ellipse x:Name="SyncToastDot" Width="8" Height="8" VerticalAlignment="Top" Margin="0,4,8,0" Fill="#22C55E" />
+                    <TextBlock x:Name="SyncToastText" Text="" FontSize="12" TextWrapping="Wrap" Foreground="#F3F4F6" />
+                </StackPanel>
+            </Border>
         </Grid>
     </Border>
     </Grid>

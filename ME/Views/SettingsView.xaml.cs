@@ -194,6 +194,7 @@ namespace ME.Views
                     try { SyncTokenBox.Password = SecureStore.Decrypt(GitHubSyncService.Load().EncryptedToken); } catch { }
                     SyncLoginBtn.IsEnabled = true;
                     RefreshAccountDisplay();
+                    SyncStatusService.RefreshLoginState();
                     SyncLoginStatus.Text = "✓ 授权成功，正在自动创建同步仓库 ME-Data…";
                     // 自动创建私有仓库 ME-Data 并写入配置，用户无需手填仓库名
                     try
@@ -219,6 +220,7 @@ namespace ME.Views
             SyncTokenBox.Password = "";
             SyncLoginStatus.Text = "";
             RefreshAccountDisplay();
+            SyncStatusService.RefreshLoginState();
         }
 
         private void SaveSyncConfig()

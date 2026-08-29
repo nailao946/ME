@@ -55,6 +55,10 @@ namespace ME
             // 启动自动同步（设置里可关；后台运行不阻塞启动，完成后通过事件刷新设置页状态）
             _ = GitHubSyncService.AutoSyncOnStartupAsync();
 
+            // 左下角云同步状态球：所有同步入口都经 SyncStatusService 登记结果
+            SyncStatusService.StateChanged += OnSyncStatusChanged;
+            SyncStatusService.RefreshLoginState();
+
             ThemeService.ThemeChanged += (theme) =>
             {
                 Dispatcher.BeginInvoke(() =>
@@ -71,6 +75,101 @@ namespace ME
         {
             ThemeService.Initialize();
             UpdateView(0);
+        }
+
+        // ========== 云同步状态球（左下角） ==========
+        private DoubleAnimation _syncBreathe;
+        private int _toastSeq;
+
+        private void OnSyncStatusChanged()
+        {
+            Dispatcher.BeginInvoke(new Action(UpdateSyncBall));
+        }
+
+        private void UpdateSyncBall()
+        {
+            var st = SyncStatusService.State;
+            bool breathe = false;
+            System.Windows.Media.Color c; string label;
+            switch (st)
+            {
+                case SyncBallState.Running: c = System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E); label = "同步中…"; breathe = true; break;
+                case SyncBallState.Success: c = System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E); label = "已同步"; break;
+                case SyncBallState.Failed: c = System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44); label = "同步失败"; break;
+                case SyncBallState.NotConfigured: c = System.Windows.Media.Color.FromRgb(0x9C, 0xA3, 0xAF); label = "未绑定"; break;
+                default: c = System.Windows.Media.Color.FromRgb(0x9C, 0xA3, 0xAF); label = "云同步"; break;
+            }
+            SetBreathe(breathe);
+            SyncDot.Fill = new SolidColorBrush(c);
+            SyncBallText.Text = label;
+            SyncBallBtn.ToolTip = st == SyncBallState.NotConfigured
+                ? "尚未绑定 GitHub，点击去设置登录"
+                : st == SyncBallState.Running
+                    ? "正在同步…"
+                    : (string.IsNullOrWhiteSpace(SyncStatusService.Message)
+                        ? "点击立即云同步（先上传后下载，自动比较新旧，只传有变化的部分）"
+                        : SyncStatusService.Message + "\n点击重新同步");
+            if (SyncStatusService.ToastPending && (st == SyncBallState.Success || st == SyncBallState.Failed))
+            {
+                SyncStatusService.ConsumeToast();
+                ShowSyncToast(SyncStatusService.Message, st == SyncBallState.Success);
+            }
+        }
+
+        /** 同步中：状态球呼吸闪烁（透明度往复），结束即停 */
+        private void SetBreathe(bool on)
+        {
+            if (on && _syncBreathe == null)
+            {
+                _syncBreathe = new DoubleAnimation(1, 0.35, TimeSpan.FromMilliseconds(650))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                SyncDot.BeginAnimation(UIElement.OpacityProperty, _syncBreathe);
+            }
+            else if (!on && _syncBreathe != null)
+            {
+                _syncBreathe = null;
+                SyncDot.BeginAnimation(UIElement.OpacityProperty, null);
+            }
+        }
+
+        /** 左下角轻提示（HUD）：浮现后停留约 2.8 秒自动淡出，不遮挡不抢占界面 */
+        private void ShowSyncToast(string msg, bool ok)
+        {
+            SyncToastDot.Fill = new SolidColorBrush(ok ? System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E) : System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
+            SyncToastText.Text = msg;
+            SyncToast.Visibility = Visibility.Visible;
+            int seq = ++_toastSeq;
+            var sb = new Storyboard();
+            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160));
+            var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(450)) { BeginTime = TimeSpan.FromMilliseconds(2800) };
+            foreach (var a in new[] { fadeIn, fadeOut })
+            {
+                Storyboard.SetTarget(a, SyncToast);
+                Storyboard.SetTargetProperty(a, new PropertyPath("Opacity"));
+                sb.Children.Add(a);
+            }
+            sb.Completed += (s, e) => { if (seq == _toastSeq) SyncToast.Visibility = Visibility.Collapsed; };
+            sb.Begin(SyncToast);
+        }
+
+        private async void SyncBall_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            var c = GitHubSyncService.Load();
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
+            {
+                ShowSyncToast("尚未绑定 GitHub，先到「设置 → 数据与备份」登录", false);
+                int idx = 7;
+                foreach (var n in _vm.NavItems)
+                    if (n.Name == "设置") { idx = n.ViewIndex; break; }
+                NavList.SelectedIndex = idx;
+                return;
+            }
+            if (SyncStatusService.State == SyncBallState.Running) return;
+            await GitHubSyncService.SyncAsync(toast: true);
         }
 
         private void UpdateThemeButton()

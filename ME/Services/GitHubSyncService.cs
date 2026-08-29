@@ -410,7 +410,21 @@ namespace ME.Services
         /// 云端较新→下载到本地；本地较新→上传到云端；两边都改过→跳过并提示；无变化→跳过。
         /// 启动自动同步与设置页都可调用。
         /// </summary>
-        public static async Task<string> SyncAsync()
+        /// <summary>
+        /// 智能同步入口（带状态球登记）：toast=true 时完成后弹左下角轻提示（状态球/触发式同步用）。
+        /// 启动自动同步与设置页调用时 toast=false，不弹提示。
+        /// </summary>
+        public static async Task<string> SyncAsync(bool toast = false)
+        {
+            SyncStatusService.SetRunning();
+            string r;
+            try { r = await SyncCoreAsync().ConfigureAwait(false); }
+            catch (Exception ex) { r = "✗ 同步失败：" + ex.Message; }
+            SyncStatusService.Report(r, toast);
+            return r;
+        }
+
+        private static async Task<string> SyncCoreAsync()
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken))
@@ -539,9 +553,18 @@ namespace ME.Services
             }
         }
 
-        /// <summary>上传 JsonData 全部 JSON 文件（逐文件 commit，已存在则带 sha 更新）。
-        /// 防覆盖：若某文件云端 sha 与上次同步记录不一致（其它设备改过），跳过该文件并提示先下载。</summary>
+        /// <summary>上传入口（带状态球登记）：结果同步反映到左下角状态球</summary>
         public static async Task<string> PushAsync()
+        {
+            SyncStatusService.SetRunning();
+            string r;
+            try { r = await PushCoreAsync().ConfigureAwait(false); }
+            catch (Exception ex) { r = "✗ 上传失败：" + ex.Message; }
+            SyncStatusService.Report(r, false);
+            return r;
+        }
+
+        private static async Task<string> PushCoreAsync()
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken))
@@ -609,8 +632,18 @@ namespace ME.Services
             return baseMsg;
         }
 
-        /// <summary>从仓库 data/ 目录下载并覆盖本地（先备份本地 JsonData）</summary>
+        /// <summary>下载入口（带状态球登记）：结果同步反映到左下角状态球</summary>
         public static async Task<string> PullAsync()
+        {
+            SyncStatusService.SetRunning();
+            string r;
+            try { r = await PullCoreAsync().ConfigureAwait(false); }
+            catch (Exception ex) { r = "✗ 下载失败：" + ex.Message; }
+            SyncStatusService.Report(r, false);
+            return r;
+        }
+
+        private static async Task<string> PullCoreAsync()
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken))
