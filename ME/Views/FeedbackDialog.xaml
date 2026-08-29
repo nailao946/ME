@@ -1,0 +1,72 @@
+<Window x:Class="ME.Views.FeedbackDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Title="提意见 / 反馈 Bug" Height="500" Width="560"
+        KeyDown="Window_KeyDown">
+    <Border CornerRadius="14" Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Opacity="0.25" BlurRadius="24" ShadowDepth="2" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <Border Grid.Row="0" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseDown"
+                    Background="{DynamicResource CardBrush}">
+                <Grid Margin="16,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="12" Height="12" CornerRadius="3"
+                                Background="{DynamicResource PrimaryBrush}"
+                                VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="提意见 / 反馈 Bug" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+                    <Button Content="✕" Click="Cancel_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"
+                            Padding="8,2" FontSize="12"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Content -->
+            <Grid Grid.Row="1" Margin="20,14,20,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="反馈将作为 Issue 提交到项目 GitHub 仓库（github.com/nailao946/ME），提交使用「数据与备份」中已绑定的 GitHub 账号；第一行会自动作为标题。"
+                           FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                           TextWrapping="Wrap" Margin="0,0,0,8" />
+                <TextBox x:Name="ContentBox" Grid.Row="1"
+                         Style="{StaticResource InputTextBoxStyle}"
+                         TextWrapping="Wrap" AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         VerticalContentAlignment="Top" Padding="10" FontSize="13"
+                         ToolTip="写下你的建议或遇到的问题" />
+                <TextBlock x:Name="StatusText" Grid.Row="2" FontSize="11"
+                           Foreground="#E53935" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Visibility="Collapsed" />
+            </Grid>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,8,20,16">
+                <Button x:Name="CancelButton" Content="取消" Click="Cancel_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"
+                        Padding="20,8" Margin="0,0,10,0" FontSize="13" />
+                <Button x:Name="SubmitButton" Content="提交反馈" Click="Submit_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"
+                        Padding="20,8" FontSize="13" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

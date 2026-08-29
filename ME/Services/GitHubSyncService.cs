@@ -202,6 +202,54 @@ namespace ME.Services
         }
         private static string _resolvedRepo;
 
+        /// <summary>反馈提交目标仓库（项目 Issues，非用户的同步数据仓库）</summary>
+        private const string FeedbackRepo = "nailao946/ME";
+
+        /// <summary>
+        /// 提交用户反馈到项目仓库 Issues。任何 GitHub 账号都能在公开仓库提 issue，无需仓库写权限；
+        /// 首行作为标题（过长截断），正文自动附上版本与平台信息便于定位问题。返回 issue 编号。
+        /// </summary>
+        public static async Task<int> SubmitFeedbackAsync(string content)
+        {
+            var c = Load();
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
+                throw new Exception("尚未绑定 GitHub，请先在「设置 → 数据与备份」中登录后再提交反馈");
+            var text = (content ?? "").Trim();
+            if (text.Length == 0) throw new Exception("请先填写反馈内容");
+
+            var firstLine = text.Split('\n')[0].Trim();
+            var title = Truncate(firstLine, 40) + (firstLine.Length > 40 ? "…" : "");
+            var body = text + $"\n\n---\n来自 ME 桌面版 v{AppVersionText} · Windows";
+            var payload = new Dictionary<string, string> { ["title"] = title, ["body"] = body };
+
+            using var client = CreateClient(c);
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"https://api.github.com/repos/{FeedbackRepo}/issues")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
+            using var resp = await client.SendAsync(req).ConfigureAwait(false);
+            var respText = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"提交失败：HTTP {(int)resp.StatusCode} {Truncate(respText, 160)}");
+            using var doc = JsonDocument.Parse(respText);
+            return doc.RootElement.TryGetProperty("number", out var n) ? n.GetInt32() : 0;
+        }
+
+        private static string AppVersionText
+        {
+            get
+            {
+                try
+                {
+                    var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                    if (v != null) return $"{v.Major}.{v.Minor}.{v.Build}";
+                }
+                catch { }
+                return "?";
+            }
+        }
+
         private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
         public static string ConfigPath => Path.Combine(

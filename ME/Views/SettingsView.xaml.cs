@@ -967,6 +967,12 @@ namespace ME.Views
             }
         }
 
+        private void Feedback_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new FeedbackDialog { Owner = Window.GetWindow(this) };
+            dlg.ShowDialog();
+        }
+
         private void WechatText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             try
