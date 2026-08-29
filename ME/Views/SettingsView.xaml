@@ -63,9 +63,9 @@
             </ListBox>
         </Border>
 
-        <!-- 右侧内容页 -->
+        <!-- 右侧内容页：面板固定伸展到可用宽度（上限 640），保证每页所有功能卡等长 -->
         <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="SettingsCardsPanel" MaxWidth="640" HorizontalAlignment="Left" Margin="20,16,20,20">
+            <StackPanel x:Name="SettingsCardsPanel" MaxWidth="640" HorizontalAlignment="Stretch" Margin="20,16,20,20">
                 <TextBlock x:Name="SettingsPageTitle" Text="外观" FontSize="20" FontWeight="Bold"
                            Foreground="{DynamicResource TextBrush}" Margin="0,0,0,14" />
 
