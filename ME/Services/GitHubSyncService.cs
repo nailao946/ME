@@ -22,6 +22,8 @@ namespace ME.Services
         public class SyncConfig
         {
             public string EncryptedToken { get; set; } = "";
+            public string EncryptedRefreshToken { get; set; } = ""; // GitHub App 开启「令牌过期」时用于自动续期
+            public string TokenExpiresAt { get; set; } = "";        // 令牌到期本地时间；空 = 令牌不过期
             public string Repo { get; set; } = "";       // owner/name
             public string Branch { get; set; } = "main";
             public string Proxy { get; set; } = "";      // 可选，如 http://127.0.0.1:7897
@@ -101,9 +103,9 @@ namespace ME.Services
             var token = r.GetProperty("access_token").GetString();
             // 拉取用户名用于显示，失败不影响登录
             c.EncryptedToken = SecureStore.Encrypt(token);
+            StoreExpiry(c, r);
             string account = "";
             try { account = await FetchLoginAsync(c).ConfigureAwait(false); } catch { }
-            c.EncryptedToken = SecureStore.Encrypt(token);
             c.AccountName = account;
             Save(c);
             return token;
@@ -120,6 +122,8 @@ namespace ME.Services
         {
             var c = Load();
             c.EncryptedToken = "";
+            c.EncryptedRefreshToken = "";
+            c.TokenExpiresAt = "";
             c.AccountName = "";
             Save(c);
             _resolvedRepo = null;
@@ -128,13 +132,14 @@ namespace ME.Services
         /// <summary>带鉴权头拉取当前登录的 GitHub 用户名（顺带缓存到配置）</summary>
         private static async Task<string> FetchLoginAsync(SyncConfig c)
         {
+            await EnsureFreshTokenAsync(c).ConfigureAwait(false);
             using var client = CreateClient(c);
             using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
+            req.Headers.Authorization = AuthHeader(c);
             using var resp = await client.SendAsync(req).ConfigureAwait(false);
             var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
-                throw new Exception($"获取账号失败：HTTP {(int)resp.StatusCode} {Truncate(text, 160)}");
+                throw new Exception("获取账号失败：" + DescribeApiError((int)resp.StatusCode, text));
             using var doc = JsonDocument.Parse(text);
             var login = doc.RootElement.GetProperty("login").GetString() ?? "";
             if (string.IsNullOrWhiteSpace(login)) throw new Exception("无法获取 GitHub 用户名");
@@ -159,6 +164,7 @@ namespace ME.Services
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken)) throw new Exception("尚未登录 GitHub 账号");
+            await EnsureFreshTokenAsync(c).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-Data";
             var name = c.Repo.Contains('/') ? c.Repo.Substring(c.Repo.IndexOf('/') + 1) : c.Repo;
             if (string.IsNullOrWhiteSpace(name)) name = "ME-Data";
@@ -174,12 +180,12 @@ namespace ME.Services
                 {
                     Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
                 };
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
+                req.Headers.Authorization = AuthHeader(c);
                 using var resp = await client.SendAsync(req).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 422)
                 {
                     var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    throw new Exception($"创建仓库失败：HTTP {(int)resp.StatusCode} {Truncate(text, 160)}");
+                    throw new Exception("创建仓库失败：" + DescribeApiError((int)resp.StatusCode, text));
                 }
             }
             catch (Exception ex) when (ex.Message.Contains("422")) { /* 已存在 */ }
@@ -222,16 +228,17 @@ namespace ME.Services
             var body = text + $"\n\n---\n来自 ME 桌面版 v{AppVersionText} · Windows";
             var payload = new Dictionary<string, string> { ["title"] = Truncate(t, 80), ["body"] = body };
 
+            await EnsureFreshTokenAsync(c).ConfigureAwait(false);
             using var client = CreateClient(c);
             using var req = new HttpRequestMessage(HttpMethod.Post, $"https://api.github.com/repos/{FeedbackRepo}/issues")
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
             };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
+            req.Headers.Authorization = AuthHeader(c);
             using var resp = await client.SendAsync(req).ConfigureAwait(false);
             var respText = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
-                throw new Exception($"提交失败：HTTP {(int)resp.StatusCode} {Truncate(respText, 160)}");
+                throw new Exception("提交失败：" + DescribeApiError((int)resp.StatusCode, respText));
             using var doc = JsonDocument.Parse(respText);
             return doc.RootElement.TryGetProperty("number", out var n) ? n.GetInt32() : 0;
         }
@@ -302,21 +309,92 @@ namespace ME.Services
 
         private static async Task<JsonElement> SendAsync(SyncConfig c, HttpMethod method, string url, object payload = null)
         {
+            await EnsureFreshTokenAsync(c).ConfigureAwait(false);
             using var client = CreateClient(c);
             using var req = new HttpRequestMessage(method, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
+            req.Headers.Authorization = AuthHeader(c);
             if (payload != null)
                 req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
             using var resp = await client.SendAsync(req).ConfigureAwait(false);
             var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
-                throw new Exception($"HTTP {(int)resp.StatusCode}：{Truncate(text, 240)}");
+                throw new Exception(DescribeApiError((int)resp.StatusCode, text));
             if (string.IsNullOrWhiteSpace(text)) return default;
             using var doc = JsonDocument.Parse(text);
             return doc.RootElement.Clone();
         }
 
         private static string Truncate(string s, int n) => string.IsNullOrEmpty(s) || s.Length <= n ? s : s.Substring(0, n);
+
+        /// <summary>统一鉴权头：令牌解密失败/为空时直接给出可操作的提示，不发出空凭据</summary>
+        private static AuthenticationHeaderValue AuthHeader(SyncConfig c)
+        {
+            var t = SecureStore.Decrypt(c.EncryptedToken);
+            if (string.IsNullOrWhiteSpace(t))
+                throw new Exception("本机保存的 GitHub 授权无法读取，请重新授权登录");
+            return new AuthenticationHeaderValue("Bearer", t);
+        }
+
+        /// <summary>统一 API 错误文案：401 = 令牌已在 GitHub 侧失效（被撤销或过期），引导重新授权</summary>
+        private static string DescribeApiError(int status, string body)
+        {
+            if (status == 401)
+                return "GitHub 授权已失效（令牌被撤销或已过期），请在上方点「重新授权」重新登录一次即可恢复";
+            return $"HTTP {status}：{Truncate(body, 240)}";
+        }
+
+        /// <summary>把授权接口返回的过期信息存进配置（应用未开启「令牌过期」时没有这两个字段，存空）</summary>
+        private static void StoreExpiry(SyncConfig c, JsonElement r)
+        {
+            if (r.TryGetProperty("refresh_token", out var rt) && !string.IsNullOrWhiteSpace(rt.GetString()))
+                c.EncryptedRefreshToken = SecureStore.Encrypt(rt.GetString());
+            else
+                c.EncryptedRefreshToken = "";
+            if (r.TryGetProperty("expires_in", out var ex) && ex.TryGetInt32(out int secs) && secs > 0)
+                c.TokenExpiresAt = DateTime.Now.AddSeconds(secs).ToString("yyyy-MM-dd HH:mm:ss");
+            else
+                c.TokenExpiresAt = "";
+        }
+
+        /// <summary>
+        /// GitHub App 开启「令牌过期」后用户令牌 8 小时失效：到期前 10 分钟内自动用 refresh_token 换新，
+        /// 用户无需反复重新授权。未存过期时间（应用关闭过期）时什么都不做；换新失败不打断，
+        /// 让后续请求自然收到 401 并看到重新授权提示。
+        /// </summary>
+        private static async Task EnsureFreshTokenAsync(SyncConfig c)
+        {
+            if (string.IsNullOrWhiteSpace(c.TokenExpiresAt) || string.IsNullOrWhiteSpace(c.EncryptedRefreshToken))
+                return;
+            if (!DateTime.TryParse(c.TokenExpiresAt, out var exp)) return;
+            if (exp - DateTime.Now > TimeSpan.FromMinutes(10)) return;
+            var rt = SecureStore.Decrypt(c.EncryptedRefreshToken);
+            if (string.IsNullOrWhiteSpace(rt)) return;
+            try
+            {
+                using var client = CreateClient(c);
+                var payload = new Dictionary<string, string>
+                {
+                    ["client_id"] = OAuthClientId,
+                    ["grant_type"] = "refresh_token",
+                    ["refresh_token"] = rt
+                };
+                using var req = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token");
+                req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                req.Content = new FormUrlEncodedContent(payload);
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(text);
+                var r = doc.RootElement;
+                if (!r.TryGetProperty("access_token", out var at)) return;
+                c.EncryptedToken = SecureStore.Encrypt(at.GetString());
+                if (r.TryGetProperty("refresh_token", out var nrt) && !string.IsNullOrWhiteSpace(nrt.GetString()))
+                    c.EncryptedRefreshToken = SecureStore.Encrypt(nrt.GetString()); // GitHub 每次刷新都会轮换 refresh_token
+                if (r.TryGetProperty("expires_in", out var nx) && nx.TryGetInt32(out int secs) && secs > 0)
+                    c.TokenExpiresAt = DateTime.Now.AddSeconds(secs).ToString("yyyy-MM-dd HH:mm:ss");
+                Save(c);
+            }
+            catch { }
+        }
 
         private static string HashFile(string path)
         {
