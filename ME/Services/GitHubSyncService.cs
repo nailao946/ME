@@ -127,6 +127,55 @@ namespace ME.Services
             Save(c);
         }
 
+        /// <summary>
+        /// 确保默认同步仓库存在：自动在用户账号下创建私有仓库 ME-OKR 并写入配置（已存在则直接使用）。
+        /// 返回配置好的 owner/name。登录后和上传/下载前（仓库为空时）调用，用户无需手填仓库名。
+        /// </summary>
+        public static async Task<string> EnsureDefaultRepoAsync()
+        {
+            var c = Load();
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken)) throw new Exception("尚未登录 GitHub 账号");
+            if (!string.IsNullOrWhiteSpace(c.Repo) && c.Repo.EndsWith("/ME-OKR")) return c.Repo;
+
+            string login = c.AccountName;
+            if (string.IsNullOrWhiteSpace(login))
+            {
+                using var client = CreateClient(c);
+                using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode) throw new Exception($"获取账号失败：HTTP {(int)resp.StatusCode}");
+                using var doc = JsonDocument.Parse(text);
+                login = doc.RootElement.GetProperty("login").GetString() ?? "";
+            }
+            if (string.IsNullOrWhiteSpace(login)) throw new Exception("无法获取 GitHub 用户名");
+
+            // 创建私有仓库（422 = 已存在，直接用）
+            string repoName = $"{login}/ME-OKR";
+            try
+            {
+                var payload = new Dictionary<string, object> { ["name"] = "ME-OKR", ["private"] = true, ["auto_init"] = false };
+                using var client = CreateClient(c);
+                using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.github.com/user/repos")
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+                };
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 422)
+                {
+                    var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    throw new Exception($"创建仓库失败：HTTP {(int)resp.StatusCode} {Truncate(text, 160)}");
+                }
+            }
+            catch (Exception ex) when (ex.Message.Contains("422")) { /* 已存在 */ }
+
+            c.Repo = repoName;
+            if (string.IsNullOrWhiteSpace(c.Branch)) c.Branch = "main";
+            if (string.IsNullOrWhiteSpace(c.AccountName)) c.AccountName = login;
+            Save(c);
+            return repoName;
+        }
+
         private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
         public static string ConfigPath => Path.Combine(
@@ -190,8 +239,13 @@ namespace ME.Services
         public static async Task<string> PushAsync()
         {
             var c = Load();
-            if (string.IsNullOrWhiteSpace(c.Repo) || string.IsNullOrWhiteSpace(c.EncryptedToken))
-                return "✗ 请先填写仓库名和 Token";
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
+                return "✗ 请先登录 GitHub 账号或填写 Token";
+            if (string.IsNullOrWhiteSpace(c.Repo))
+            {
+                try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
+                catch (Exception ex) { return "✗ " + ex.Message; }
+            }
             if (!Directory.Exists(DataDir)) return "✗ 没有可上传的数据";
             var files = Directory.GetFiles(DataDir, "*.json");
             if (files.Length == 0) return "✗ 没有可上传的数据";
@@ -233,8 +287,13 @@ namespace ME.Services
         public static async Task<string> PullAsync()
         {
             var c = Load();
-            if (string.IsNullOrWhiteSpace(c.Repo) || string.IsNullOrWhiteSpace(c.EncryptedToken))
-                return "✗ 请先填写仓库名和 Token";
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
+                return "✗ 请先登录 GitHub 账号或填写 Token";
+            if (string.IsNullOrWhiteSpace(c.Repo))
+            {
+                try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
+                catch (Exception ex) { return "✗ " + ex.Message; }
+            }
             JsonElement listing;
             try
             {

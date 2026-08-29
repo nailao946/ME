@@ -451,13 +451,13 @@ namespace ME.Views
 
             // 先声明全部控件（类型按钮的 Click 会引用它们）
             var fieldLabel = new TextBlock { Text = "统计字段", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 12, 0, 6) };
-            var fieldCombo = new ComboBox { FontSize = 12.5, Padding = new Thickness(8, 6, 8, 6), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200 };
+            var fieldCombo = new ComboBox { FontSize = 12.5, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200 };
             var aggLabel = new TextBlock { Text = "聚合方式", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 12, 0, 6) };
-            var aggCombo = new ComboBox { FontSize = 12.5, Padding = new Thickness(8, 6, 8, 6), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200, ItemsSource = new[] { "求和 sum", "平均 avg", "最大 max", "最小 min", "最新 latest", "记录数 count" } };
+            var aggCombo = new ComboBox { FontSize = 12.5, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200, ItemsSource = new[] { "求和 sum", "平均 avg", "最大 max", "最小 min", "最新 latest", "记录数 count" } };
             var rangeLabel = new TextBlock { Text = "统计范围", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 12, 0, 6) };
-            var rangeCombo = new ComboBox { FontSize = 12.5, Padding = new Thickness(8, 6, 8, 6), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200, ItemsSource = new[] { "今天", "本周", "本月", "全部" } };
+            var rangeCombo = new ComboBox { FontSize = 12.5, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200, ItemsSource = new[] { "今天", "本周", "本月", "全部" } };
             var daysLabel = new TextBlock { Text = "趋势天数", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 12, 0, 6) };
-            var daysCombo = new ComboBox { FontSize = 12.5, Padding = new Thickness(8, 6, 8, 6), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200, ItemsSource = new[] { "近 7 天", "近 30 天" } };
+            var daysCombo = new ComboBox { FontSize = 12.5, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 200, ItemsSource = new[] { "近 7 天", "近 30 天" } };
 
             root.Children.Add(new TextBlock { Text = "组件类型", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 6) });
             var typePanel = new UniformGrid { Columns = 4 };
@@ -467,7 +467,7 @@ namespace ME.Views
             {
                 var b = new Button
                 {
-                    Content = name, FontSize = 12, Padding = new Thickness(8, 7, 8, 7), Margin = new Thickness(2, 0, 2, 0),
+                    Content = name, FontSize = 12, Height = 36, Padding = new Thickness(4), Margin = new Thickness(2, 0, 2, 0), VerticalContentAlignment = VerticalAlignment.Center,
                     Cursor = Cursors.Hand
                 };
                 b.Click += (s, e) => { draft.Type = tp; RefreshTypeUi(); };
@@ -735,7 +735,7 @@ namespace ME.Views
 
             var root = new StackPanel { Margin = new Thickness(18) };
 
-            var nameBox = new TextBox { Text = initial?.Name ?? "", FontSize = 13, Padding = new Thickness(8, 6, 8, 6) };
+            var nameBox = new TextBox { Text = initial?.Name ?? "", FontSize = 13, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
             root.Children.Add(FormRow("模块名称", nameBox));
 
             int iconIdx = initial?.Icon ?? 0;
@@ -746,7 +746,10 @@ namespace ME.Views
                 int idx = i;
                 var b = new Button
                 {
-                    Content = ModuleIcons[i], FontSize = 15, Width = 34, Height = 32, Margin = new Thickness(0, 0, 4, 4),
+                    Content = ModuleIcons[i], FontSize = 16, Width = 40, Height = 36,
+                    Padding = new Thickness(0),
+                    FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"),
+                    Margin = new Thickness(0, 0, 4, 4),
                     Style = (Style)FindResource("SecondaryButtonStyle"), Cursor = Cursors.Hand
                 };
                 b.Click += (s, e) => iconIdx = idx;
@@ -754,7 +757,7 @@ namespace ME.Views
             }
             root.Children.Add(FormRow("图标（点击选中）", iconPanel));
 
-            var colorBox = new TextBox { Text = colorHex, FontSize = 13, Width = 110, Padding = new Thickness(8, 6, 8, 6) };
+            var colorBox = new TextBox { Text = colorHex, FontSize = 13, Height = 34, Width = 130, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
             root.Children.Add(FormRow("颜色（#RRGGBB）", colorBox));
 
             // 字段编辑
@@ -778,15 +781,15 @@ namespace ME.Views
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
 
-                    var labelBox = new TextBox { Text = f.Label, FontSize = 12, Padding = new Thickness(6, 5, 6, 5) };
+                    var labelBox = new TextBox { Text = f.Label, FontSize = 12, Height = 30, Padding = new Thickness(6, 3, 6, 3), VerticalContentAlignment = VerticalAlignment.Center };
                     labelBox.TextChanged += (s, e) => f.Label = labelBox.Text;
                     Grid.SetColumn(labelBox, 0);
 
-                    var typeCombo = new ComboBox { FontSize = 12, ItemsSource = FieldTypeNames, SelectedIndex = Math.Max(0, Array.IndexOf(FieldTypes, f.Type)) };
+                    var typeCombo = new ComboBox { FontSize = 12, Height = 30, ItemsSource = FieldTypeNames, VerticalContentAlignment = VerticalAlignment.Center, SelectedIndex = Math.Max(0, Array.IndexOf(FieldTypes, f.Type)) };
                     typeCombo.SelectionChanged += (s, e) => { f.Type = FieldTypes[typeCombo.SelectedIndex]; RenderFields(); };
                     Grid.SetColumn(typeCombo, 2);
 
-                    var unitBox = new TextBox { Text = f.Unit, FontSize = 12, Padding = new Thickness(6, 5, 6, 5) };
+                    var unitBox = new TextBox { Text = f.Unit, FontSize = 12, Height = 30, Padding = new Thickness(6, 3, 6, 3), VerticalContentAlignment = VerticalAlignment.Center };
                     unitBox.TextChanged += (s, e) => f.Unit = unitBox.Text;
                     Grid.SetColumn(unitBox, 4);
 
@@ -801,7 +804,8 @@ namespace ME.Views
                     {
                         var optBox = new TextBox
                         {
-                            Text = f.Options, FontSize = 12, Padding = new Thickness(6, 5, 6, 5), Margin = new Thickness(0, 0, 0, 6),
+                            Text = f.Options, FontSize = 12, Height = 30, Padding = new Thickness(6, 3, 6, 3),
+                            VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6),
                             Tag = "候选值，逗号分隔，如：好,中,差"
                         };
                         optBox.TextChanged += (s, e) => f.Options = optBox.Text;
@@ -860,7 +864,7 @@ namespace ME.Views
             var root = new StackPanel { Margin = new Thickness(18) };
             var values = new Dictionary<string, string>();
 
-            var dateBox = new TextBox { Text = DateTime.Now.ToString("yyyy-MM-dd"), FontSize = 13, Width = 140, Padding = new Thickness(8, 6, 8, 6), HorizontalAlignment = HorizontalAlignment.Left };
+            var dateBox = new TextBox { Text = DateTime.Now.ToString("yyyy-MM-dd"), FontSize = 13, Height = 34, Width = 150, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
             root.Children.Add(FormRow("日期", dateBox));
 
             foreach (var f in m.Fields)
@@ -868,7 +872,7 @@ namespace ME.Views
                 UIElement input;
                 if (f.Type == "bool")
                 {
-                    var cb = new ComboBox { FontSize = 12, Width = 120, ItemsSource = new[] { "是", "否" }, SelectedIndex = 1 };
+                    var cb = new ComboBox { FontSize = 12, Height = 32, Width = 120, ItemsSource = new[] { "是", "否" }, VerticalContentAlignment = VerticalAlignment.Center, SelectedIndex = 1 };
                     cb.SelectionChanged += (s, e) => values[f.Key] = cb.SelectedIndex == 0 ? "true" : "false";
                     input = cb;
                 }
@@ -876,13 +880,13 @@ namespace ME.Views
                 {
                     var opts = (f.Options ?? "").Split(',').Select(o => o.Trim()).Where(o => o != "").ToArray();
                     if (opts.Length == 0) opts = new[] { "选项1", "选项2" };
-                    var combo = new ComboBox { FontSize = 12, Width = 160, ItemsSource = opts };
+                    var combo = new ComboBox { FontSize = 12, Height = 32, Width = 160, ItemsSource = opts, VerticalContentAlignment = VerticalAlignment.Center };
                     combo.SelectionChanged += (s, e) => values[f.Key] = opts[combo.SelectedIndex];
                     input = combo;
                 }
                 else
                 {
-                    var tb = new TextBox { FontSize = 13, Width = 160, Padding = new Thickness(8, 6, 8, 6) };
+                    var tb = new TextBox { FontSize = 13, Height = 34, Width = 160, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
                     TextChangedHandler(f.Key);
                     void TextChangedHandler(string key) => tb.TextChanged += (s, e) => values[key] = tb.Text;
                     input = tb;
@@ -891,7 +895,7 @@ namespace ME.Views
                 root.Children.Add(FormRow(label, input));
             }
 
-            var noteBox = new TextBox { FontSize = 13, Padding = new Thickness(8, 6, 8, 6) };
+            var noteBox = new TextBox { FontSize = 13, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
             root.Children.Add(FormRow("备注（可选）", noteBox));
 
             var saveBtn = new Button { Content = "保存记录", Style = (Style)FindResource("PrimaryButtonStyle"), FontSize = 13, Padding = new Thickness(24, 7, 24, 7), Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand };

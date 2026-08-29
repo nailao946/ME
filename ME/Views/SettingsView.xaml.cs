@@ -140,9 +140,20 @@ namespace ME.Views
                 else
                 {
                     try { SyncTokenBox.Password = SecureStore.Decrypt(GitHubSyncService.Load().EncryptedToken); } catch { }
-                    SyncLoginStatus.Text = "✓ 授权成功，Token 已自动保存";
                     SyncLoginBtn.IsEnabled = true;
                     RefreshAccountDisplay();
+                    SyncLoginStatus.Text = "✓ 授权成功，正在自动创建同步仓库 ME-OKR…";
+                    // 自动创建私有仓库 ME-OKR 并写入配置，用户无需手填仓库名
+                    try
+                    {
+                        var repo = await GitHubSyncService.EnsureDefaultRepoAsync();
+                        SyncLoginStatus.Text = $"✓ 授权成功，已配置仓库 {repo}，可直接上传/下载";
+                        LoadSyncConfig();
+                    }
+                    catch (Exception ex)
+                    {
+                        SyncLoginStatus.Text = "✓ 授权成功，但自动建仓失败：" + ex.Message + "（可手动填仓库名）";
+                    }
                 }
             };
             _loginPollTimer.Start();
@@ -171,9 +182,9 @@ namespace ME.Views
 
         private async void SyncPush_Click(object sender, RoutedEventArgs e)
         {
-            if (SyncRepoBox.Text.Trim() == "" || SyncTokenBox.Password.Trim() == "")
+            if (SyncRepoBox.Text.Trim() == "" && SyncTokenBox.Password.Trim() == "")
             {
-                SyncStatusText.Text = "请先填写仓库名和 Token";
+                SyncStatusText.Text = "请先登录 GitHub 账号或填写 Token";
                 return;
             }
             SaveSyncConfig();
@@ -191,9 +202,9 @@ namespace ME.Views
 
         private async void SyncPull_Click(object sender, RoutedEventArgs e)
         {
-            if (SyncRepoBox.Text.Trim() == "" || SyncTokenBox.Password.Trim() == "")
+            if (SyncRepoBox.Text.Trim() == "" && SyncTokenBox.Password.Trim() == "")
             {
-                SyncStatusText.Text = "请先填写仓库名和 Token";
+                SyncStatusText.Text = "请先登录 GitHub 账号或填写 Token";
                 return;
             }
             if (MessageBox.Show("下载会用仓库数据覆盖本机数据（本机会先自动备份）。继续？", "云同步下载",
