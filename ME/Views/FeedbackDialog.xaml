@@ -5,7 +5,7 @@
         Background="Transparent"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
-        Title="提意见 / 反馈 Bug" Height="500" Width="560"
+        Title="提意见 / 反馈 Bug" Height="680" Width="640"
         KeyDown="Window_KeyDown">
     <Border CornerRadius="14" Background="{DynamicResource BackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
@@ -38,22 +38,64 @@
             </Border>
 
             <!-- Content -->
-            <Grid Grid.Row="1" Margin="20,14,20,0">
+            <Grid Grid.Row="1" Margin="20,12,20,0">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <TextBlock Text="反馈将作为 Issue 提交到项目 GitHub 仓库（github.com/nailao946/ME），提交使用「数据与备份」中已绑定的 GitHub 账号；第一行会自动作为标题。"
+
+                <TextBlock Grid.Row="0"
+                           Text="反馈将作为 Issue 提交到项目仓库 github.com/nailao946/ME（使用「数据与备份」中已绑定的 GitHub 账号）。"
                            FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                           TextWrapping="Wrap" Margin="0,0,0,8" />
-                <TextBox x:Name="ContentBox" Grid.Row="1"
+                           TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                <TextBlock Grid.Row="1" Text="标题" FontSize="11"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,4" />
+                <TextBox x:Name="TitleBox" Grid.Row="2"
                          Style="{StaticResource InputTextBoxStyle}"
-                         TextWrapping="Wrap" AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         VerticalContentAlignment="Top" Padding="10" FontSize="13"
-                         ToolTip="写下你的建议或遇到的问题" />
-                <TextBlock x:Name="StatusText" Grid.Row="2" FontSize="11"
+                         MaxLength="80"
+                         ToolTip="一句话概括你的反馈" />
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="类型" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <RadioButton x:Name="BugRadio" GroupName="FbType" Content="🐛 Bug 反馈"
+                                 IsChecked="True" Checked="Type_Checked"
+                                 FontSize="12" VerticalAlignment="Center" Margin="0,0,18,0" />
+                    <RadioButton x:Name="SuggestRadio" GroupName="FbType" Content="💡 功能建议"
+                                 Checked="Type_Checked"
+                                 FontSize="12" VerticalAlignment="Center" Margin="0,0,18,0" />
+                    <RadioButton x:Name="OtherRadio" GroupName="FbType" Content="📮 其他"
+                                 Checked="Type_Checked"
+                                 FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="4" Text="详细描述" FontSize="11"
+                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,12,0,4" />
+
+                <Grid Grid.Row="5">
+                    <TextBox x:Name="ContentBox"
+                             Style="{StaticResource InputTextBoxStyle}"
+                             TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             VerticalContentAlignment="Top" Padding="10" FontSize="13"
+                             Height="Auto" TextChanged="ContentBox_TextChanged"
+                             ToolTip="写下详细描述；Bug 建议附上复现步骤、期望结果与实际结果" />
+                    <TextBlock x:Name="ContentPlaceholder"
+                               Text="请在此写下详细描述…&#x0a;&#x0a;Bug 反馈建议包含：问题描述 / 复现步骤 / 期望结果与实际结果。&#x0a;功能建议可说明：功能设想 / 使用场景。"
+                               FontSize="13" TextWrapping="Wrap"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               Margin="12,11,12,0" IsHitTestVisible="False"
+                               Visibility="Collapsed" />
+                </Grid>
+
+                <TextBlock x:Name="StatusText" Grid.Row="6" FontSize="11"
                            Foreground="#E53935" TextWrapping="Wrap" Margin="0,8,0,0"
                            Visibility="Collapsed" />
             </Grid>

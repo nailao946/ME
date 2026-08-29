@@ -207,20 +207,20 @@ namespace ME.Services
 
         /// <summary>
         /// 提交用户反馈到项目仓库 Issues。任何 GitHub 账号都能在公开仓库提 issue，无需仓库写权限；
-        /// 首行作为标题（过长截断），正文自动附上版本与平台信息便于定位问题。返回 issue 编号。
+        /// 标题由弹窗组装（含类型前缀），正文由弹窗组装类型段落后在此追加版本与平台信息。返回 issue 编号。
         /// </summary>
-        public static async Task<int> SubmitFeedbackAsync(string content)
+        public static async Task<int> SubmitFeedbackAsync(string title, string content)
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken))
                 throw new Exception("尚未绑定 GitHub，请先在「设置 → 数据与备份」中登录后再提交反馈");
+            var t = (title ?? "").Trim();
+            if (t.Length == 0) throw new Exception("请填写反馈标题");
             var text = (content ?? "").Trim();
             if (text.Length == 0) throw new Exception("请先填写反馈内容");
 
-            var firstLine = text.Split('\n')[0].Trim();
-            var title = Truncate(firstLine, 40) + (firstLine.Length > 40 ? "…" : "");
             var body = text + $"\n\n---\n来自 ME 桌面版 v{AppVersionText} · Windows";
-            var payload = new Dictionary<string, string> { ["title"] = title, ["body"] = body };
+            var payload = new Dictionary<string, string> { ["title"] = Truncate(t, 80), ["body"] = body };
 
             using var client = CreateClient(c);
             using var req = new HttpRequestMessage(HttpMethod.Post, $"https://api.github.com/repos/{FeedbackRepo}/issues")
