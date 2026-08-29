@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -82,6 +82,10 @@ namespace ME.Models
 
         private int? _tagId;
         public int? TagId { get => _tagId; set { _tagId = value; OnPropertyChanged(); } }
+
+        private int? _timeTagId;
+        /// <summary>绑定的时间标签（与安卓端互通；该目标下的任务默认继承此标签）</summary>
+        public int? TimeTagId { get => _timeTagId; set { _timeTagId = value; OnPropertyChanged(); } }
 
         private string _tagColor;
         /// <summary>
