@@ -128,7 +128,7 @@ namespace ME
                 var showBalloon = settingsRepo.GetValue(SettingsKeys.TrayBalloonEnabled, "True");
                 if (showBalloon == "True")
                 {
-                    _notifyIcon.ShowBalloonTip(2000, "目标地图", "已最小化到系统托盘", Forms.ToolTipIcon.Info);
+                    _notifyIcon.ShowBalloonTip(2000, "ME", "已最小化到系统托盘", Forms.ToolTipIcon.Info);
                 }
             }
             else
@@ -394,7 +394,7 @@ namespace ME
             try
             {
                 _notifyIcon = new Forms.NotifyIcon();
-                _notifyIcon.Text = "目标地图";
+                _notifyIcon.Text = "ME";
 
                 var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hobby_working_dailyroutine_life_time_management_icon_142245.ico");
                 if (File.Exists(iconPath))

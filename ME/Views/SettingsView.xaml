@@ -117,7 +117,7 @@
                                 <TextBlock Text="开机自动启动" Foreground="{DynamicResource TextBrush}" FontSize="13"
                                            VerticalAlignment="Center" Margin="8,0,0,0" />
                             </StackPanel>
-                            <TextBlock Text="Windows启动时自动运行目标地图" FontSize="11"
+                            <TextBlock Text="Windows 启动时自动运行 ME" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" Margin="24,0,0,0" />
                         </StackPanel>
                     </Border>
@@ -306,7 +306,7 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />
-                                <TextBox x:Name="SyncRepoBox" Width="240" FontSize="12" Padding="8,5,8,5" Text="ME-OKR"
+                                <TextBox x:Name="SyncRepoBox" Width="240" FontSize="12" Padding="8,5,8,5" Text="ME-Data"
                                          ToolTip="只填仓库名即可（自动创建私有仓库并挂到你的账号下），也可填 owner/仓库名" />
                                 <TextBlock Text="分支" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Margin="16,0,0,0" Width="40" />
@@ -402,13 +402,13 @@
                     <!-- About -->
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
-                            <TextBlock Text="关于目标地图" FontSize="16" FontWeight="Bold"
+                            <TextBlock Text="关于 ME" FontSize="16" FontWeight="Bold"
                                        Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
                             <TextBlock x:Name="VersionText" Text="版本 1.0.0" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" />
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                 <TextBlock Text="🔗 GitHub：" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" />
-                                <Button Content="github.com/nailao946/OKR" Click="OpenGithub_Click"
+                                <Button Content="github.com/nailao946/ME" Click="OpenGithub_Click"
                                         Style="{StaticResource SecondaryButtonStyle}" Padding="12,5" FontSize="11"
                                         Cursor="Hand" ToolTip="点击打开项目 GitHub 页面" />
                             </StackPanel>

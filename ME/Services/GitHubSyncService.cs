@@ -152,16 +152,16 @@ namespace ME.Services
         }
 
         /// <summary>
-        /// 确保同步仓库存在：默认 ME-OKR（私有），用户只填仓库名时自动挂到当前账号下（已存在则直接使用）。
+        /// 确保同步仓库存在：默认 ME-Data（私有），用户只填仓库名时自动挂到当前账号下（已存在则直接使用）。
         /// 登录后和上传/下载前调用，用户无需手填 owner/ 前缀。
         /// </summary>
         public static async Task<string> EnsureDefaultRepoAsync()
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken)) throw new Exception("尚未登录 GitHub 账号");
-            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-OKR";
+            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-Data";
             var name = c.Repo.Contains('/') ? c.Repo.Substring(c.Repo.IndexOf('/') + 1) : c.Repo;
-            if (string.IsNullOrWhiteSpace(name)) name = "ME-OKR";
+            if (string.IsNullOrWhiteSpace(name)) name = "ME-Data";
 
             var login = string.IsNullOrWhiteSpace(c.AccountName) ? await FetchLoginAsync(c).ConfigureAwait(false) : c.AccountName;
 
@@ -190,10 +190,10 @@ namespace ME.Services
             return _resolvedRepo;
         }
 
-        /// <summary>把用户填的仓库名解析成 owner/name：只填 ME-OKR 时自动补当前账号前缀</summary>
+        /// <summary>把用户填的仓库名解析成 owner/name：只填 ME-Data 时自动补当前账号前缀</summary>
         private static async Task<string> ResolveRepoAsync(SyncConfig c)
         {
-            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-OKR";
+            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-Data";
             if (c.Repo.Contains('/')) return c.Repo;
             if (_resolvedRepo != null && _resolvedRepo.EndsWith("/" + c.Repo)) return _resolvedRepo;
             var login = string.IsNullOrWhiteSpace(c.AccountName) ? await FetchLoginAsync(c).ConfigureAwait(false) : c.AccountName;
@@ -215,7 +215,16 @@ namespace ME.Services
             try
             {
                 if (File.Exists(ConfigPath))
-                    return JsonSerializer.Deserialize<SyncConfig>(File.ReadAllText(ConfigPath)) ?? new SyncConfig();
+                {
+                    var c = JsonSerializer.Deserialize<SyncConfig>(File.ReadAllText(ConfigPath)) ?? new SyncConfig();
+                    // 数据仓库由 ME-OKR 更名为 ME-Data：旧配置自动迁移，避免两端同步中断
+                    if (c.Repo == "ME-OKR" || c.Repo.EndsWith("/ME-OKR"))
+                    {
+                        c.Repo = c.Repo.Contains('/') ? c.Repo.Substring(0, c.Repo.IndexOf('/') + 1) + "ME-Data" : "ME-Data";
+                        Save(c);
+                    }
+                    return c;
+                }
             }
             catch { }
             return new SyncConfig();

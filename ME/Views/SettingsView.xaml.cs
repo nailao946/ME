@@ -94,7 +94,7 @@ namespace ME.Views
         private void LoadSyncConfig()
         {
             var c = GitHubSyncService.Load();
-            SyncRepoBox.Text = string.IsNullOrWhiteSpace(c.Repo) ? "ME-OKR" : c.Repo;
+            SyncRepoBox.Text = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo;
             SyncBranchBox.Text = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch;
             SyncProxyBox.Text = c.Proxy;
             if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
@@ -194,8 +194,8 @@ namespace ME.Views
                     try { SyncTokenBox.Password = SecureStore.Decrypt(GitHubSyncService.Load().EncryptedToken); } catch { }
                     SyncLoginBtn.IsEnabled = true;
                     RefreshAccountDisplay();
-                    SyncLoginStatus.Text = "✓ 授权成功，正在自动创建同步仓库 ME-OKR…";
-                    // 自动创建私有仓库 ME-OKR 并写入配置，用户无需手填仓库名
+                    SyncLoginStatus.Text = "✓ 授权成功，正在自动创建同步仓库 ME-Data…";
+                    // 自动创建私有仓库 ME-Data 并写入配置，用户无需手填仓库名
                     try
                     {
                         var repo = await GitHubSyncService.EnsureDefaultRepoAsync();
@@ -224,8 +224,8 @@ namespace ME.Views
         private void SaveSyncConfig()
         {
             var c = GitHubSyncService.Load();
-            // 只填仓库名即可（如 ME-OKR），账号前缀在上传/下载时自动补
-            c.Repo = string.IsNullOrWhiteSpace(SyncRepoBox.Text) ? "ME-OKR" : SyncRepoBox.Text.Trim();
+            // 只填仓库名即可（如 ME-Data），账号前缀在上传/下载时自动补
+            c.Repo = string.IsNullOrWhiteSpace(SyncRepoBox.Text) ? "ME-Data" : SyncRepoBox.Text.Trim();
             c.Branch = string.IsNullOrWhiteSpace(SyncBranchBox.Text) ? "main" : SyncBranchBox.Text.Trim();
             c.Proxy = SyncProxyBox.Text.Trim();
             if (!string.IsNullOrWhiteSpace(SyncTokenBox.Password))
@@ -957,7 +957,7 @@ namespace ME.Views
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = "https://github.com/nailao946/OKR",
+                    FileName = "https://github.com/nailao946/ME",
                     UseShellExecute = true
                 });
             }

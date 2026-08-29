@@ -1,8 +1,8 @@
-# 目标地图 (Goal Map) — 个人目标管理 & 健康追踪工具
+# ME — 个人管理系统（目标 · 任务 · 时间 · 健康）
 
-> 一款纯本地运行的 WPF 桌面应用，帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
+> 一款纯本地运行的个人管理系统（Windows 桌面端），帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
 
-![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-2.1.0-orange)
+![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-2.3.4-orange)
 
 ---
 
@@ -166,8 +166,8 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/nailao946/OKR.git
-cd OKR
+git clone https://github.com/nailao946/ME.git
+cd ME
 
 # 构建
 dotnet build "ME\ME.csproj"
@@ -197,7 +197,7 @@ dotnet publish "ME\ME.csproj" -c Release -r win-x64 --self-contained true -p:Pub
 
 ## 联系作者
 
-- 🔗 GitHub：[github.com/nailao946/OKR](https://github.com/nailao946/OKR)
+- 🔗 GitHub：[github.com/nailao946/ME](https://github.com/nailao946/ME)
 - 📱 微信：`shuaim888888`（点击设置页微信号可复制）
 
 欢迎反馈建议、提交 Issue 与 PR！
@@ -283,3 +283,7 @@ MIT
 ## v2.3.3 更新日志
 
 - 设置页右侧内容面板固定伸展宽度（原来收缩到内容宽度，导致只有一张卡的页面如"外观"比"数据备份"短）——现在每个分类页里的功能卡都等长、和最宽的页一致
+
+## v2.3.4 更新日志
+
+- **应用与仓库统一更名 ME**：窗口标题、托盘、关于页、健康报告落款全部改为「ME」（个人管理系统）；GitHub 源码仓库 OKR → **ME**，云同步数据仓库 ME-OKR → **ME-Data**（旧配置自动迁移，手机端同步不受影响）

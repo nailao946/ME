@@ -45,7 +45,7 @@ namespace ME.Services
         private static void EnsureTempIcon()
         {
             if (_tempIcon != null) return;
-            _tempIcon = new NotifyIcon { Text = "目标地图" };
+            _tempIcon = new NotifyIcon { Text = "ME" };
 
             var iconPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 "hobby_working_dailyroutine_life_time_management_icon_142245.ico");

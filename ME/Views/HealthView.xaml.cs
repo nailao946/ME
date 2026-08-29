@@ -2312,7 +2312,7 @@ namespace ME.Views
                 sb.AppendLine("</table>");
             }
 
-            sb.AppendLine("<p style=\"margin-top:30px;color:#8E8E93;font-size:11px\">本报告由目标地图生成，仅供健康参考，不构成医疗建议。</p>");
+            sb.AppendLine("<p style=\"margin-top:30px;color:#8E8E93;font-size:11px\">本报告由 ME 生成，仅供健康参考，不构成医疗建议。</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }
