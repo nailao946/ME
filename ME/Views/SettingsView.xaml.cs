@@ -62,7 +62,7 @@ namespace ME.Views
         private void LoadSyncConfig()
         {
             var c = GitHubSyncService.Load();
-            SyncRepoBox.Text = c.Repo;
+            SyncRepoBox.Text = string.IsNullOrWhiteSpace(c.Repo) ? "ME-OKR" : c.Repo;
             SyncBranchBox.Text = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch;
             SyncProxyBox.Text = c.Proxy;
             if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
@@ -74,6 +74,19 @@ namespace ME.Views
             if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}";
             SyncLastTimeText.Text = last;
             RefreshAccountDisplay();
+            // 已登录但没存账号名时后台补拉一次，保证刷新后仍显示登录状态
+            if (!string.IsNullOrWhiteSpace(c.EncryptedToken) && string.IsNullOrWhiteSpace(c.AccountName))
+            {
+                _ = System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(new Action(async () =>
+                {
+                    try
+                    {
+                        await GitHubSyncService.RefreshAccountAsync();
+                        RefreshAccountDisplay();
+                    }
+                    catch { }
+                }));
+            }
         }
 
         private void RefreshAccountDisplay()
@@ -172,7 +185,8 @@ namespace ME.Views
         private void SaveSyncConfig()
         {
             var c = GitHubSyncService.Load();
-            c.Repo = SyncRepoBox.Text.Trim();
+            // 只填仓库名即可（如 ME-OKR），账号前缀在上传/下载时自动补
+            c.Repo = string.IsNullOrWhiteSpace(SyncRepoBox.Text) ? "ME-OKR" : SyncRepoBox.Text.Trim();
             c.Branch = string.IsNullOrWhiteSpace(SyncBranchBox.Text) ? "main" : SyncBranchBox.Text.Trim();
             c.Proxy = SyncProxyBox.Text.Trim();
             if (!string.IsNullOrWhiteSpace(SyncTokenBox.Password))

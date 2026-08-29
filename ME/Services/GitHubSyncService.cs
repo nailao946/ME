@@ -93,19 +93,9 @@ namespace ME.Services
             }
             var token = r.GetProperty("access_token").GetString();
             // 拉取用户名用于显示，失败不影响登录
+            c.EncryptedToken = SecureStore.Encrypt(token);
             string account = "";
-            try
-            {
-                c.EncryptedToken = SecureStore.Encrypt(token);
-                using var uclient = CreateClient(c);
-                using var ureq = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
-                ureq.Headers.UserAgent.ParseAdd("ME-PC");
-                using var uresp = await uclient.SendAsync(ureq).ConfigureAwait(false);
-                var utext = await uresp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                using var udoc = JsonDocument.Parse(utext);
-                account = udoc.RootElement.GetProperty("login").GetString() ?? "";
-            }
-            catch { }
+            try { account = await FetchLoginAsync(c).ConfigureAwait(false); } catch { }
             c.EncryptedToken = SecureStore.Encrypt(token);
             c.AccountName = account;
             Save(c);
@@ -125,41 +115,59 @@ namespace ME.Services
             c.EncryptedToken = "";
             c.AccountName = "";
             Save(c);
+            _resolvedRepo = null;
+        }
+
+        /// <summary>带鉴权头拉取当前登录的 GitHub 用户名（顺带缓存到配置）</summary>
+        private static async Task<string> FetchLoginAsync(SyncConfig c)
+        {
+            using var client = CreateClient(c);
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
+            using var resp = await client.SendAsync(req).ConfigureAwait(false);
+            var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"获取账号失败：HTTP {(int)resp.StatusCode} {Truncate(text, 160)}");
+            using var doc = JsonDocument.Parse(text);
+            var login = doc.RootElement.GetProperty("login").GetString() ?? "";
+            if (string.IsNullOrWhiteSpace(login)) throw new Exception("无法获取 GitHub 用户名");
+            c.AccountName = login;
+            Save(c);
+            return login;
+        }
+
+        /// <summary>已保存 Token 时补拉账号名（用于启动后恢复登录状态显示）</summary>
+        public static Task RefreshAccountAsync()
+        {
+            var c = Load();
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken)) return Task.CompletedTask;
+            return FetchLoginAsync(c);
         }
 
         /// <summary>
-        /// 确保默认同步仓库存在：自动在用户账号下创建私有仓库 ME-OKR 并写入配置（已存在则直接使用）。
-        /// 返回配置好的 owner/name。登录后和上传/下载前（仓库为空时）调用，用户无需手填仓库名。
+        /// 确保同步仓库存在：默认 ME-OKR（私有），用户只填仓库名时自动挂到当前账号下（已存在则直接使用）。
+        /// 登录后和上传/下载前调用，用户无需手填 owner/ 前缀。
         /// </summary>
         public static async Task<string> EnsureDefaultRepoAsync()
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken)) throw new Exception("尚未登录 GitHub 账号");
-            if (!string.IsNullOrWhiteSpace(c.Repo) && c.Repo.EndsWith("/ME-OKR")) return c.Repo;
+            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-OKR";
+            var name = c.Repo.Contains('/') ? c.Repo.Substring(c.Repo.IndexOf('/') + 1) : c.Repo;
+            if (string.IsNullOrWhiteSpace(name)) name = "ME-OKR";
 
-            string login = c.AccountName;
-            if (string.IsNullOrWhiteSpace(login))
-            {
-                using var client = CreateClient(c);
-                using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
-                using var resp = await client.SendAsync(req).ConfigureAwait(false);
-                var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode) throw new Exception($"获取账号失败：HTTP {(int)resp.StatusCode}");
-                using var doc = JsonDocument.Parse(text);
-                login = doc.RootElement.GetProperty("login").GetString() ?? "";
-            }
-            if (string.IsNullOrWhiteSpace(login)) throw new Exception("无法获取 GitHub 用户名");
+            var login = string.IsNullOrWhiteSpace(c.AccountName) ? await FetchLoginAsync(c).ConfigureAwait(false) : c.AccountName;
 
-            // 创建私有仓库（422 = 已存在，直接用）
-            string repoName = $"{login}/ME-OKR";
+            // 创建私有仓库（HTTP 422 = 已存在，直接使用）
             try
             {
-                var payload = new Dictionary<string, object> { ["name"] = "ME-OKR", ["private"] = true, ["auto_init"] = false };
+                var payload = new Dictionary<string, object> { ["name"] = name, ["private"] = true, ["auto_init"] = false };
                 using var client = CreateClient(c);
                 using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.github.com/user/repos")
                 {
                     Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
                 };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SecureStore.Decrypt(c.EncryptedToken));
                 using var resp = await client.SendAsync(req).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 422)
                 {
@@ -169,12 +177,23 @@ namespace ME.Services
             }
             catch (Exception ex) when (ex.Message.Contains("422")) { /* 已存在 */ }
 
-            c.Repo = repoName;
             if (string.IsNullOrWhiteSpace(c.Branch)) c.Branch = "main";
-            if (string.IsNullOrWhiteSpace(c.AccountName)) c.AccountName = login;
             Save(c);
-            return repoName;
+            _resolvedRepo = $"{login}/{name}";
+            return _resolvedRepo;
         }
+
+        /// <summary>把用户填的仓库名解析成 owner/name：只填 ME-OKR 时自动补当前账号前缀</summary>
+        private static async Task<string> ResolveRepoAsync(SyncConfig c)
+        {
+            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-OKR";
+            if (c.Repo.Contains('/')) return c.Repo;
+            if (_resolvedRepo != null && _resolvedRepo.EndsWith("/" + c.Repo)) return _resolvedRepo;
+            var login = string.IsNullOrWhiteSpace(c.AccountName) ? await FetchLoginAsync(c).ConfigureAwait(false) : c.AccountName;
+            _resolvedRepo = $"{login}/{c.Repo}";
+            return _resolvedRepo;
+        }
+        private static string _resolvedRepo;
 
         private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
@@ -249,6 +268,9 @@ namespace ME.Services
             if (!Directory.Exists(DataDir)) return "✗ 没有可上传的数据";
             var files = Directory.GetFiles(DataDir, "*.json");
             if (files.Length == 0) return "✗ 没有可上传的数据";
+            string repo;
+            try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
+            catch (Exception ex) { return "✗ " + ex.Message; }
             int ok = 0; string lastErr = null;
             foreach (var f in files)
             {
@@ -258,7 +280,7 @@ namespace ME.Services
                     string sha = null;
                     try
                     {
-                        var existing = await SendAsync(c, HttpMethod.Get, Api(c.Repo, $"data/{Path.GetFileName(f)}?ref={c.Branch}")).ConfigureAwait(false);
+                        var existing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{Path.GetFileName(f)}?ref={c.Branch}")).ConfigureAwait(false);
                         sha = existing.GetProperty("sha").GetString();
                     }
                     catch { /* 不存在则新建 */ }
@@ -269,7 +291,7 @@ namespace ME.Services
                         ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch
                     };
                     if (sha != null) payload["sha"] = sha;
-                    await SendAsync(c, HttpMethod.Put, Api(c.Repo, $"data/{Path.GetFileName(f)}"), payload).ConfigureAwait(false);
+                    await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{Path.GetFileName(f)}"), payload).ConfigureAwait(false);
                     ok++;
                 }
                 catch (Exception ex) { lastErr = ex.Message; }
@@ -289,15 +311,13 @@ namespace ME.Services
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken))
                 return "✗ 请先登录 GitHub 账号或填写 Token";
-            if (string.IsNullOrWhiteSpace(c.Repo))
-            {
-                try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
-                catch (Exception ex) { return "✗ " + ex.Message; }
-            }
+            string repo;
+            try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
+            catch (Exception ex) { return "✗ " + ex.Message; }
             JsonElement listing;
             try
             {
-                listing = await SendAsync(c, HttpMethod.Get, Api(c.Repo, $"data?ref={c.Branch}")).ConfigureAwait(false);
+                listing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data?ref={c.Branch}")).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex.Message.Contains("404"))
             {
@@ -324,7 +344,7 @@ namespace ME.Services
                 total++;
                 try
                 {
-                    var detail = await SendAsync(c, HttpMethod.Get, Api(c.Repo, $"data/{name}?ref={c.Branch}")).ConfigureAwait(false);
+                    var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{name}?ref={c.Branch}")).ConfigureAwait(false);
                     var b64 = detail.GetProperty("content").GetString() ?? "";
                     var text = Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
                     File.WriteAllText(Path.Combine(DataDir, name), text);

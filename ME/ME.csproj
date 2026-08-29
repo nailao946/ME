@@ -11,7 +11,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <DisableHardwareAcceleration>true</DisableHardwareAcceleration>
     <ApplicationIcon>hobby_working_dailyroutine_life_time_management_icon_142245.ico</ApplicationIcon>
-    <Version>2.2.0.0</Version>
+    <Version>2.2.1.0</Version>
     <StartupObject>ME.App</StartupObject>
     <Authors>JOE</Authors>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
