@@ -8,19 +8,58 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左侧分类导航（微信/系统设置式：一个大类一页） -->
-        <Border Background="{DynamicResource BackgroundBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-            <ListBox x:Name="SettingsNav" BorderThickness="0" Background="Transparent" Padding="8,10"
+        <!-- 左侧分类导航：样式与主菜单一致（透明底、圆角选中、同色悬停） -->
+        <Border Grid.Column="0" Background="{DynamicResource BackgroundBrush}">
+            <ListBox x:Name="SettingsNav" BorderThickness="0" Background="Transparent" Margin="10"
                      SelectionChanged="SettingsNav_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBoxItem Content="🎨  外观" IsSelected="True" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="⚙️  通用" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="⏱  专注与统计" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="💾  数据与备份" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="☁️  GitHub 同步" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="🧩  自定义模块" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="🤖  AI 分析" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
-                <ListBoxItem Content="ℹ️  关于" Padding="10,9" FontSize="13" Foreground="{DynamicResource TextBrush}" />
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="12,10" />
+                        <Setter Property="Margin" Value="0,2" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="border" Background="Transparent"
+                                            CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource NavSelectedBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="White" />
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource NavHoverBrush}" />
+                                        </Trigger>
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition Property="IsSelected" Value="True" />
+                                                <Condition Property="IsMouseOver" Value="True" />
+                                            </MultiTrigger.Conditions>
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource NavSelectedHoverBrush}" />
+                                            <Setter Property="TextElement.Foreground" Value="White" />
+                                        </MultiTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding}" FontSize="13" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBoxItem Content="🎨  外观" IsSelected="True" />
+                <ListBoxItem Content="⚙️  通用" />
+                <ListBoxItem Content="⏱  专注与统计" />
+                <ListBoxItem Content="💾  数据与备份" />
+                <ListBoxItem Content="🧩  自定义模块" />
+                <ListBoxItem Content="🤖  AI 分析" />
+                <ListBoxItem Content="ℹ️  关于" />
             </ListBox>
         </Border>
 
@@ -231,38 +270,17 @@
                                         Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
                                 <Button Content="导入数据" Click="Restore_Click"
                                         Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
+                                <Button Content="导入小米健康数据" Click="ImportXiaomi_Click" Margin="8,0,0,0"
+                                        Style="{StaticResource SecondaryButtonStyle}" Padding="16,8"
+                                        ToolTip="登录 account.xiaomi.com → 隐私中心 → 管理您的数据 → 小米运动健康 → 申请导出，下载 zip 后在此导入（解析睡眠与体重）" />
                             </StackPanel>
                             <TextBlock x:Name="LastBackupText" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
+                            <TextBlock Text="小米健康导入：小米未开放实时接口，官方隐私中心的导出 zip 是唯一数据通道，解析睡眠与体重。" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
 
-                    <!-- Cloud Sync -->
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <TextBlock Text="云同步" FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Text="同步状态:" FontSize="13" Foreground="{DynamicResource TextBrush}"
-                                           VerticalAlignment="Center" />
-                                <TextBlock x:Name="LastSyncTimeText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}"
-                                           VerticalAlignment="Center" Margin="8,0,0,0" Text="未同步" />
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Button Content="导出数据" Click="ExportSyncData_Click"
-                                        Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
-                                <Button Content="导入小米健康数据" Click="ImportXiaomi_Click" Margin="8,0,0,0"
-                                        Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
-                            </StackPanel>
-                            <TextBlock Text="数据格式兼容Web版目标地图" FontSize="11"
-                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,0" />
-                            <TextBlock Text="小米健康导入：登录 account.xiaomi.com → 隐私中心 → 管理您的数据 → 小米运动健康 → 申请导出，下载 zip 后在此导入（解析睡眠与体重）。小米未开放实时接口，此为官方唯一数据通道。" FontSize="11"
-                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <StackPanel x:Name="Sec_GitHub" Visibility="Collapsed">
                     <!-- GitHub Cloud Sync (PC ↔ Android) -->
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
@@ -270,6 +288,21 @@
                                        Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
                             <TextBlock Text="把数据上传到自己的 GitHub 私有仓库实现 PC / 安卓免费云同步。Token 需要 repo（Contents 读写）权限，用 DPAPI 加密保存，不会随数据上传。" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                            <!-- 启动自动同步 -->
+                            <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="8" Padding="12"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox x:Name="AutoSyncToggle" Checked="AutoSyncToggle_Changed" Unchecked="AutoSyncToggle_Changed"
+                                                  VerticalAlignment="Center" />
+                                        <TextBlock Text="启动软件时自动同步" Foreground="{DynamicResource TextBrush}" FontSize="13"
+                                                   FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="AutoSyncStatusText" FontSize="11"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="24,4,0,0"
+                                               TextWrapping="Wrap" Text="每次打开软件自动比对：云端较新的文件下载到本地，本地较新的上传到云端，两边都改过的跳过并提示。" />
+                                </StackPanel>
+                            </Border>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />

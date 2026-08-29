@@ -52,6 +52,9 @@ namespace ME
             ApplyWindowBorderColor();
             InitFloatingWindow();
 
+            // 启动自动同步（设置里可关；后台运行不阻塞启动，完成后通过事件刷新设置页状态）
+            _ = GitHubSyncService.AutoSyncOnStartupAsync();
+
             ThemeService.ThemeChanged += (theme) =>
             {
                 Dispatcher.BeginInvoke(() =>

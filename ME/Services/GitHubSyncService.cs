@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ME.Data;
+using ME.Core;
 
 namespace ME.Services
 {
@@ -26,9 +27,13 @@ namespace ME.Services
             public string Proxy { get; set; } = "";      // 可选，如 http://127.0.0.1:7897
             public string LastPushAt { get; set; } = "";
             public string LastPullAt { get; set; } = "";
+            public string LastSyncAt { get; set; } = "";  // 最近一次自动同步时间
             public string AccountName { get; set; } = ""; // 授权后显示的 GitHub 用户名
+            public bool AutoSyncOnStartup { get; set; } = true; // 启动软件时自动同步
             // 每个文件上次同步后的云端 sha，用于检测「云端比本地新」，避免覆盖其它设备的更新
             public Dictionary<string, string> FileShas { get; set; } = new Dictionary<string, string>();
+            // 每个文件上次同步后的本地内容哈希，用于检测「本地比云端新」
+            public Dictionary<string, string> FileHashes { get; set; } = new Dictionary<string, string>();
         }
 
         /// <summary>设备码授权会话（GitHub Device Flow，用户只需在网页登录后输入代码点允许）</summary>
@@ -256,6 +261,149 @@ namespace ME.Services
 
         private static string Truncate(string s, int n) => string.IsNullOrEmpty(s) || s.Length <= n ? s : s.Substring(0, n);
 
+        private static string HashFile(string path)
+        {
+            using var sha = System.Security.Cryptography.SHA1.Create();
+            return Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(path)));
+        }
+
+        /// <summary>最近一次启动自动同步的结果（设置页显示用）</summary>
+        public static string LastAutoSyncResult { get; private set; } = "";
+
+        /// <summary>
+        /// 智能同步：逐文件比较本地与云端，谁新用谁——
+        /// 云端较新→下载到本地；本地较新→上传到云端；两边都改过→跳过并提示；无变化→跳过。
+        /// 启动自动同步与设置页都可调用。
+        /// </summary>
+        public static async Task<string> SyncAsync()
+        {
+            var c = Load();
+            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
+                return "✗ 请先登录 GitHub 账号";
+            if (string.IsNullOrWhiteSpace(c.Repo))
+            {
+                try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
+                catch (Exception ex) { return "✗ " + ex.Message; }
+            }
+            string repo;
+            try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
+            catch (Exception ex) { return "✗ " + ex.Message; }
+            Directory.CreateDirectory(DataDir);
+
+            // 云端文件清单 name -> sha
+            var remote = new Dictionary<string, string>();
+            try
+            {
+                var listing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data?ref={c.Branch}")).ConfigureAwait(false);
+                if (listing.ValueKind == JsonValueKind.Array)
+                    foreach (var item in listing.EnumerateArray())
+                    {
+                        var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
+                        var fsha = item.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
+                        if (!string.IsNullOrEmpty(name) && name.EndsWith(".json") && !string.IsNullOrEmpty(fsha))
+                            remote[name] = fsha;
+                    }
+            }
+            catch (Exception ex) when (ex.Message.Contains("404")) { /* 仓库还没有 data 目录，当作空 */ }
+
+            var localNames = Directory.Exists(DataDir)
+                ? Directory.GetFiles(DataDir, "*.json").Select(Path.GetFileName).ToList()
+                : new List<string>();
+
+            int up = 0, down = 0, conflict = 0, same = 0; string lastErr = null;
+            var newShas = new Dictionary<string, string>(c.FileShas);
+            var newHashes = new Dictionary<string, string>(c.FileHashes);
+
+            foreach (var name in remote.Keys.Union(localNames).Distinct().ToList())
+            {
+                try
+                {
+                    var localPath = Path.Combine(DataDir, name);
+                    bool localExists = File.Exists(localPath);
+                    string localHash = localExists ? HashFile(localPath) : null;
+                    bool remoteExists = remote.TryGetValue(name, out var rsha);
+                    c.FileShas.TryGetValue(name, out var knownSha);
+                    c.FileHashes.TryGetValue(name, out var knownHash);
+
+                    bool wantUpload, wantDownload;
+                    if (!remoteExists && localExists) { wantUpload = true; wantDownload = false; }
+                    else if (remoteExists && !localExists) { wantDownload = true; wantUpload = false; }
+                    else if (!remoteExists) continue;
+                    else
+                    {
+                        bool remoteChanged = knownSha != null && knownSha != rsha;
+                        bool localChanged = knownHash != null && knownHash != localHash;
+                        if (!remoteChanged && !localChanged)
+                        {
+                            same++;
+                            newShas[name] = rsha;
+                            newHashes[name] = localHash;
+                            continue;
+                        }
+                        wantDownload = remoteChanged && !localChanged;
+                        wantUpload = localChanged && !remoteChanged;
+                        if (!wantDownload && !wantUpload) { conflict++; continue; } // 两边都改过
+                    }
+
+                    if (wantUpload)
+                    {
+                        var content = Convert.ToBase64String(Encoding.UTF8.GetBytes(File.ReadAllText(localPath)));
+                        var payload = new Dictionary<string, object>
+                        {
+                            ["message"] = $"ME 数据同步（PC 自动）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                            ["content"] = content,
+                            ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch
+                        };
+                        if (remoteExists) payload["sha"] = rsha;
+                        var putResp = await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{name}"), payload).ConfigureAwait(false);
+                        try { newShas[name] = putResp.GetProperty("content").GetProperty("sha").GetString(); } catch { }
+                        newHashes[name] = localHash;
+                        up++;
+                    }
+                    else
+                    {
+                        var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{name}?ref={c.Branch}")).ConfigureAwait(false);
+                        var b64 = detail.GetProperty("content").GetString() ?? "";
+                        var text = Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
+                        File.WriteAllText(localPath, text);
+                        JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
+                        try { newShas[name] = detail.GetProperty("sha").GetString(); } catch { }
+                        newHashes[name] = HashFile(localPath);
+                        down++;
+                    }
+                }
+                catch (Exception ex) { lastErr = ex.Message; }
+            }
+
+            c.FileShas = newShas;
+            c.FileHashes = newHashes;
+            if (up + down > 0)
+            {
+                c.LastSyncAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                Save(c);
+            }
+            var msg = $"✓ 同步完成：上传 {up} 个，下载 {down} 个，无变化 {same} 个";
+            if (conflict > 0) msg += $"；{conflict} 个文件本地与云端都有修改已跳过（可分别用上传/下载处理）";
+            if (lastErr != null) msg += $"；错误：{lastErr}";
+            EventAggregator.Instance.Publish("SyncStatusChanged");
+            return msg;
+        }
+
+        /// <summary>启动时自动同步：已登录且开启「启动软件时自动同步」才执行（后台运行，不阻塞启动）</summary>
+        public static async Task AutoSyncOnStartupAsync()
+        {
+            try
+            {
+                var c = Load();
+                if (!c.AutoSyncOnStartup || string.IsNullOrWhiteSpace(c.EncryptedToken)) return;
+                LastAutoSyncResult = await SyncAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LastAutoSyncResult = "自动同步失败：" + ex.Message;
+            }
+        }
+
         /// <summary>上传 JsonData 全部 JSON 文件（逐文件 commit，已存在则带 sha 更新）。
         /// 防覆盖：若某文件云端 sha 与上次同步记录不一致（其它设备改过），跳过该文件并提示先下载。</summary>
         public static async Task<string> PushAsync()
@@ -276,6 +424,7 @@ namespace ME.Services
             catch (Exception ex) { return "✗ " + ex.Message; }
             int ok = 0; int skipped = 0; string lastErr = null;
             var newShas = new Dictionary<string, string>(c.FileShas);
+            var newHashes = new Dictionary<string, string>(c.FileHashes);
             foreach (var f in files)
             {
                 try
@@ -305,6 +454,7 @@ namespace ME.Services
                     if (sha != null) payload["sha"] = sha;
                     var putResp = await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{Path.GetFileName(f)}"), payload).ConfigureAwait(false);
                     try { newShas[Path.GetFileName(f)] = putResp.GetProperty("content").GetProperty("sha").GetString(); } catch { }
+                    newHashes[Path.GetFileName(f)] = HashFile(f);
                     ok++;
                 }
                 catch (Exception ex) { lastErr = ex.Message; }
@@ -312,6 +462,7 @@ namespace ME.Services
             if (ok > 0)
             {
                 c.FileShas = newShas;
+                c.FileHashes = newHashes;
                 c.LastPushAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 Save(c);
             }
@@ -356,6 +507,7 @@ namespace ME.Services
 
             int n = 0; int total = 0; string lastErr = null;
             var newShas = new Dictionary<string, string>(c.FileShas);
+            var newHashes = new Dictionary<string, string>(c.FileHashes);
             foreach (var item in listing.EnumerateArray())
             {
                 var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
@@ -366,7 +518,8 @@ namespace ME.Services
                     var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{name}?ref={c.Branch}")).ConfigureAwait(false);
                     var b64 = detail.GetProperty("content").GetString() ?? "";
                     var text = Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
-                    File.WriteAllText(Path.Combine(DataDir, name), text);
+                    var localPath = Path.Combine(DataDir, name);
+                    File.WriteAllText(localPath, text);
                     JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
                     try
                     {
@@ -374,6 +527,7 @@ namespace ME.Services
                         if (fsha != null) newShas[name] = fsha;
                     }
                     catch { }
+                    newHashes[name] = HashFile(localPath);
                     n++;
                 }
                 catch (Exception ex) { lastErr = ex.Message; }
@@ -381,6 +535,7 @@ namespace ME.Services
             if (n > 0)
             {
                 c.FileShas = newShas;
+                c.FileHashes = newHashes;
                 c.LastPullAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 Save(c);
             }

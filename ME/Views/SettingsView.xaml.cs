@@ -13,6 +13,7 @@ using Microsoft.Win32;
 using ME.Data;
 using ME.Models;
 using ME.Services;
+using ME.Core;
 
 using Forms = System.Windows.Forms;
 
@@ -41,6 +42,8 @@ namespace ME.Views
             BackupModePartial.IsChecked = true;
             UpdateBackupPanelVisibility();
             BuildColorBalls();
+            EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
+            this.Unloaded += (s, e) => EventAggregator.Instance.Unsubscribe<string>(OnGlobalEvent);
         }
 
         private void SettingsView_Loaded(object sender, RoutedEventArgs e)
@@ -65,7 +68,6 @@ namespace ME.Views
             (Sec_General, "通用"),
             (Sec_Focus, "专注与统计"),
             (Sec_Data, "数据与备份"),
-            (Sec_GitHub, "GitHub 同步"),
             (Sec_Modules, "自定义模块"),
             (Sec_AI, "AI 分析"),
             (Sec_About, "关于"),
@@ -99,10 +101,17 @@ namespace ME.Views
             {
                 try { SyncTokenBox.Password = SecureStore.Decrypt(c.EncryptedToken); } catch { }
             }
+            // 启动自动同步开关（赋值会触发 Checked/Unchecked，用标志跳过保存）
+            _loadingSyncConfig = true;
+            AutoSyncToggle.IsChecked = c.AutoSyncOnStartup;
+            _loadingSyncConfig = false;
             var last = "";
             if (!string.IsNullOrEmpty(c.LastPushAt)) last += $"上次上传 {c.LastPushAt}  ";
-            if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}";
+            if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}  ";
+            if (!string.IsNullOrEmpty(c.LastSyncAt)) last += $"上次自动同步 {c.LastSyncAt}";
             SyncLastTimeText.Text = last;
+            if (!string.IsNullOrWhiteSpace(GitHubSyncService.LastAutoSyncResult))
+                AutoSyncStatusText.Text = $"本次启动：{GitHubSyncService.LastAutoSyncResult}";
             RefreshAccountDisplay();
             // 已登录但没存账号名时后台补拉一次，保证刷新后仍显示登录状态
             if (!string.IsNullOrWhiteSpace(c.EncryptedToken) && string.IsNullOrWhiteSpace(c.AccountName))
@@ -481,10 +490,6 @@ namespace ME.Views
             // Stats tag selection
             BuildStatsTagsPanel();
 
-            // Last sync time
-            var lastSync = SyncService.GetLastSyncTime();
-            LastSyncTimeText.Text = lastSync.HasValue ? $"上次同步: {lastSync:yyyy-MM-dd HH:mm:ss}" : "未同步";
-
             // DeepSeek API Key → 多供应商
             LoadAiProviders();
         }
@@ -639,24 +644,38 @@ namespace ME.Views
             }
         }
 
-        private void ExportSyncData_Click(object sender, RoutedEventArgs e)
-        {
-            var dlg = new Forms.SaveFileDialog
-            {
-                Filter = "JSON files (*.json)|*.json",
-                FileName = $"me_export_{DateTime.Now:yyyyMMdd_HHmmss}.json"
-            };
-            if (dlg.ShowDialog() == Forms.DialogResult.OK)
-            {
-                var json = SyncService.ExportAllAsJson();
-                File.WriteAllText(dlg.FileName, json);
-                ConfirmDialog.Show(Window.GetWindow(this), "提示", $"数据已导出到:\n{dlg.FileName}", "确定");
-            }
-        }
-
         private void BackupMode_Changed(object sender, RoutedEventArgs e)
         {
             UpdateBackupPanelVisibility();
+        }
+
+        // ========== 启动自动同步 ==========
+
+        private bool _loadingSyncConfig;
+
+        private void AutoSyncToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_loadingSyncConfig || AutoSyncToggle == null) return; // XAML 初始化/回填期不写盘
+            var c = GitHubSyncService.Load();
+            c.AutoSyncOnStartup = AutoSyncToggle.IsChecked == true;
+            GitHubSyncService.Save(c);
+        }
+
+        /// <summary>后台自动同步完成后刷新状态显示</summary>
+        private void OnGlobalEvent(string message)
+        {
+            if (message != "SyncStatusChanged") return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var c = GitHubSyncService.Load();
+                var last = "";
+                if (!string.IsNullOrEmpty(c.LastPushAt)) last += $"上次上传 {c.LastPushAt}  ";
+                if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}  ";
+                if (!string.IsNullOrEmpty(c.LastSyncAt)) last += $"上次自动同步 {c.LastSyncAt}";
+                SyncLastTimeText.Text = last;
+                if (!string.IsNullOrWhiteSpace(GitHubSyncService.LastAutoSyncResult))
+                    AutoSyncStatusText.Text = $"本次启动：{GitHubSyncService.LastAutoSyncResult}";
+            }));
         }
 
         private void UpdateBackupPanelVisibility()
