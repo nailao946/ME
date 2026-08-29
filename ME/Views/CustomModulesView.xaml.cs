@@ -740,7 +740,6 @@ namespace ME.Views
 
             int iconIdx = initial?.Icon ?? 0;
             var iconPanel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-            string colorHex = initial?.ColorHex ?? "#4F6EF7";
             for (int i = 0; i < ModuleIcons.Length; i++)
             {
                 int idx = i;
@@ -757,8 +756,28 @@ namespace ME.Views
             }
             root.Children.Add(FormRow("图标（点击选中）", iconPanel));
 
-            var colorBox = new TextBox { Text = colorHex, FontSize = 13, Height = 34, Width = 130, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
-            root.Children.Add(FormRow("颜色（#RRGGBB）", colorBox));
+            string colorHex = initial?.ColorHex ?? "#4F6EF7";
+            // 颜色：圆形颜料盘（点击色球按钮弹出，不再手输颜色代码）
+            var colorBtn = new Button { Height = 34, Width = 150, Padding = new Thickness(0), Cursor = Cursors.Hand };
+            void RenderColorBtn()
+            {
+                var p = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+                p.Children.Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = 14, Height = 14,
+                    Fill = new SolidColorBrush(ParseColor(colorHex)),
+                    Margin = new Thickness(0, 0, 6, 0)
+                });
+                p.Children.Add(new TextBlock { Text = "点击选择颜色", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                colorBtn.Content = p;
+            }
+            colorBtn.Click += (s, e) =>
+            {
+                var picked = ColorPaletteDialog.Show(win, colorHex);
+                if (picked != null) { colorHex = picked; RenderColorBtn(); }
+            };
+            RenderColorBtn();
+            root.Children.Add(FormRow("颜色", colorBtn));
 
             // 字段编辑
             var fieldsPanel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
@@ -836,13 +855,13 @@ namespace ME.Views
                 if (validFields.Count == 0) { MessageBox.Show("至少需要一个字段"); return; }
                 if (initial == null)
                 {
-                    var nm = CustomModuleRepository.Add(new CustomModule { Name = nameBox.Text.Trim(), ColorHex = colorBox.Text.Trim(), Icon = iconIdx, Fields = validFields });
+                    var nm = CustomModuleRepository.Add(new CustomModule { Name = nameBox.Text.Trim(), ColorHex = colorHex, Icon = iconIdx, Fields = validFields });
                     _selectedModuleId = nm.Id;
                 }
                 else
                 {
                     initial.Name = nameBox.Text.Trim();
-                    initial.ColorHex = colorBox.Text.Trim();
+                    initial.ColorHex = colorHex;
                     initial.Icon = iconIdx;
                     initial.Fields = validFields;
                     CustomModuleRepository.Update(initial);

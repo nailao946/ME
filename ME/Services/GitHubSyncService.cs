@@ -27,6 +27,8 @@ namespace ME.Services
             public string LastPushAt { get; set; } = "";
             public string LastPullAt { get; set; } = "";
             public string AccountName { get; set; } = ""; // 授权后显示的 GitHub 用户名
+            // 每个文件上次同步后的云端 sha，用于检测「云端比本地新」，避免覆盖其它设备的更新
+            public Dictionary<string, string> FileShas { get; set; } = new Dictionary<string, string>();
         }
 
         /// <summary>设备码授权会话（GitHub Device Flow，用户只需在网页登录后输入代码点允许）</summary>
@@ -254,7 +256,8 @@ namespace ME.Services
 
         private static string Truncate(string s, int n) => string.IsNullOrEmpty(s) || s.Length <= n ? s : s.Substring(0, n);
 
-        /// <summary>上传 JsonData 全部 JSON 文件（逐文件 commit，已存在则带 sha 更新）</summary>
+        /// <summary>上传 JsonData 全部 JSON 文件（逐文件 commit，已存在则带 sha 更新）。
+        /// 防覆盖：若某文件云端 sha 与上次同步记录不一致（其它设备改过），跳过该文件并提示先下载。</summary>
         public static async Task<string> PushAsync()
         {
             var c = Load();
@@ -271,7 +274,8 @@ namespace ME.Services
             string repo;
             try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
             catch (Exception ex) { return "✗ " + ex.Message; }
-            int ok = 0; string lastErr = null;
+            int ok = 0; int skipped = 0; string lastErr = null;
+            var newShas = new Dictionary<string, string>(c.FileShas);
             foreach (var f in files)
             {
                 try
@@ -284,6 +288,14 @@ namespace ME.Services
                         sha = existing.GetProperty("sha").GetString();
                     }
                     catch { /* 不存在则新建 */ }
+
+                    // 云端被其它设备更新过而本地没有先下载 → 跳过，避免覆盖
+                    if (c.FileShas.TryGetValue(Path.GetFileName(f), out var known) && sha != null && known != sha)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
                     var payload = new Dictionary<string, object>
                     {
                         ["message"] = $"ME 数据同步（PC）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
@@ -291,18 +303,24 @@ namespace ME.Services
                         ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch
                     };
                     if (sha != null) payload["sha"] = sha;
-                    await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{Path.GetFileName(f)}"), payload).ConfigureAwait(false);
+                    var putResp = await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{Path.GetFileName(f)}"), payload).ConfigureAwait(false);
+                    try { newShas[Path.GetFileName(f)] = putResp.GetProperty("content").GetProperty("sha").GetString(); } catch { }
                     ok++;
                 }
                 catch (Exception ex) { lastErr = ex.Message; }
             }
-            if (ok == files.Length)
+            if (ok > 0)
             {
+                c.FileShas = newShas;
                 c.LastPushAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 Save(c);
-                return $"✓ 已上传 {ok} 个文件";
             }
-            return $"已上传 {ok}/{files.Length} 个" + (lastErr != null ? "，错误：" + lastErr : "");
+            var baseMsg = ok == files.Length
+                ? $"✓ 已上传 {ok} 个文件"
+                : $"已上传 {ok}/{files.Length} 个" + (lastErr != null ? "，错误：" + lastErr : "");
+            if (skipped > 0)
+                baseMsg += $"；云端有 {skipped} 个文件比本地新，已跳过（请先「下载数据」再上传）";
+            return baseMsg;
         }
 
         /// <summary>从仓库 data/ 目录下载并覆盖本地（先备份本地 JsonData）</summary>
@@ -337,6 +355,7 @@ namespace ME.Services
             Directory.CreateDirectory(DataDir);
 
             int n = 0; int total = 0; string lastErr = null;
+            var newShas = new Dictionary<string, string>(c.FileShas);
             foreach (var item in listing.EnumerateArray())
             {
                 var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
@@ -349,12 +368,19 @@ namespace ME.Services
                     var text = Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
                     File.WriteAllText(Path.Combine(DataDir, name), text);
                     JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
+                    try
+                    {
+                        var fsha = detail.GetProperty("sha").GetString();
+                        if (fsha != null) newShas[name] = fsha;
+                    }
+                    catch { }
                     n++;
                 }
                 catch (Exception ex) { lastErr = ex.Message; }
             }
             if (n > 0)
             {
+                c.FileShas = newShas;
                 c.LastPullAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 Save(c);
             }

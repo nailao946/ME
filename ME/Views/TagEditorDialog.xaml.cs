@@ -14,10 +14,15 @@ namespace ME.Views
         private string _selectedColor;
         private readonly bool _isPreset;
 
+        // 与安卓端调色盘一致（24 色精选，无需输入颜色代码）
         private static readonly List<string> PresetColors = new List<string>
         {
-            "#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF",
-            "#5856D6", "#AF52DE", "#FF2D55", "#00C7BE", "#8E8E93"
+            "#E5484D", "#E0603C", "#E07B39", "#E0A93C",
+            "#D9B23C", "#A8C03C", "#7CB342", "#2E9E5B",
+            "#2BA8A8", "#3AA6B8", "#4FC3F7", "#4A8CF7",
+            "#4F6EF7", "#6C5CE7", "#7C5CE0", "#9B59B6",
+            "#C25CE0", "#E05C8A", "#E05570", "#B85C5C",
+            "#8A8F9E", "#6B7280", "#5A6472", "#3E4756",
         };
 
         public TagEditorDialog(TimeTag existing = null)
@@ -29,7 +34,6 @@ namespace ME.Views
 
             NameBox.Text = existing?.Name ?? "新标签";
             NameBox.IsReadOnly = _isPreset;
-            ColorBox.Text = _selectedColor;
             NotesBox.Text = existing?.Notes ?? "";
 
             Result = existing ?? new TimeTag();
@@ -88,7 +92,6 @@ namespace ME.Views
         private void SelectColor(string color)
         {
             _selectedColor = color;
-            ColorBox.Text = color;
 
             foreach (var child in ColorPalette.Items)
             {
@@ -110,16 +113,6 @@ namespace ME.Views
         private static string ColorToHex(Color c)
         {
             return $"{c.R:X2}{c.G:X2}{c.B:X2}";
-        }
-
-        private void ColorBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-        {
-            try
-            {
-                var c = (Color)ColorConverter.ConvertFromString(ColorBox.Text);
-                _selectedColor = ColorBox.Text;
-            }
-            catch { }
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)

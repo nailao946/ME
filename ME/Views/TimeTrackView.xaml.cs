@@ -1159,7 +1159,15 @@ namespace ME.Views
                 $"{year}-{month:D2}-01",
                 $"{year}-{month:D2}-{daysInMonth:D2}"
             );
-            var datesWithRecords = recordsThisMonth.Select(r => r.Date).ToHashSet();
+            // 热力图数据：每天总时长（分钟）
+            var dayMinutes = new Dictionary<string, double>();
+            foreach (var r in recordsThisMonth)
+            {
+                var dur = (r.EndTime ?? DateTime.Now) - r.StartTime;
+                dayMinutes[r.Date] = (dayMinutes.TryGetValue(r.Date, out var m) ? m : 0) + Math.Max(0, dur.TotalMinutes);
+            }
+            var maxMin = dayMinutes.Count > 0 ? dayMinutes.Values.Max() : 0;
+            var baseColor = (FindResource("PrimaryBrush") as SolidColorBrush)?.Color ?? Color.FromRgb(0, 122, 255);
 
             for (int i = 0; i < startOffset; i++)
             {
@@ -1172,9 +1180,22 @@ namespace ME.Views
                 var dateStr = date.ToString("yyyy-MM-dd");
                 bool isToday = date == today;
                 bool isSelected = date.Date == _selectedDate.Date;
-                bool hasRecord = datesWithRecords.Contains(dateStr);
+                bool hasRecord = dayMinutes.ContainsKey(dateStr) && dayMinutes[dateStr] > 0;
 
                 var cell = new Grid { Margin = new Thickness(1) };
+
+                // 热力底色：圆角方块按时长深浅着色（替代原来的小圆点）
+                if (hasRecord && !isSelected && maxMin > 0 && dayMinutes.TryGetValue(dateStr, out var mins))
+                {
+                    var a = (byte)(36 + 150 * Math.Min(1.0, mins / maxMin));
+                    var heat = new Border
+                    {
+                        CornerRadius = new CornerRadius(8),
+                        Background = new SolidColorBrush(Color.FromArgb(a, baseColor.R, baseColor.G, baseColor.B)),
+                        Margin = new Thickness(1)
+                    };
+                    cell.Children.Add(heat);
+                }
 
                 var dayBtn = new Button
                 {
@@ -1184,7 +1205,10 @@ namespace ME.Views
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     VerticalAlignment = VerticalAlignment.Stretch,
                     Padding = new Thickness(0),
-                    MinHeight = 30
+                    MinHeight = 30,
+                    ToolTip = hasRecord && dayMinutes.TryGetValue(dateStr, out var tipMin)
+                        ? $"{date:MM/dd} 计时 {FormatDuration(TimeSpan.FromMinutes(tipMin))}"
+                        : $"{date:MM/dd} 无计时记录"
                 };
 
                 if (isSelected)
@@ -1233,20 +1257,6 @@ namespace ME.Views
                         Margin = new Thickness(0, 0, 0, 2)
                     };
                     cell.Children.Add(dot);
-                }
-
-                if (hasRecord && !isSelected)
-                {
-                    var indicator = new Border
-                    {
-                        Width = 4, Height = 4,
-                        CornerRadius = new CornerRadius(2),
-                        Background = (Brush)FindResource("PrimaryBrush"),
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        VerticalAlignment = VerticalAlignment.Top,
-                        Margin = new Thickness(0, 2, 2, 0)
-                    };
-                    cell.Children.Add(indicator);
                 }
 
                 CalendarGrid.Children.Add(cell);

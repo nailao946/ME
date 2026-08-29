@@ -54,6 +54,36 @@ namespace ME.Views
             }
             catch { }
             LoadSyncConfig();
+            ApplySettingsCategory(SettingsNav.SelectedIndex);
+        }
+
+        // ========== 分类导航（微信设置式：左侧大类 → 右侧一页） ==========
+
+        private (StackPanel panel, string title)[] CategoryPanels => new (StackPanel, string)[]
+        {
+            (Sec_Appearance, "外观"),
+            (Sec_General, "通用"),
+            (Sec_Focus, "专注与统计"),
+            (Sec_Data, "数据与备份"),
+            (Sec_GitHub, "GitHub 同步"),
+            (Sec_Modules, "自定义模块"),
+            (Sec_AI, "AI 分析"),
+            (Sec_About, "关于"),
+        };
+
+        private void SettingsNav_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (SettingsCardsPanel == null) return; // XAML 尚未加载
+            ApplySettingsCategory(SettingsNav.SelectedIndex);
+        }
+
+        private void ApplySettingsCategory(int index)
+        {
+            var secs = CategoryPanels;
+            if (index < 0 || index >= secs.Length) index = 0;
+            for (int k = 0; k < secs.Length; k++)
+                secs[k].panel.Visibility = k == index ? Visibility.Visible : Visibility.Collapsed;
+            SettingsPageTitle.Text = secs[index].title;
             AnimateSettingCards();
         }
 
@@ -240,12 +270,12 @@ namespace ME.Views
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (this.Content is ScrollViewer sv && sv.Content is Panel panel)
+                if (SettingsCardsPanel is Panel panel)
                 {
                     int idx = 0;
                     foreach (var child in panel.Children)
                     {
-                        if (child is FrameworkElement el)
+                        if (child is FrameworkElement el && el.Visibility == Visibility.Visible)
                         {
                             el.Opacity = 0;
                             var delay = TimeSpan.FromMilliseconds(idx * 60);
@@ -263,8 +293,8 @@ namespace ME.Views
                                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                             };
                             slide.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+                            idx++;
                         }
-                        idx++;
                     }
                 }
             }), System.Windows.Threading.DispatcherPriority.Loaded);

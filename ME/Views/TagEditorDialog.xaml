@@ -39,7 +39,7 @@
                     <TextBox x:Name="NameBox" Style="{DynamicResource InputTextBoxStyle}"
                              Height="36" FontSize="13" Margin="0,0,0,14" />
 
-                    <TextBlock Text="颜色" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
+                    <TextBlock Text="颜色（点色块选择）" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8" />
                     <ItemsControl x:Name="ColorPalette" Margin="0,0,0,14">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -47,10 +47,6 @@
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
-
-                    <TextBlock Text="自定义颜色 (Hex)" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6" />
-                    <TextBox x:Name="ColorBox" Style="{DynamicResource InputTextBoxStyle}"
-                             Height="36" FontSize="13" TextChanged="ColorBox_TextChanged" Margin="0,0,0,14" />
 
                     <TextBlock Text="备注" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,6" />
                     <TextBox x:Name="NotesBox" Style="{DynamicResource InputTextBoxStyle}"

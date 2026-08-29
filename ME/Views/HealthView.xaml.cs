@@ -20,15 +20,25 @@ namespace ME.Views
 {
     public partial class HealthView : UserControl
     {
-        private static readonly string[] MoodEmojis = { "😊", "😐", "😔", "😢" };
-        private static readonly string[] MoodNames = { "开心", "平静", "低落", "难过" };
+        // 心情五档（与安卓端一致：1=😢很难过 … 5=😄很开心）；旧数据 0-3 四档在显示时自动换算
+        private static readonly string[] MoodEmojis = { "😢", "😔", "😐", "😊", "😄" };
+        private static readonly string[] MoodNames = { "很难过", "低落", "一般", "不错", "很开心" };
         private static readonly Brush[] MoodColors =
         {
-            new SolidColorBrush(Color.FromRgb(52, 199, 89)),
-            new SolidColorBrush(Color.FromRgb(90, 200, 250)),
-            new SolidColorBrush(Color.FromRgb(255, 159, 10)),
-            new SolidColorBrush(Color.FromRgb(90, 90, 110))
+            new SolidColorBrush(Color.FromRgb(229, 72, 77)),
+            new SolidColorBrush(Color.FromRgb(224, 96, 60)),
+            new SolidColorBrush(Color.FromRgb(224, 169, 60)),
+            new SolidColorBrush(Color.FromRgb(124, 179, 66)),
+            new SolidColorBrush(Color.FromRgb(46, 158, 91))
         };
+
+        /// <summary>原始值 → 0-4 下标（旧 0-3 四档：0=😊开心…3=😢难过，换算为 5-v；新 1-5 直接 v-1）</summary>
+        private static int MoodIdxOf(double raw)
+        {
+            int v = (int)raw;
+            if (v >= 0 && v <= 3) v = 5 - v;
+            return Math.Min(Math.Max(v - 1, 0), 4);
+        }
 
         private readonly HealthRepository _repo = new HealthRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
@@ -945,9 +955,9 @@ namespace ME.Views
         private void Mood_Click(object sender, RoutedEventArgs e)
         {
             if (!(sender is Button btn)) return;
-            var idx = int.Parse((string)btn.Tag);
+            var idx = int.Parse((string)btn.Tag);   // 0-4（😢…😄）
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
-            _repo.Upsert(new HealthRecord { Type = "mood", Date = todayStr, Value = idx });
+            _repo.Upsert(new HealthRecord { Type = "mood", Date = todayStr, Value = idx + 1 });  // 存 1-5，与安卓端一致
             LoadMood();
         }
 
@@ -961,11 +971,11 @@ namespace ME.Views
         {
             var todayStr = DateTime.Today.ToString("yyyy-MM-dd");
             var todayRec = _repo.GetByTypeAndDate("mood", todayStr);
-            int todayMood = todayRec != null ? (int)todayRec.Value : -1;
+            int todayMood = todayRec != null ? MoodIdxOf(todayRec.Value) : -1;
 
             MoodSelectedText.Text = todayMood >= 0 ? $"今天的心情：{MoodEmojis[todayMood]} {MoodNames[todayMood]}" : "";
 
-            var moodBtns = new[] { MoodBtn0, MoodBtn1, MoodBtn2, MoodBtn3 };
+            var moodBtns = new[] { MoodBtn0, MoodBtn1, MoodBtn2, MoodBtn3, MoodBtn4 };
             for (int i = 0; i < moodBtns.Length; i++)
             {
                 var selected = i == todayMood;
@@ -977,13 +987,13 @@ namespace ME.Views
             MoodDistributionPanel.Children.Clear();
             var all = _repo.GetByType("mood");
             var weekMoods = all.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
-            var counts = new int[4];
+            var counts = new int[5];
             foreach (var r in weekMoods)
             {
-                var idx = (int)r.Value;
-                if (idx >= 0 && idx < 4) counts[idx]++;
+                var idx = MoodIdxOf(r.Value);
+                counts[idx]++;
             }
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
                 row.Children.Add(new TextBlock
@@ -1025,7 +1035,7 @@ namespace ME.Views
             // 近 30 天时间线
             MoodTimelinePanel.Children.Clear();
             var moodDays = all.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-29).ToString("yyyy-MM-dd")) >= 0)
-                              .ToDictionary(r => r.Date, r => (int)r.Value);
+                              .ToDictionary(r => r.Date, r => MoodIdxOf(r.Value));
             for (int i = 29; i >= 0; i--)
             {
                 var d = DateTime.Today.AddDays(-i);
@@ -1036,12 +1046,12 @@ namespace ME.Views
                     Height = 26,
                     CornerRadius = new CornerRadius(5),
                     Margin = new Thickness(2),
-                    Background = moodDays.TryGetValue(key, out var mi) && mi >= 0 && mi < 4
+                    Background = moodDays.TryGetValue(key, out var mi) && mi >= 0 && mi < 5
                         ? MoodColors[mi]
                         : new SolidColorBrush(Color.FromArgb(25, 128, 128, 128)),
                     ToolTip = d.ToString("MM/dd") + (moodDays.TryGetValue(key, out var m2) ? $" {MoodNames[m2]}" : "")
                 };
-                box.Child = moodDays.TryGetValue(key, out var em) && em >= 0 && em < 4
+                box.Child = moodDays.TryGetValue(key, out var em) && em >= 0 && em < 5
                     ? new TextBlock { Text = MoodEmojis[em], FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
                     : null;
                 MoodTimelinePanel.Children.Add(box);
@@ -1052,8 +1062,8 @@ namespace ME.Views
             var recent = all.OrderByDescending(r => r.Date).Take(14).ToList();
             foreach (var r in recent)
             {
-                var idx = (int)r.Value;
-                var moodText = idx >= 0 && idx < 4 ? $"{MoodEmojis[idx]} {MoodNames[idx]}" : "?";
+                var idx = MoodIdxOf(r.Value);
+                var moodText = $"{MoodEmojis[idx]} {MoodNames[idx]}";
                 MoodRecordsPanel.Children.Add(BuildRecordRow(
                     $"{r.Date}  {moodText}",
                     null,
@@ -1873,17 +1883,17 @@ namespace ME.Views
 
             // ===== 心情组 =====
             var mood = _repo.GetByTypeAndDate("mood", todayStr);
-            var mi = mood != null ? (int)mood.Value : -1;
+            var mi = mood != null ? MoodIdxOf(mood.Value) : -1;
             var allMoods = _repo.GetByType("mood");
             var weekMoods = allMoods.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
             var moodItems = new List<(string, string, string)>
             {
-                ("今日心情", mi >= 0 && mi < 4 ? MoodEmojis[mi] + " " + MoodNames[mi] : "未记录", mi >= 0 && mi <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush")
+                ("今日心情", mi >= 0 && mi < 5 ? MoodEmojis[mi] + " " + MoodNames[mi] : "未记录", mi >= 3 ? "AccentGreenBrush" : "SecondaryTextBrush")
             };
             if (weekMoods.Count > 0)
             {
-                var avg = (int)Math.Round(weekMoods.Average(r => r.Value));
-                if (avg < 0 || avg > 3) avg = 1;
+                var avg = (int)Math.Round(weekMoods.Average(r => MoodIdxOf(r.Value)));
+                if (avg < 0 || avg > 4) avg = 2;
                 moodItems.Add(("近 7 天平均", MoodEmojis[avg] + " " + MoodNames[avg], "SecondaryTextBrush"));
             }
             AddGroup("😊 心情", moodItems.ToArray());
@@ -1936,9 +1946,8 @@ namespace ME.Views
                 {
                     var rec = _repo.GetByTypeAndDate("mood", todayStr);
                     if (rec == null) return (key, "--", "今日未记录", "SecondaryTextBrush");
-                    var idx = (int)rec.Value;
-                    if (idx < 0 || idx >= 4) return (key, "--", "未知", "SecondaryTextBrush");
-                    return (key, MoodEmojis[idx], MoodNames[idx], idx <= 1 ? "AccentGreenBrush" : "AccentYellowBrush");
+                    var idx = MoodIdxOf(rec.Value);
+                    return (key, MoodEmojis[idx], MoodNames[idx], idx >= 3 ? "AccentGreenBrush" : "AccentYellowBrush");
                 }
                 case "尿酸":
                 {
@@ -1964,20 +1973,64 @@ namespace ME.Views
             foreach (var key in new[] { "睡眠", "体重", "喝水", "心情", "尿酸", "用药" })
             {
                 var (title, value, sub, brushKey) = GetOverviewCardData(key);
+                var emoji = key switch
+                {
+                    "睡眠" => "😴", "体重" => "⚖️", "喝水" => "💧", "心情" => "😊", "尿酸" => "💉", _ => "💊"
+                };
+                // 强调色低透明度做图标底
+                Brush iconBg = new SolidColorBrush(Color.FromArgb(30, 128, 140, 170));
+                if (FindResource(brushKey) is SolidColorBrush scb)
+                    iconBg = new SolidColorBrush(Color.FromArgb(34, scb.Color.R, scb.Color.G, scb.Color.B));
+
                 var card = new Border
                 {
                     Style = (Style)FindResource("CardStyle"),
-                    Width = 150,
+                    Width = 172,
                     Margin = new Thickness(0, 0, 10, 10),
-                    Padding = new Thickness(12, 10, 12, 10),
+                    Padding = new Thickness(12, 12, 12, 12),
                     Cursor = Cursors.Hand
                 };
                 var keyCopy = key;
                 card.MouseLeftButtonDown += (s, e) => ShowBodyPartDetail(keyCopy);
+
+                var rowPanel = new StackPanel { Orientation = Orientation.Horizontal };
+                var iconBox = new Border
+                {
+                    Width = 38, Height = 38, CornerRadius = new CornerRadius(11),
+                    Background = iconBg,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                iconBox.Child = new TextBlock
+                {
+                    Text = emoji,
+                    FontSize = 18,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                rowPanel.Children.Add(iconBox);
+
+                var col = new StackPanel { Margin = new Thickness(9, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+                col.Children.Add(new TextBlock { Text = key, FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush") });
+                col.Children.Add(new TextBlock
+                {
+                    Text = value,
+                    FontSize = 17,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = (Brush)FindResource(brushKey),
+                    Margin = new Thickness(0, 1, 0, 0)
+                });
+                rowPanel.Children.Add(col);
+
                 var panel = new StackPanel();
-                panel.Children.Add(new TextBlock { Text = key, FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush") });
-                panel.Children.Add(new TextBlock { Text = value, FontSize = 18, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource(brushKey), Margin = new Thickness(0, 2, 0, 0) });
-                panel.Children.Add(new TextBlock { Text = sub, FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+                panel.Children.Add(rowPanel);
+                panel.Children.Add(new TextBlock
+                {
+                    Text = sub,
+                    FontSize = 10,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                    Margin = new Thickness(0, 6, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
                 card.Child = panel;
                 OverviewCardsPanel.Children.Add(card);
             }

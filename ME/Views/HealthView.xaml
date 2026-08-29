@@ -526,18 +526,21 @@
                                    Foreground="{DynamicResource TextBrush}" />
                         <TextBlock x:Name="MoodTodayHint" Text="点击选择今天的心情"
                                    FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" />
-                        <UniformGrid Columns="4" Margin="0,14,0,0">
-                            <Button x:Name="MoodBtn0" Content="😊" Tag="0" Click="Mood_Click" FontSize="30"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                        <UniformGrid Columns="5" Margin="0,14,0,0">
+                            <Button x:Name="MoodBtn0" Content="😢" Tag="0" Click="Mood_Click" FontSize="26"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="46" Height="46"
                                     Padding="0" Margin="0,0,6,0" />
-                            <Button x:Name="MoodBtn1" Content="😐" Tag="1" Click="Mood_Click" FontSize="30"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                            <Button x:Name="MoodBtn1" Content="😔" Tag="1" Click="Mood_Click" FontSize="26"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="46" Height="46"
                                     Padding="0" Margin="0,0,6,0" />
-                            <Button x:Name="MoodBtn2" Content="😔" Tag="2" Click="Mood_Click" FontSize="30"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                            <Button x:Name="MoodBtn2" Content="😐" Tag="2" Click="Mood_Click" FontSize="26"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="46" Height="46"
                                     Padding="0" Margin="0,0,6,0" />
-                            <Button x:Name="MoodBtn3" Content="😢" Tag="3" Click="Mood_Click" FontSize="30"
-                                    Style="{StaticResource SecondaryButtonStyle}" Width="52" Height="52"
+                            <Button x:Name="MoodBtn3" Content="😊" Tag="3" Click="Mood_Click" FontSize="26"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="46" Height="46"
+                                    Padding="0" Margin="0,0,6,0" />
+                            <Button x:Name="MoodBtn4" Content="😄" Tag="4" Click="Mood_Click" FontSize="26"
+                                    Style="{StaticResource SecondaryButtonStyle}" Width="46" Height="46"
                                     Padding="0" />
                         </UniformGrid>
                         <TextBlock x:Name="MoodSelectedText" FontSize="12"
