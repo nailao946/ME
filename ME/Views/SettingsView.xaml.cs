@@ -973,6 +973,60 @@ namespace ME.Views
             dlg.ShowDialog();
         }
 
+        // ========== 关于：版本检测（对比 GitHub Releases 发布的最新版本） ==========
+
+        private string _releaseUrl;
+
+        private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            CheckUpdateBtn.IsEnabled = false;
+            CheckUpdateBtn.Content = "检查中…";
+            UpdateStatusText.Visibility = Visibility.Collapsed;
+            _releaseUrl = null;
+            try
+            {
+                var r = await UpdateCheckService.CheckAsync();
+                if (r.Error != null)
+                {
+                    UpdateStatusText.Text = r.Error;
+                    UpdateStatusText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+                    UpdateStatusText.Visibility = Visibility.Visible;
+                }
+                else if (r.HasUpdate)
+                {
+                    _releaseUrl = r.ReleaseUrl;
+                    UpdateStatusText.Text = $"发现新版本 v{r.LatestVersion}（当前 v{r.CurrentVersion}），点此前往下载";
+                    UpdateStatusText.Foreground = (Brush)FindResource("PrimaryBrush");
+                    UpdateStatusText.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    UpdateStatusText.Text = $"已是最新版本 v{r.CurrentVersion}";
+                    UpdateStatusText.Foreground = (Brush)FindResource("SecondaryTextBrush");
+                    UpdateStatusText.Visibility = Visibility.Visible;
+                }
+            }
+            finally
+            {
+                CheckUpdateBtn.IsEnabled = true;
+                CheckUpdateBtn.Content = "重新检查";
+            }
+        }
+
+        private void UpdateStatusText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_releaseUrl)) return;
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = _releaseUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch { }
+        }
+
         private void WechatText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             try

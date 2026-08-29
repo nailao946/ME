@@ -406,6 +406,16 @@
                                        Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
                             <TextBlock x:Name="VersionText" Text="版本 1.0.0" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" />
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <TextBlock Text="🔄 版本检测：" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" />
+                                <Button x:Name="CheckUpdateBtn" Content="检查更新" Click="CheckUpdate_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}" Padding="12,5" FontSize="11"
+                                        Cursor="Hand" ToolTip="对比 GitHub Releases 上发布的最新版本" />
+                                <TextBlock x:Name="UpdateStatusText" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource PrimaryBrush}" Cursor="Hand" Visibility="Collapsed"
+                                           MouseLeftButtonDown="UpdateStatusText_MouseLeftButtonDown" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                 <TextBlock Text="🔗 GitHub：" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" />
                                 <Button Content="github.com/nailao946/ME" Click="OpenGithub_Click"
