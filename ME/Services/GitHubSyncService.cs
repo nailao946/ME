@@ -26,6 +26,105 @@ namespace ME.Services
             public string Proxy { get; set; } = "";      // 可选，如 http://127.0.0.1:7897
             public string LastPushAt { get; set; } = "";
             public string LastPullAt { get; set; } = "";
+            public string AccountName { get; set; } = ""; // 授权后显示的 GitHub 用户名
+        }
+
+        /// <summary>设备码授权会话（GitHub Device Flow，用户只需在网页登录后输入代码点允许）</summary>
+        public class DeviceFlowSession
+        {
+            public string DeviceCode { get; set; }
+            public string UserCode { get; set; }
+            public string VerificationUri { get; set; }
+            public int Interval { get; set; } = 5;
+            public DateTime ExpiresAt { get; set; }
+        }
+
+        private const string OAuthClientId = "Ov23liBQpCTtMnMWyzsa";
+
+        /// <summary>开始设备码授权：请求 device code，返回会话（应随即打开浏览器）</summary>
+        public static async Task<DeviceFlowSession> LoginStartAsync()
+        {
+            var c = Load();
+            using var client = CreateClient(c);
+            var payload = new Dictionary<string, string> { ["client_id"] = OAuthClientId, ["scope"] = "repo" };
+            using var req = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/device/code");
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Content = new FormUrlEncodedContent(payload);
+            using var resp = await client.SendAsync(req).ConfigureAwait(false);
+            var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) throw new Exception($"HTTP {(int)resp.StatusCode}：{Truncate(text, 200)}");
+            using var doc = JsonDocument.Parse(text);
+            var r = doc.RootElement;
+            return new DeviceFlowSession
+            {
+                DeviceCode = r.GetProperty("device_code").GetString(),
+                UserCode = r.GetProperty("user_code").GetString(),
+                VerificationUri = r.GetProperty("verification_uri").GetString(),
+                Interval = r.TryGetProperty("interval", out var it) ? it.GetInt32() : 5,
+                ExpiresAt = DateTime.Now.AddSeconds(r.TryGetProperty("expires_in", out var ex) ? ex.GetInt32() : 900)
+            };
+        }
+
+        /// <summary>轮询一次授权结果。返回值：null=仍在等待用户授权；其他=token 或错误信息（以 ! 开头表示错误）</summary>
+        public static async Task<string> LoginPollAsync(DeviceFlowSession s)
+        {
+            var c = Load();
+            using var client = CreateClient(c);
+            var payload = new Dictionary<string, string>
+            {
+                ["client_id"] = OAuthClientId,
+                ["device_code"] = s.DeviceCode,
+                ["grant_type"] = "urn:ietf:params:oauth:grant-type:device_code"
+            };
+            using var req = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token");
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Content = new FormUrlEncodedContent(payload);
+            using var resp = await client.SendAsync(req).ConfigureAwait(false);
+            var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(text);
+            var r = doc.RootElement;
+            if (r.TryGetProperty("error", out var err))
+            {
+                var code = err.GetString();
+                if (code == "authorization_pending") return null;
+                if (code == "slow_down") { s.Interval += 5; return null; }
+                if (code == "expired_token") return "!授权码已过期，请重新开始";
+                return "!授权失败：" + code;
+            }
+            var token = r.GetProperty("access_token").GetString();
+            // 拉取用户名用于显示，失败不影响登录
+            string account = "";
+            try
+            {
+                c.EncryptedToken = SecureStore.Encrypt(token);
+                using var uclient = CreateClient(c);
+                using var ureq = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+                ureq.Headers.UserAgent.ParseAdd("ME-PC");
+                using var uresp = await uclient.SendAsync(ureq).ConfigureAwait(false);
+                var utext = await uresp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                using var udoc = JsonDocument.Parse(utext);
+                account = udoc.RootElement.GetProperty("login").GetString() ?? "";
+            }
+            catch { }
+            c.EncryptedToken = SecureStore.Encrypt(token);
+            c.AccountName = account;
+            Save(c);
+            return token;
+        }
+
+        /// <summary>打开浏览器进入授权页</summary>
+        public static void OpenLoginPage(DeviceFlowSession s)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(s.VerificationUri) { UseShellExecute = true }); } catch { }
+        }
+
+        /// <summary>退出登录：清除 token 与账号</summary>
+        public static void Logout()
+        {
+            var c = Load();
+            c.EncryptedToken = "";
+            c.AccountName = "";
+            Save(c);
         }
 
         private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };

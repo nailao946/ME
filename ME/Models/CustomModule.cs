@@ -39,6 +39,30 @@ namespace ME.Models
         public DateTime CreatedAt { get; set; }
         public bool IsDeleted { get; set; }
     }
+
+    /// <summary>
+    /// 模块仪表盘组件（PC 端专属配置，存于 custom_dashboards.json，安卓端会忽略此文件）。
+    /// Type：stat=数值统计 chart=趋势折线 pie=分布占比 streak=连续打卡
+    /// </summary>
+    public class CustomDashboardWidget
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N").Substring(0, 8);
+        public string Type { get; set; } = "stat";
+        /// <summary>关联的字段 Key（streak 可为空表示任意记录）</summary>
+        public string FieldKey { get; set; } = "";
+        /// <summary>stat 聚合方式：sum avg max min latest count</summary>
+        public string Agg { get; set; } = "sum";
+        /// <summary>统计范围：today week month all（chart 用 Days）</summary>
+        public string Range { get; set; } = "all";
+        /// <summary>chart 趋势天数：7 / 30</summary>
+        public int Days { get; set; } = 30;
+    }
+
+    public class CustomDashboard
+    {
+        public string ModuleId { get; set; } = "";
+        public List<CustomDashboardWidget> Widgets { get; set; } = new();
+    }
 }
 
 namespace ME.Data
@@ -93,6 +117,24 @@ namespace ME.Data
             if (m == null) return;
             m.Records.RemoveAll(r => r.Id == recordId);
             JsonStore.Save("custom_modules", all);
+        }
+    }
+
+    public static class CustomDashboardRepository
+    {
+        public static List<CustomDashboardWidget> GetFor(int moduleId)
+        {
+            var all = JsonStore.Load<CustomDashboard>("custom_dashboards");
+            return all.FirstOrDefault(d => d.ModuleId == moduleId.ToString())?.Widgets ?? new List<CustomDashboardWidget>();
+        }
+
+        public static void SaveFor(int moduleId, List<CustomDashboardWidget> widgets)
+        {
+            var all = JsonStore.Load<CustomDashboard>("custom_dashboards");
+            var i = all.FindIndex(d => d.ModuleId == moduleId.ToString());
+            if (i >= 0) all[i].Widgets = widgets;
+            else all.Add(new CustomDashboard { ModuleId = moduleId.ToString(), Widgets = widgets });
+            JsonStore.Save("custom_dashboards", all);
         }
     }
 }

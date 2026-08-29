@@ -73,6 +73,89 @@ namespace ME.Views
             if (!string.IsNullOrEmpty(c.LastPushAt)) last += $"上次上传 {c.LastPushAt}  ";
             if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}";
             SyncLastTimeText.Text = last;
+            RefreshAccountDisplay();
+        }
+
+        private void RefreshAccountDisplay()
+        {
+            var c = GitHubSyncService.Load();
+            if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
+            {
+                SyncAccountText.Text = string.IsNullOrWhiteSpace(c.AccountName)
+                    ? "已登录 GitHub（Token 已保存）"
+                    : $"已登录：{c.AccountName}";
+                SyncLoginBtn.Content = "重新授权";
+            }
+            else
+            {
+                SyncAccountText.Text = "未登录 GitHub 账号";
+                SyncLoginBtn.Content = "账号授权登录";
+            }
+        }
+
+        private System.Windows.Threading.DispatcherTimer _loginPollTimer;
+        private GitHubSyncService.DeviceFlowSession _loginSession;
+
+        private async void SyncLogin_Click(object sender, RoutedEventArgs e)
+        {
+            SaveSyncConfig(); // 保存代理设置，登录请求要用
+            SyncLoginBtn.IsEnabled = false;
+            SyncLoginStatus.Text = "正在请求授权码…";
+            try
+            {
+                _loginSession = await GitHubSyncService.LoginStartAsync();
+            }
+            catch (Exception ex)
+            {
+                SyncLoginStatus.Text = "请求失败：" + ex.Message + "（可尝试在上方填写代理）";
+                SyncLoginBtn.IsEnabled = true;
+                return;
+            }
+            GitHubSyncService.OpenLoginPage(_loginSession);
+            SyncLoginStatus.Text = $"请在打开的网页登录 GitHub 并输入代码 {_loginSession.UserCode}，点 Authorize 后等待…";
+
+            _loginPollTimer?.Stop();
+            _loginPollTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(Math.Max(3, _loginSession.Interval))
+            };
+            bool expired = false;
+            _loginPollTimer.Tick += async (s2, e2) =>
+            {
+                if (_loginSession == null || _loginSession.ExpiresAt < DateTime.Now)
+                {
+                    if (!expired) { expired = true; _loginPollTimer.Stop(); SyncLoginStatus.Text = "授权超时，请重试"; SyncLoginBtn.IsEnabled = true; }
+                    return;
+                }
+                string result;
+                try { result = await GitHubSyncService.LoginPollAsync(_loginSession); }
+                catch (Exception ex) { result = "!" + ex.Message; }
+                if (result == null) return; // 仍在等待
+                _loginPollTimer.Stop();
+                if (result.StartsWith("!"))
+                {
+                    SyncLoginStatus.Text = result.TrimStart('!');
+                    SyncLoginBtn.IsEnabled = true;
+                }
+                else
+                {
+                    try { SyncTokenBox.Password = SecureStore.Decrypt(GitHubSyncService.Load().EncryptedToken); } catch { }
+                    SyncLoginStatus.Text = "✓ 授权成功，Token 已自动保存";
+                    SyncLoginBtn.IsEnabled = true;
+                    RefreshAccountDisplay();
+                }
+            };
+            _loginPollTimer.Start();
+        }
+
+        private void SyncLogout_Click(object sender, RoutedEventArgs e)
+        {
+            if (MessageBox.Show("确定退出 GitHub 账号？将清除已保存的 Token。", "退出登录",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            GitHubSyncService.Logout();
+            SyncTokenBox.Password = "";
+            SyncLoginStatus.Text = "";
+            RefreshAccountDisplay();
         }
 
         private void SaveSyncConfig()

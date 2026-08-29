@@ -151,7 +151,7 @@ namespace ME
         private const int WM_NCHITTEST = 0x84;
         private const int HTCLIENT = 1;
         private const int HTCAPTION = 2;
-        private const int ResizeEdge = 10;
+        private const int ResizeEdge = 6;
 
         private System.Windows.Interop.HwndSource _hwndSource;
 
@@ -210,7 +210,7 @@ namespace ME
             var pos = e.GetPosition(this);
             var w = ActualWidth;
             var h = ActualHeight;
-            const int edge = 8;
+            const int edge = ResizeEdge;
             if (pos.X < edge) Cursor = pos.Y < edge ? Cursors.SizeNWSE : pos.Y > h - edge ? Cursors.SizeNESW : Cursors.SizeWE;
             else if (pos.X > w - edge) Cursor = pos.Y < edge ? Cursors.SizeNESW : pos.Y > h - edge ? Cursors.SizeNWSE : Cursors.SizeWE;
             else if (pos.Y < edge) Cursor = Cursors.SizeNS;
@@ -229,7 +229,7 @@ namespace ME
                 WindowClip.RadiusX = radius;
                 WindowClip.RadiusY = radius;
                 WindowBorder.CornerRadius = new CornerRadius(radius);
-                WindowBorder.Margin = WindowState == WindowState.Maximized ? new Thickness(0) : new Thickness(8);
+                WindowBorder.Margin = new Thickness(0);
             }
         }
 

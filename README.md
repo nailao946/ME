@@ -2,7 +2,7 @@
 
 > 一款纯本地运行的 WPF 桌面应用，帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
 
-![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-2.0.0-orange)
+![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-2.1.0-orange)
 
 ---
 
@@ -219,3 +219,13 @@ MIT
 - **目标自定义颜色**：目标支持 ColorHex 自定义色（与安卓端互通）
 - **任务手动排序修复**：拖拽落点按分区计算，同时保存 Priority + SortOrder，主任务/子任务排序均正常
 - 安卓版：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)
+
+
+---
+
+## v2.1.0 更新日志
+
+- **窗口边框修复**：去掉窗口外圈投影留边，边框贴住窗口最边缘，不再有黑色一圈
+- **GitHub 账号授权登录**：设置 → GitHub 云同步 →「账号授权登录」，自动打开网页登录并点 Authorize 即可拿 Token（GitHub Device Flow，OAuth App「ME 目标地图」），无需再手动创建 PAT；仍保留手动填 Token 和退出登录
+- **自定义模块重做**：模块切换 chips + 模块仪表盘 —— 内置今日/本周/累计/连续天数统计卡；可自行添加统计组件（数值统计【求和/平均/最大/最小/最新/记录数 × 今日/本周/本月/全部】、趋势折线图、分布占比环形图、连续打卡），组件点击可改、可删；最近记录直显卡片
+- 安卓版：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)（同版本支持账号授权登录）

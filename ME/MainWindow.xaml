@@ -21,10 +21,7 @@
                 Cursor="Arrow" Background="Transparent" />
         <Border x:Name="WindowBorder" Background="{DynamicResource BackgroundBrush}" CornerRadius="12"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                Margin="8">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="16" Opacity="0.25" ShadowDepth="2" />
-            </Border.Effect>
+                Margin="0">
             <Border.Clip>
                 <RectangleGeometry x:Name="WindowClip" Rect="0,0,1184,684" RadiusX="12" RadiusY="12" />
             </Border.Clip>

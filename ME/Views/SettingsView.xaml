@@ -255,6 +255,25 @@
                         <TextBox x:Name="SyncProxyBox" Width="130" FontSize="12" Padding="8,5,8,5"
                                  ToolTip="如 http://127.0.0.1:7897，留空直连" />
                     </StackPanel>
+                    <!-- 账号授权登录（GitHub Device Flow） -->
+                    <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="8" Padding="12"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock x:Name="SyncAccountText" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"
+                                       Text="未登录 GitHub 账号" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="SyncLoginBtn" Content="账号授权登录" Click="SyncLogin_Click"
+                                        Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0"
+                                        ToolTip="跳转 GitHub 网页登录并点允许，自动获取 Token，无需手动创建" />
+                                <Button x:Name="SyncLogoutBtn" Content="退出登录" Click="SyncLogout_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" />
+                                <TextBlock x:Name="SyncLoginStatus" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="330" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <Button x:Name="SyncPushBtn" Content="上传数据" Click="SyncPush_Click"
                                 Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
