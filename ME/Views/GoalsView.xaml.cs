@@ -418,6 +418,13 @@ namespace ME.Views
                     Cursor = Cursors.SizeAll,
                     Tag = goal
                 };
+                // 边框跟随目标标签颜色
+                var goalBorder = TagBorderBrush(goal.TagColor);
+                if (goalBorder != null)
+                {
+                    card.BorderBrush = goalBorder;
+                    card.BorderThickness = new Thickness(1.2);
+                }
                 SetupGoalDragDrop(card, goal, goals, panel);
 
                 var grid = new Grid();
@@ -572,11 +579,12 @@ namespace ME.Views
                 Grid.SetColumn(textPanel, 0);
                 grid.Children.Add(textPanel);
 
-                // Buttons
+                // Buttons (icons)
                 var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-                btnPanel.Children.Add(CreateGoalButton("编辑", EditGoal_Click, goal));
-                btnPanel.Children.Add(CreateGoalButton("+任务", AddSubtask_Click, goal));
-                btnPanel.Children.Add(CreateGoalButton("删除", DeleteGoal_Click, goal));
+                btnPanel.Children.Add(CreateGoalButton("\uE946", "打卡详情（哪些天完成/未完成）", GoalDetail_Click, goal));
+                btnPanel.Children.Add(CreateGoalButton("\uE70F", "编辑", EditGoal_Click, goal));
+                btnPanel.Children.Add(CreateGoalButton("\uE710", "添加任务", AddSubtask_Click, goal));
+                btnPanel.Children.Add(CreateGoalButton("\uE74D", "删除", DeleteGoal_Click, goal));
                 Grid.SetColumn(btnPanel, 1);
                 grid.Children.Add(btnPanel);
 
@@ -791,6 +799,15 @@ namespace ME.Views
                 Tag = task
             };
 
+            // 边框跟随标签颜色（时间标签优先，其次目标标签）
+            var timeTag = task.TimeTagId.HasValue ? new TimeTagRepository().GetTagById(task.TimeTagId.Value) : null;
+            var subBorder = TagBorderBrush(timeTag?.Color ?? tagColor);
+            if (subBorder != null)
+            {
+                card.BorderBrush = subBorder;
+                card.BorderThickness = new Thickness(1.2);
+            }
+
             var progressColor = string.IsNullOrEmpty(tagColor) ? (SolidColorBrush)FindResource("PrimaryBrush")
                 : new SolidColorBrush((Color)ColorConverter.ConvertFromString(tagColor));
 
@@ -826,14 +843,29 @@ namespace ME.Views
             Grid.SetColumn(circle, 0);
             grid.Children.Add(circle);
 
-            // Text area
-            var textPanel = new StackPanel { IsHitTestVisible = false };
-            textPanel.Children.Add(new TextBlock
+            // Text area：名称前加时间标签徽章（与目标条的目标标签徽章同款，并排显示）
+            var namePanel = new StackPanel { Orientation = Orientation.Horizontal };
+            if (timeTag != null)
+            {
+                Color ttColor;
+                try { ttColor = (Color)ColorConverter.ConvertFromString(timeTag.Color); }
+                catch { ttColor = Color.FromRgb(0, 122, 255); }
+                namePanel.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    Background = new SolidColorBrush(ttColor),
+                    Child = new TextBlock { Text = timeTag.Name, FontSize = 10, Foreground = Brushes.White }
+                });
+            }
+            namePanel.Children.Add(new TextBlock
             {
                 Text = task.Title, FontSize = 12,
                 Foreground = isCompletedDisplay ? (SolidColorBrush)FindResource("SecondaryTextBrush") : (SolidColorBrush)FindResource("TextBrush"),
                 TextDecorations = isCompletedDisplay ? TextDecorations.Strikethrough : null
             });
+            var textPanel = new StackPanel { IsHitTestVisible = false };
+            textPanel.Children.Add(namePanel);
 
             // Expired label
             bool isExpired = !isCompletedDisplay && task.EndDate.HasValue && task.EndDate.Value.Date < DateTime.Today;
@@ -861,36 +893,10 @@ namespace ME.Views
                     });
                 }
 
-                // Info panel: type + deadline + time tag
+                // Info panel: type + elapsed + deadline（时间标签已上移为名称前徽章）
                 var infoPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
                 var typeText = task.Type == TaskType.Recurring ? "循环" : task.Type == TaskType.Quantitative ? "量化" : "单次";
                 infoPanel.Children.Add(new TextBlock { Text = typeText, FontSize = 10, Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush") });
-
-                // Show time tag if set
-                if (task.TimeTagId.HasValue)
-                {
-                    var tagRepo = new TimeTagRepository();
-                    var tag = tagRepo.GetTagById(task.TimeTagId.Value);
-                    if (tag != null)
-                    {
-                        Color timeTagClr;
-                        try { timeTagClr = (Color)ColorConverter.ConvertFromString(tag.Color); }
-                        catch { timeTagClr = Color.FromRgb(128, 128, 128); }
-                        infoPanel.Children.Add(new Border
-                        {
-                            Width = 6, Height = 6, CornerRadius = new CornerRadius(3),
-                            Background = new SolidColorBrush(timeTagClr),
-                            Margin = new Thickness(6, 0, 4, 0),
-                            VerticalAlignment = VerticalAlignment.Center
-                        });
-                        infoPanel.Children.Add(new TextBlock
-                        {
-                            Text = tag.Name, FontSize = 10,
-                            Foreground = new SolidColorBrush(timeTagClr),
-                            Margin = new Thickness(0, 0, 6, 0)
-                        });
-                    }
-                }
 
                 // Show elapsed time for tasks with a time tag
                 if (task.TimeTagId.HasValue)
@@ -1010,12 +1016,13 @@ namespace ME.Views
             Grid.SetColumn(textPanel, 1);
             grid.Children.Add(textPanel);
 
-            // Edit/AddSubtask/Delete buttons
+            // Detail/Edit/AddSubtask/Delete buttons (icons)
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            btnPanel.Children.Add(CreateGoalButton("\uE946", "打卡详情（哪些天完成/未完成）", TaskDetail_Click, task));
             if (!isCompletedDisplay)
-                btnPanel.Children.Add(CreateGoalButton("+子", AddSubtaskToTask_Click, task));
-            btnPanel.Children.Add(CreateGoalButton("编辑", EditTaskFromGoal_Click, task));
-            btnPanel.Children.Add(CreateGoalButton("删除", DeleteTaskFromGoal_Click, task));
+                btnPanel.Children.Add(CreateGoalButton("\uE710", "添加子任务", AddSubtaskToTask_Click, task));
+            btnPanel.Children.Add(CreateGoalButton("\uE70F", "编辑", EditTaskFromGoal_Click, task));
+            btnPanel.Children.Add(CreateGoalButton("\uE74D", "删除", DeleteTaskFromGoal_Click, task));
             Grid.SetColumn(btnPanel, 2);
             grid.Children.Add(btnPanel);
 
@@ -1041,17 +1048,54 @@ namespace ME.Views
             return card;
         }
 
-        private Button CreateGoalButton(string content, RoutedEventHandler handler, object tag)
+        /// <summary>图标小按钮（Segoe MDL2 Assets 字形 + 悬停提示）</summary>
+        private Button CreateGoalButton(string glyph, string tooltip, RoutedEventHandler handler, object tag)
         {
             var btn = new Button
             {
-                Content = content,
+                Content = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 13,
                 Style = (Style)FindResource("SecondaryButtonStyle"),
-                Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 4, 0),
-                FontSize = 11, Tag = tag
+                Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(0, 0, 4, 0),
+                ToolTip = tooltip, Tag = tag
             };
             btn.Click += handler;
             return btn;
+        }
+
+        // ============ HELPERS: hex color / tag border ============
+        private static Color? ParseHexColor(string hex)
+        {
+            if (string.IsNullOrEmpty(hex)) return null;
+            try { return (Color)ColorConverter.ConvertFromString(hex); }
+            catch { return null; }
+        }
+
+        /// <summary>卡片边框颜色（半透明描边）</summary>
+        private static Brush TagBorderBrush(string hex)
+        {
+            var c = ParseHexColor(hex);
+            if (!c.HasValue) return null;
+            return new SolidColorBrush(Color.FromArgb(150, c.Value.R, c.Value.G, c.Value.B));
+        }
+
+        private void GoalDetail_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is Goal goal)
+            {
+                var win = new TaskDetailWindow(goal) { Owner = Window.GetWindow(this) };
+                win.ShowDialog();
+            }
+        }
+
+        private void TaskDetail_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is TaskItem task)
+            {
+                var win = new TaskDetailWindow(task) { Owner = Window.GetWindow(this) };
+                win.ShowDialog();
+            }
         }
 
         // ============ DRAG AND DROP FOR GOALS ============

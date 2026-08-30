@@ -681,6 +681,7 @@ namespace ME.Views
             var taskRepo = new TaskRepository();
             var allGoals = goalRepo.GetAllGoals();
             var allTags = tagRepo.GetAllTags();
+            var allTimeTags = new TimeTagRepository().GetAllTags();
             var todayGoalIds = new HashSet<int>();
             foreach (var goal in allGoals)
             {
@@ -819,7 +820,7 @@ namespace ME.Views
                     Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush"),
                     Margin = new Thickness(0, 0, 0, 8)
                 });
-                BuildTaskTree(TasksPanel, activeTasks, subtasksMap, tagColorMap, false);
+                BuildTaskTree(TasksPanel, activeTasks, subtasksMap, tagColorMap, false, allTimeTags);
             }
 
             if (doneTasks.Count > 0)
@@ -831,7 +832,7 @@ namespace ME.Views
                     Foreground = (SolidColorBrush)FindResource("AccentGreenBrush"),
                     Margin = new Thickness(0, 12, 0, 8)
                 });
-                BuildTaskTree(TasksPanel, doneTasks, subtasksMap, tagColorMap, true);
+                BuildTaskTree(TasksPanel, doneTasks, subtasksMap, tagColorMap, true, allTimeTags);
             }
 
             if (activeTasks.Count == 0 && doneTasks.Count == 0)
@@ -873,7 +874,29 @@ namespace ME.Views
             return null;
         }
 
-        private void BuildTaskTree(StackPanel panel, List<TaskItem> mainTasks, Dictionary<int, List<TaskItem>> subtasksMap, Dictionary<int, string> tagColorMap, bool isCompleted)
+        // ============ HELPERS: time tag lookup & hex color ============
+        private static TimeTag FindTimeTag(int? id, List<TimeTag> timeTags)
+        {
+            if (!id.HasValue || timeTags == null) return null;
+            return timeTags.Find(t => t.Id == id.Value);
+        }
+
+        private static Color? ParseHexColor(string hex)
+        {
+            if (string.IsNullOrEmpty(hex)) return null;
+            try { return (Color)ColorConverter.ConvertFromString(hex); }
+            catch { return null; }
+        }
+
+        /// <summary>卡片边框颜色：优先时间标签，其次目标标签（半透明描边）</summary>
+        private static Brush TagBorderBrush(string hex)
+        {
+            var c = ParseHexColor(hex);
+            if (!c.HasValue) return null;
+            return new SolidColorBrush(Color.FromArgb(150, c.Value.R, c.Value.G, c.Value.B));
+        }
+
+        private void BuildTaskTree(StackPanel panel, List<TaskItem> mainTasks, Dictionary<int, List<TaskItem>> subtasksMap, Dictionary<int, string> tagColorMap, bool isCompleted, List<TimeTag> timeTags)
         {
 
             foreach (var task in mainTasks)
@@ -884,7 +907,7 @@ namespace ME.Views
                 string tagName = GetTagNameForTask(task);
 
                 // Main task card (matching GoalsView style)
-                var card = CreateTaskCard(task, isCompleted, tagColor, tagName);
+                var card = CreateTaskCard(task, isCompleted, tagColor, tagName, timeTags);
                 SetupDragDrop(card, task, mainTasks, panel);
                 wrapper.Children.Add(card);
 
@@ -907,7 +930,7 @@ namespace ME.Views
                     foreach (var sub in subtasks)
                     {
                         // Subtask uses parent task's tag color
-                        var subCard = CreateSubtaskCard(sub, tagColor, subtasks, subtaskPanel);
+                        var subCard = CreateSubtaskCard(sub, tagColor, subtasks, subtaskPanel, timeTags);
                         subtaskPanel.Children.Add(subCard);
                     }
                     subtaskExpander.Content = subtaskPanel;
@@ -918,7 +941,7 @@ namespace ME.Views
             }
         }
 
-        private Border CreateTaskCard(TaskItem task, bool isCompleted, string tagColor, string tagName)
+        private Border CreateTaskCard(TaskItem task, bool isCompleted, string tagColor, string tagName, List<TimeTag> timeTags)
         {
             var card = new Border
             {
@@ -926,6 +949,16 @@ namespace ME.Views
                 Cursor = isCompleted ? Cursors.Hand : Cursors.SizeAll,
                 Tag = task
             };
+
+            // 边框跟随标签颜色（时间标签优先，其次目标标签）
+            var timeTag = FindTimeTag(task.TimeTagId, timeTags);
+            var borderHex = timeTag?.Color ?? tagColor;
+            var borderBrush = TagBorderBrush(borderHex);
+            if (borderBrush != null)
+            {
+                card.BorderBrush = borderBrush;
+                card.BorderThickness = new Thickness(1.2);
+            }
 
             var progressColor = string.IsNullOrEmpty(tagColor) ? (SolidColorBrush)FindResource("PrimaryBrush")
                 : new SolidColorBrush((Color)ColorConverter.ConvertFromString(tagColor));
@@ -970,6 +1003,7 @@ namespace ME.Views
             var textPanel = new StackPanel { IsHitTestVisible = false };
 
             // Tag badge + Name + Expired label
+            // 徽章并排：目标标签 + 时间标签（如「考研 数学」任务名）
             var namePanel = new StackPanel { Orientation = Orientation.Horizontal };
             if (!string.IsNullOrEmpty(tagName))
             {
@@ -983,6 +1017,17 @@ namespace ME.Views
                     Child = new TextBlock { Text = tagName, FontSize = 10, Foreground = Brushes.White }
                 };
                 namePanel.Children.Add(tagBadge);
+            }
+            if (timeTag != null)
+            {
+                var ttColor = ParseHexColor(timeTag.Color) ?? Color.FromRgb(0, 122, 255);
+                namePanel.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    Background = new SolidColorBrush(ttColor),
+                    Child = new TextBlock { Text = timeTag.Name, FontSize = 10, Foreground = Brushes.White }
+                });
             }
             namePanel.Children.Add(new TextBlock
             {
@@ -1072,6 +1117,23 @@ namespace ME.Views
                 var typeText = (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue) ? "循环·量化"
                     : task.Type == TaskType.Recurring ? "循环" : task.Type == TaskType.Quantitative ? "量化" : "单次";
                 infoPanel.Children.Add(new TextBlock { Text = typeText, FontSize = 10, Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush") });
+                // 时间标签的累计用时（与目标管理界面口径一致），显示在截止时间前
+                if (timeTag != null)
+                {
+                    var tagMins = new TimeRecordRepository().GetAllRecords()
+                        .Where(r => r.TagId == timeTag.Id).Sum(r => r.Duration.TotalMinutes);
+                    if (tagMins > 0)
+                    {
+                        var th = (int)(tagMins / 60);
+                        var tm = (int)(tagMins % 60);
+                        infoPanel.Children.Add(new TextBlock
+                        {
+                            Text = $" ⌚ {th}h{tm:D2}m", FontSize = 10,
+                            Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush"),
+                            Margin = new Thickness(8, 0, 0, 0)
+                        });
+                    }
+                }
                 if (task.EndDate.HasValue)
                 {
                     var deadlineColor = isExpired 
@@ -1112,11 +1174,12 @@ namespace ME.Views
             Grid.SetColumn(textPanel, 1);
             grid.Children.Add(textPanel);
 
-            // Buttons (matching GoalsView)
+            // Buttons (icons, matching GoalsView)
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            btnPanel.Children.Add(CreateTaskButton("编辑", EditTask_Click, task));
-            btnPanel.Children.Add(CreateTaskButton("子任务", AddSubtaskToTask_Click, task));
-            btnPanel.Children.Add(CreateTaskButton("删除", DeleteTask_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE946", "打卡详情（哪些天完成/未完成）", TaskDetail_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE70F", "编辑", EditTask_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE710", "添加子任务", AddSubtaskToTask_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE74D", "删除", DeleteTask_Click, task));
             Grid.SetColumn(btnPanel, 2);
             grid.Children.Add(btnPanel);
 
@@ -1124,7 +1187,7 @@ namespace ME.Views
             return card;
         }
 
-        private Border CreateSubtaskCard(TaskItem task, string tagColor, List<TaskItem> subtaskList = null, StackPanel subtaskPanel = null)
+        private Border CreateSubtaskCard(TaskItem task, string tagColor, List<TaskItem> subtaskList = null, StackPanel subtaskPanel = null, List<TimeTag> timeTags = null)
         {
             var card = new Border
             {
@@ -1134,6 +1197,15 @@ namespace ME.Views
                 Cursor = Cursors.Hand,
                 Tag = task
             };
+
+            // 边框跟随标签颜色（时间标签优先，其次目标标签）
+            var subTimeTag = FindTimeTag(task.TimeTagId, timeTags);
+            var subBorder = TagBorderBrush(subTimeTag?.Color ?? tagColor);
+            if (subBorder != null)
+            {
+                card.BorderBrush = subBorder;
+                card.BorderThickness = new Thickness(1.2);
+            }
 
             var progressColor = string.IsNullOrEmpty(tagColor) ? (SolidColorBrush)FindResource("PrimaryBrush")
                 : new SolidColorBrush((Color)ColorConverter.ConvertFromString(tagColor));
@@ -1252,8 +1324,9 @@ namespace ME.Views
 
             // Edit/Delete buttons
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            btnPanel.Children.Add(CreateTaskButton("编辑", EditTask_Click, task));
-            btnPanel.Children.Add(CreateTaskButton("删除", DeleteTask_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE946", "打卡详情（哪些天完成/未完成）", TaskDetail_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE70F", "编辑", EditTask_Click, task));
+            btnPanel.Children.Add(CreateTaskButton("\uE74D", "删除", DeleteTask_Click, task));
             Grid.SetColumn(btnPanel, 2);
             grid.Children.Add(btnPanel);
 
@@ -1268,17 +1341,29 @@ namespace ME.Views
             return card;
         }
 
-        private Button CreateTaskButton(string content, RoutedEventHandler handler, TaskItem task)
+        /// <summary>图标小按钮（Segoe MDL2 Assets 字形 + 悬停提示）</summary>
+        private Button CreateTaskButton(string glyph, string tooltip, RoutedEventHandler handler, TaskItem task)
         {
             var btn = new Button
             {
-                Content = content,
+                Content = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 13,
                 Style = (Style)FindResource("SecondaryButtonStyle"),
-                Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 4, 0),
-                FontSize = 11, Tag = task
+                Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(0, 0, 4, 0),
+                ToolTip = tooltip, Tag = task
             };
             btn.Click += handler;
             return btn;
+        }
+
+        private void TaskDetail_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is TaskItem task)
+            {
+                var win = new TaskDetailWindow(task) { Owner = Window.GetWindow(this) };
+                win.ShowDialog();
+            }
         }
 
         // ============ DRAG AND DROP (matching GoalsView pattern) ============
