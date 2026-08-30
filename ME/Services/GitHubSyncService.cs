@@ -446,14 +446,32 @@ namespace ME.Services
             public async Task<string> WriteAsync(SyncConfig c, string name, string content, string prevRev)
             {
                 var full = await FullRepoAsync(c).ConfigureAwait(false);
+                var path = $"/repos/{full}/contents/data/{Uri.EscapeDataString(name)}";
                 var payload = new Dictionary<string, object>
                 {
                     ["message"] = $"ME 数据同步（PC）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     ["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
                     ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "master" : c.Branch
                 };
-                if (!string.IsNullOrEmpty(prevRev)) payload["sha"] = prevRev;
-                var resp = await SendAsync(c, HttpMethod.Put, $"/repos/{full}/contents/data/{Uri.EscapeDataString(name)}", payload).ConfigureAwait(false);
+                JsonElement resp;
+                if (!string.IsNullOrEmpty(prevRev))
+                {
+                    payload["sha"] = prevRev;
+                    resp = await SendAsync(c, HttpMethod.Put, path, payload).ConfigureAwait(false);
+                }
+                else
+                {
+                    // Gitee 与 GitHub 不同：PUT 是纯「更新」接口，不带 sha 一律 400 sha is missing（即使文件不存在），
+                    // 新建文件必须走 POST；若撞上已存在（本地版本记录缺失），取最新 sha 转更新
+                    try { resp = await SendAsync(c, HttpMethod.Post, path, payload).ConfigureAwait(false); }
+                    catch (Exception ex) when (ex.Message.Contains("存在") || ex.Message.Contains("exist", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var fresh = await RevOfAsync(c, name).ConfigureAwait(false);
+                        if (string.IsNullOrEmpty(fresh)) throw;
+                        payload["sha"] = fresh;
+                        resp = await SendAsync(c, HttpMethod.Put, path, payload).ConfigureAwait(false);
+                    }
+                }
                 try { return resp.GetProperty("content").GetProperty("sha").GetString() ?? ""; } catch { return ""; }
             }
 

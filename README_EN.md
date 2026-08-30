@@ -227,6 +227,10 @@ MIT
 
 ## Recent Updates
 
+### v2.3.14
+
+- **Fixed Gitee upload failing with "sha is missing" (0/15 files)**: Gitee's API differs from GitHub's — creating a file requires POST, while PUT is strictly an update endpoint that must carry the file's sha (requests without one are rejected with HTTP 400 even when the file doesn't exist yet). New files previously went through a sha-less PUT, so every first-time upload failed. File creation now uses POST, with an automatic fallback to a sha-carrying update when the file turns out to exist. GitHub / WebDAV behavior unchanged; the Gitee repo stays interoperable with the Android version
+
 ### v2.3.13
 
 - **Review statistics reworked**: "Completed tasks" now shows **completed / total due**. Total due counts only tasks actually due that day — a recurring task scheduled for Sat/Sun doesn't count on Monday, subtasks don't count, quantitative tasks without a daily target don't count. Completion rate = completed ÷ total due. Quantitative tasks with a daily target (e.g. 1) count as completed once that day's check-in reaches the daily target; a finished quantitative task counts only up to the day it reached its target
