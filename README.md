@@ -1,8 +1,21 @@
+<div align="center">
+
 # ME — 个人管理系统（目标 · 任务 · 时间 · 健康）
 
-> 一款纯本地运行的个人管理系统（Windows 桌面端），帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
+**简体中文** | [English](README_EN.md)
 
-![.NET 8](https://img.shields.io/badge/.NET-8-blue) ![WPF](https://img.shields.io/badge/Platform-WPF-purple) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-2.3.4-orange)
+一款纯本地运行的个人管理系统（Windows 桌面端），帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
+
+[![Release](https://img.shields.io/github/v/release/nailao946/ME)](https://github.com/nailao946/ME/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/nailao946/ME/total)](https://github.com/nailao946/ME/releases/latest)
+![.NET 8](https://img.shields.io/badge/.NET-8-blue)
+![Platform](https://img.shields.io/badge/Platform-Windows%20WPF-purple)
+![License](https://img.shields.io/badge/License-MIT-green)
+[![Stars](https://img.shields.io/github/stars/nailao946/ME?style=social)](https://github.com/nailao946/ME/stargazers)
+
+**⬇️ [下载最新版](https://github.com/nailao946/ME/releases/latest)** · 📱 [安卓版 ME-PE](https://github.com/nailao946/ME-PE)
+
+</div>
 
 ---
 
