@@ -114,6 +114,7 @@ namespace ME.Views
             var taskRepo = new TaskRepository();
             var goalRepo = new GoalRepository();
             var allTasks = taskRepo.GetAllTasks();
+            var taskService = new TaskService();
 
             var now = DateTime.Now;
             DateTime startDate;
@@ -142,41 +143,34 @@ namespace ME.Views
                 ? $"全部 — {now:yyyy/MM/dd}"
                 : $"{startDate:MM/dd} — {now:MM/dd}";
 
+            // 统计口径：只算主任务按天计——应做(总任务数)与已完成；
+            // 子任务不计；未设每日目标的量化任务不计；周六周日的循环任务周一不计入总任务数
+            var mainTasks = allTasks.Where(t => taskService.TaskCountsForStats(t)).ToList();
+            var allCompletions = _completionRepo.GetAll();
+
             int completed = 0, total = 0;
             var dailyData = new SortedDictionary<string, DailyData>();
-            for (var d = startDate; d <= now; d = d.AddDays(1))
-                dailyData[d.ToString("yyyy-MM-dd")] = new DailyData { Date = d.ToString("MM/dd") };
-
-            var allCompletions = _completionRepo.GetAll();
-            var periodCompletions = allCompletions
-                .Where(c => c.Date.CompareTo(startStr) >= 0 && c.Date.CompareTo(endStr) <= 0)
-                .ToList();
-            completed = periodCompletions.Count;
-
-            foreach (var task in allTasks)
+            foreach (var t in mainTasks)
             {
-                if (!task.IsDeleted) total++;
-                var taskDayCompletions = allCompletions
-                    .Where(c => c.TaskId == task.Id && c.Date.CompareTo(startStr) >= 0 && c.Date.CompareTo(endStr) <= 0);
-                foreach (var c in taskDayCompletions)
+                var taskRecords = allCompletions.Where(c => c.TaskId == t.Id).ToList();
+                for (var d = startDate; d <= now; d = d.AddDays(1))
                 {
-                    var dayKey = DateTime.Parse(c.Date).ToString("yyyy-MM-dd");
-                    if (dailyData.ContainsKey(dayKey))
-                        dailyData[dayKey].Completed++;
+                    var key = d.ToString("yyyy-MM-dd");
+                    if (!dailyData.ContainsKey(key))
+                        dailyData[key] = new DailyData { Date = d.ToString("MM/dd") };
+                    if (taskService.TaskDueOnDate(t, d)) { total++; dailyData[key].Due++; }
+                    if (taskService.TaskDoneOnDate(t, d, taskRecords)) { completed++; dailyData[key].Completed++; }
                 }
             }
 
-            // Completion rate
-            var days = Math.Max(1, DaysBetween(startDate, now) + 1);
-            var rate = total > 0 ? (double)completed / (total * days) * 100 : 0;
-            rate = Math.Min(rate, 100);
+            // 完成率 = 完成任务 / 总任务数
+            var rate = total > 0 ? (double)completed / total * 100 : 0;
             CompletionRateText.Text = $"{rate:F0}%";
             AnimateRateRing(rate);
 
-            CompletedCountText.Text = completed.ToString();
+            CompletedCountText.Text = $"{completed} / {total}";
 
-            // Previous period comparison
-            int prevCompletions = 0;
+            // 较上期（今天=比昨天、本周=比上周、本月=比上月；全部不比）
             DateTime prevStart, prevEnd;
             switch (_currentPeriod)
             {
@@ -197,25 +191,42 @@ namespace ME.Views
                     prevEnd = startDate;
                     break;
             }
-            if (_currentPeriod != ReviewPeriod.All)
+            bool hasPrev = _currentPeriod != ReviewPeriod.All;
+            int prevCompleted = 0, prevTotal = 0;
+            double prevRate = 0;
+            if (hasPrev)
             {
-                prevCompletions = allCompletions
-                    .Where(c => c.Date.CompareTo(prevStart.ToString("yyyy-MM-dd")) >= 0
-                             && c.Date.CompareTo(prevEnd.ToString("yyyy-MM-dd")) <= 0)
-                    .Count();
+                foreach (var t in mainTasks)
+                {
+                    var taskRecords = allCompletions.Where(c => c.TaskId == t.Id).ToList();
+                    for (var d = prevStart; d <= prevEnd; d = d.AddDays(1))
+                    {
+                        if (taskService.TaskDueOnDate(t, d)) prevTotal++;
+                        if (taskService.TaskDoneOnDate(t, d, taskRecords)) prevCompleted++;
+                    }
+                }
+                prevRate = prevTotal > 0 ? (double)prevCompleted / prevTotal * 100 : 0;
             }
-            var diff = completed - prevCompletions;
-            if (_currentPeriod != ReviewPeriod.All && (prevCompletions > 0 || completed > 0))
+
+            // 完成任务较上期
+            if (hasPrev && (prevCompleted > 0 || completed > 0))
+                SetTrendText(CompletedTrendText, completed - prevCompleted, "较上期");
+            else
+                CompletedTrendText.Text = "";
+
+            // 完成率较上期（百分点）
+            if (hasPrev && (prevTotal > 0 || total > 0))
             {
-                var sign = diff >= 0 ? "+" : "";
-                CompletedTrendText.Text = $"较上期{sign}{diff}";
-                CompletedTrendText.Foreground = diff >= 0
+                var rateDiff = Math.Round(rate - prevRate);
+                var sign = rateDiff >= 0 ? "+" : "";
+                RateTrendText.Text = $"较上期{sign}{rateDiff:F0}%";
+                RateTrendText.Foreground = rateDiff >= 0
                     ? (Brush)FindResource("AccentGreenBrush")
                     : new SolidColorBrush(Color.FromRgb(255, 59, 48));
             }
             else
             {
-                CompletedTrendText.Text = "";
+                RateTrendText.Text = "";
             }
 
             // Time invested
@@ -224,8 +235,32 @@ namespace ME.Views
             var hours = (int)(totalMinutes / 60);
             var mins = (int)(totalMinutes % 60);
             TimeInvestedText.Text = hours > 0 ? $"{hours}h{mins:D2}" : $"{mins}m";
+            var days = Math.Max(1, DaysBetween(startDate, now) + 1);
             var avgDaily = totalMinutes / days;
             TimeDailyAvgText.Text = $"日均 {(int)(avgDaily / 60)}h{(int)(avgDaily % 60):D2}m";
+
+            // 时间投入较上期
+            if (hasPrev)
+            {
+                var prevRecords = _timeRecordRepo.GetRecordsByDateRange(prevStart.ToString("yyyy-MM-dd"), prevEnd.ToString("yyyy-MM-dd"));
+                var prevMinutes = (int)prevRecords.Sum(r => r.Duration.TotalMinutes);
+                var curMinutes = (int)totalMinutes;
+                if (prevMinutes > 0 || curMinutes > 0)
+                {
+                    var tDiff = curMinutes - prevMinutes;
+                    var am = Math.Abs(tDiff);
+                    var durStr = am >= 60 ? $"{am / 60}h{am % 60:D2}m" : $"{am}m";
+                    TimeTrendText.Text = $"较上期{(tDiff >= 0 ? "+" : "-")}{durStr}";
+                    TimeTrendText.Foreground = tDiff >= 0
+                        ? (Brush)FindResource("AccentGreenBrush")
+                        : new SolidColorBrush(Color.FromRgb(255, 59, 48));
+                }
+                else TimeTrendText.Text = "";
+            }
+            else
+            {
+                TimeTrendText.Text = "";
+            }
 
             // Streak
             int streak = 0, bestStreak = 0, tempStreak = 0;
@@ -257,6 +292,15 @@ namespace ME.Views
             // Time stats
             if (!_tagsInited) InitTagSelection();
             LoadTimeStats();
+        }
+
+        private void SetTrendText(TextBlock tb, int diff, string prefix)
+        {
+            var sign = diff >= 0 ? "+" : "";
+            tb.Text = $"{prefix}{sign}{diff}";
+            tb.Foreground = diff >= 0
+                ? (Brush)FindResource("AccentGreenBrush")
+                : new SolidColorBrush(Color.FromRgb(255, 59, 48));
         }
 
         private int DaysBetween(DateTime a, DateTime b) => Math.Max(0, (int)(b.Date - a.Date).TotalDays);
@@ -595,9 +639,23 @@ namespace ME.Views
             var allTags = _timeTagRepo.GetAllTags();
             var records = _timeRecordRepo.GetRecordsByDateRange(startStr, endStr);
 
+            bool monthly = _statsPeriod == ReviewPeriod.All;
             var dateKeys = new List<(string display, string full)>();
-            for (var d = startDate; d <= now; d = d.AddDays(1))
-                dateKeys.Add((d.ToString("MM/dd"), d.ToString("yyyy-MM-dd")));
+            if (monthly)
+            {
+                // 全部：近 12 个月按月分组，月度对比（按天太密看不清日期）
+                var curMonth = new DateTime(now.Year, now.Month, 1);
+                for (int i = 11; i >= 0; i--)
+                {
+                    var m = curMonth.AddMonths(-i);
+                    dateKeys.Add((m.ToString("yy/MM"), m.ToString("yyyy-MM")));
+                }
+            }
+            else
+            {
+                for (var d = startDate; d <= now; d = d.AddDays(1))
+                    dateKeys.Add((d.ToString("MM/dd"), d.ToString("yyyy-MM-dd")));
+            }
 
             var tagData = new Dictionary<int, List<(string date, TimeSpan dur)>>();
             foreach (var tag in allTags)
@@ -609,7 +667,8 @@ namespace ME.Views
                     var total = TimeSpan.Zero;
                     foreach (var r in records)
                     {
-                        if (r.TagId == tag.Id && r.Date == fullKey)
+                        if (r.TagId != tag.Id) continue;
+                        if (monthly ? r.Date.StartsWith(fullKey) : r.Date == fullKey)
                             total += r.Duration;
                     }
                     dailyList.Add((displayKey, total));
@@ -857,12 +916,20 @@ namespace ME.Views
                 StatsChartCanvas.Children.Add(line);
             }
 
-            // X-axis labels
+            // X-axis labels（点太多时按间隔抽稀，避免日期挤在一起看不清）
             if (firstEntry.Count > 0)
             {
                 var step = firstEntry.Count > 1 ? chartWidth / (double)(firstEntry.Count - 1) : chartWidth / 2.0;
+                int maxLabels = Math.Max(1, (int)(chartWidth / 45));
+                int labelEvery = (int)Math.Ceiling(firstEntry.Count / (double)maxLabels);
+                if (labelEvery < 1) labelEvery = 1;
+                int lastIdx = firstEntry.Count - 1;
                 for (int i = 0; i < firstEntry.Count; i++)
                 {
+                    bool show = i % labelEvery == 0 || i == lastIdx;
+                    // 末尾常规刻度与最后一点太近时跳过，防止重叠
+                    if (show && i != lastIdx && (lastIdx - i) < labelEvery / 2.0) show = false;
+                    if (!show) continue;
                     var x = padding + i * step;
                     var label = new TextBlock
                     {
@@ -1009,6 +1076,7 @@ namespace ME.Views
         {
             public string Date { get; set; }
             public int Completed { get; set; }
+            public int Due { get; set; }
         }
     }
 }

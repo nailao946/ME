@@ -181,36 +181,39 @@ namespace ME.Views
             }
         }
 
-        // ============ 完成判定（与任务页展示口径一致） ============
+        // ============ 完成判定（按天计，与定期盘点统计口径一致） ============
         private bool TaskDoneOn(TaskItem t, DateTime date)
         {
-            if (t.IsDeleted) return false;
-            switch (t.Type)
-            {
-                case TaskType.OneTime:
-                case TaskType.Periodic:
-                    return t.CompletedAt.HasValue && t.CompletedAt.Value.Date == date.Date;
-                case TaskType.Recurring:
-                    return t.RecurringPattern.HasValue && _taskService.IsRecurringTaskCompletedOnDate(t, date);
-                case TaskType.Quantitative:
-                    if (t.RecurringPattern.HasValue)
-                        return _completionRepo.IsCompletedOnDate(t.Id, date.ToString("yyyy-MM-dd"));
-                    return t.CompletedAt.HasValue && t.CompletedAt.Value.Date == date.Date;
-                default:
-                    return false;
-            }
+            return _taskService.TaskDoneOnDate(t, date);
         }
 
         private bool TaskDueOn(TaskItem t, DateTime date)
         {
+            // 打卡图只关心单个任务本身（不含子任务排除规则），这里单独按出现规则判
             if (t.IsDeleted) return false;
-            if (t.Type == TaskType.Recurring && t.RecurringPattern.HasValue)
+
+            if (t.Type == TaskType.Quantitative && (!t.QuantitativeDailyMin.HasValue || t.QuantitativeDailyMin.Value <= 0))
+            {
+                // 未设每日目标的量化任务：只显示达标当天
+                return t.CompletedAt.HasValue && t.CompletedAt.Value.Date == date.Date;
+            }
+
+            if (t.Type == TaskType.Quantitative && t.QuantitativeTarget.HasValue && t.QuantitativeTarget.Value > 0
+                && (t.QuantitativeCurrent ?? 0) >= t.QuantitativeTarget.Value)
+            {
+                if (!t.CompletedAt.HasValue || date.Date > t.CompletedAt.Value.Date) return false;
+            }
+
+            if ((t.Type == TaskType.Recurring || t.Type == TaskType.Quantitative) && t.RecurringPattern.HasValue)
                 return _taskService.ShouldShowRecurringTaskOnDate(t, date);
 
             bool startOk = !t.StartDate.HasValue || t.StartDate.Value.Date <= date.Date;
             bool endOk = !t.EndDate.HasValue || t.EndDate.Value.Date >= date.Date;
             if (!t.StartDate.HasValue && !t.EndDate.HasValue)
-                endOk = date.Date == t.CreatedAt.Date;   // 与任务页一致：无起止只显示创建当天
+            {
+                if (t.Type == TaskType.Quantitative) return date.Date >= t.CreatedAt.Date && date.Date <= DateTime.Today;
+                return date.Date == t.CreatedAt.Date;
+            }
             return startOk && endOk && date.Date <= DateTime.Today;
         }
 

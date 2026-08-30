@@ -55,6 +55,8 @@
                         </Grid>
                         <TextBlock Text="完成率" FontSize="11"
                                    Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="RateTrendText" Text="" FontSize="10"
+                                   Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
                     </StackPanel>
                 </Border>
 
@@ -79,6 +81,8 @@
                                    Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
                         <TextBlock x:Name="TimeDailyAvgText" Text="" FontSize="10"
                                    Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+                        <TextBlock x:Name="TimeTrendText" Text="" FontSize="10"
+                                   Foreground="{DynamicResource AccentGreenBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
                     </StackPanel>
                 </Border>
 

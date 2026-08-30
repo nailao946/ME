@@ -408,6 +408,90 @@ namespace ME.Services
         }
 
         /// <summary>
+        /// 统计口径：任务是否计入"完成任务/总任务数"（子任务不计；未设每日目标的量化任务不计）。
+        /// </summary>
+        public bool TaskCountsForStats(TaskItem task)
+        {
+            if (task.IsDeleted || task.ParentTaskId.HasValue) return false;
+            if (task.Type == TaskType.Quantitative && (!task.QuantitativeDailyMin.HasValue || task.QuantitativeDailyMin.Value <= 0))
+                return false;
+            return true;
+        }
+
+        /// <summary>
+        /// 统计口径：任务在指定日期是否应做（计入当日总任务数）。
+        /// 周期任务按重复规则（周六周日的任务周一不计）；已达总目标的量化任务只算到达标当天。
+        /// </summary>
+        public bool TaskDueOnDate(TaskItem task, DateTime date)
+        {
+            if (!TaskCountsForStats(task)) return false;
+
+            if (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue && task.QuantitativeTarget.Value > 0
+                && (task.QuantitativeCurrent ?? 0) >= task.QuantitativeTarget.Value)
+            {
+                if (!task.CompletedAt.HasValue || date.Date > task.CompletedAt.Value.Date) return false;
+            }
+
+            if ((task.Type == TaskType.Recurring || task.Type == TaskType.Quantitative) && task.RecurringPattern.HasValue)
+                return ShouldShowRecurringTaskOnDate(task, date);
+
+            bool startOk = !task.StartDate.HasValue || task.StartDate.Value.Date <= date.Date;
+            bool endOk = !task.EndDate.HasValue || task.EndDate.Value.Date >= date.Date;
+            if (!task.StartDate.HasValue && !task.EndDate.HasValue)
+            {
+                // 无日期：一次性任务只算创建当天；纯量化（设了每日目标）从创建日起每天计
+                if (task.Type == TaskType.Quantitative)
+                    return date.Date >= task.CreatedAt.Date;
+                return date.Date == task.CreatedAt.Date;
+            }
+            if (date.Date < task.CreatedAt.Date) return false;
+            return startOk && endOk;
+        }
+
+        /// <summary>
+        /// 统计口径：任务在指定日期是否算"完成"（按天计，供盘点/打卡图使用）。
+        /// 一次性=完成当天；循环=当日打卡记录（自定义按次数）；量化=当日打卡记录或达标当天。
+        /// </summary>
+        public bool TaskDoneOnDate(TaskItem task, DateTime date)
+        {
+            return TaskDoneOnDate(task, date, null);
+        }
+
+        public bool TaskDoneOnDate(TaskItem task, DateTime date, List<TaskCompletionRecord> records)
+        {
+            if (task.IsDeleted) return false;
+            string dateStr = date.ToString("yyyy-MM-dd");
+            switch (task.Type)
+            {
+                case TaskType.OneTime:
+                case TaskType.Periodic:
+                    return task.CompletedAt.HasValue && task.CompletedAt.Value.Date == date.Date;
+                case TaskType.Recurring:
+                    if (!task.RecurringPattern.HasValue) return false;
+                    if (task.RecurringPattern == RecurringPattern.Custom && task.RecurringTargetCount.HasValue && task.RecurringTargetCount.Value > 1)
+                        return CountRecordsOnDate(task.Id, dateStr, records) >= task.RecurringTargetCount.Value;
+                    return HasRecordOnDate(task.Id, dateStr, records);
+                case TaskType.Quantitative:
+                    if (HasRecordOnDate(task.Id, dateStr, records)) return true;
+                    return task.CompletedAt.HasValue && task.CompletedAt.Value.Date == date.Date;
+                default:
+                    return false;
+            }
+        }
+
+        private bool HasRecordOnDate(int taskId, string dateStr, List<TaskCompletionRecord> records)
+        {
+            if (records != null) return records.Any(r => r.TaskId == taskId && r.Date == dateStr);
+            return _completionRepo.IsCompletedOnDate(taskId, dateStr);
+        }
+
+        private int CountRecordsOnDate(int taskId, string dateStr, List<TaskCompletionRecord> records)
+        {
+            if (records != null) return records.Count(r => r.TaskId == taskId && r.Date == dateStr);
+            return _completionRepo.GetByTaskId(taskId).Count(r => r.Date == dateStr);
+        }
+
+        /// <summary>
         /// Returns the start-of-week date respecting the WeekStartDay setting.
         /// </summary>
         public static DateTime GetWeekStartForDate(DateTime date)

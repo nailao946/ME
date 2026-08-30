@@ -364,6 +364,29 @@ namespace ME.Views
             {
                 MiniTotalTime.Text = "";
             }
+            // 较昨日（时间投入）
+            var yRecords = recordRepo.GetRecordsByDate(DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd"));
+            double yMins = 0;
+            foreach (var r in yRecords)
+            {
+                if (r.TagId == idleTagId) continue;
+                var yEnd = r.EndTime ?? DateTime.Now;
+                yMins += (yEnd - r.StartTime).TotalMinutes;
+            }
+            if (totalSpan.TotalMinutes >= 1 || yMins >= 1)
+            {
+                var dMins = (int)(totalSpan.TotalMinutes - yMins);
+                var am = Math.Abs(dMins);
+                var durStr = am >= 60 ? $"{am / 60}h{am % 60:D2}m" : $"{am}m";
+                MiniTimeTrend.Text = $"较昨日{(dMins >= 0 ? "+" : "-")}{durStr}";
+                MiniTimeTrend.Foreground = dMins >= 0
+                    ? (Brush)FindResource("AccentGreenBrush")
+                    : new SolidColorBrush(Color.FromRgb(255, 59, 48));
+            }
+            else
+            {
+                MiniTimeTrend.Text = "";
+            }
             if (tagTime.Count == 0)
             {
                 MiniStatsPanel.Children.Add(new TextBlock { Text = "暂无数据", FontSize = 11, Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush") });
@@ -426,37 +449,43 @@ namespace ME.Views
                 var taskService = new TaskService();
                 var allTasks = taskRepo.GetAllTasks();
 
+                // 统一口径（与定期盘点一致）：应做才算总任务数（子任务、未设每日目标的量化、非当日的循环任务都不计）
                 int completed = 0;
                 int total = 0;
                 foreach (var task in allTasks)
                 {
-                    if (task.IsDeleted) continue;
                     if (task.ParentTaskId.HasValue) continue;
+                    if (taskService.TaskDueOnDate(task, _selectedDate)) total++;
+                    if (taskService.TaskDoneOnDate(task, _selectedDate)) completed++;
+                }
 
-                    bool isRecurringOrCombined = (task.Type == TaskType.Recurring || (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue))
-                        && task.RecurringPattern.HasValue;
-
-                    if (isRecurringOrCombined)
-                    {
-                        if (!taskService.ShouldShowRecurringTaskOnDate(task, _selectedDate))
-                            continue;
-                    }
-                    else
-                    {
-                        if (task.StartDate.HasValue && task.StartDate.Value > _selectedDate) continue;
-                        if (task.EndDate.HasValue && task.EndDate.Value < _selectedDate) continue;
-                        if (!task.StartDate.HasValue && !task.EndDate.HasValue && task.CreatedAt.Date != _selectedDate.Date) continue;
-                    }
-
-                    total++;
-                    if (taskService.IsTaskCompletedForDisplay(task, _selectedDate))
-                        completed++;
+                // 较昨日（选中非今天时对比前一天）
+                var cmpLabel = _selectedDate.Date == DateTime.Today ? "较昨日" : "较前日";
+                var prevDate = _selectedDate.AddDays(-1);
+                int prevCompleted = 0, prevTotal = 0;
+                foreach (var task in allTasks)
+                {
+                    if (task.ParentTaskId.HasValue) continue;
+                    if (taskService.TaskDueOnDate(task, prevDate)) prevTotal++;
+                    if (taskService.TaskDoneOnDate(task, prevDate)) prevCompleted++;
                 }
 
                 if (total > 0)
                 {
                     MiniTaskSummary.Visibility = Visibility.Visible;
                     MiniCompletedCount.Text = $"{completed}/{total}";
+                    if (prevTotal > 0 || prevCompleted > 0)
+                    {
+                        var d = completed - prevCompleted;
+                        MiniCompletedTrend.Text = $"{cmpLabel}{(d >= 0 ? "+" : "")}{d}";
+                        MiniCompletedTrend.Foreground = d >= 0
+                            ? (Brush)FindResource("AccentGreenBrush")
+                            : new SolidColorBrush(Color.FromRgb(255, 59, 48));
+                    }
+                    else
+                    {
+                        MiniCompletedTrend.Text = "";
+                    }
                 }
                 else
                 {
@@ -1857,6 +1886,17 @@ namespace ME.Views
                     {
                         task.IsCompleted = false;
                         task.CompletedAt = null;
+                    }
+                    // 纯量化（无周期）且设了每日目标：当日增量达到每日目标时记一条当日完成记录，供盘点统计与打卡图按天计
+                    if (!isCombined && !reachedTarget && task.QuantitativeDailyMin.HasValue && task.QuantitativeDailyMin.Value > 0)
+                    {
+                        double delta = task.QuantitativeCurrent.Value - oldValue;
+                        bool dayMet = task.QuantitativeMode == QuantitativeMode.Update
+                            ? task.QuantitativeCurrent.Value >= task.QuantitativeDailyMin.Value
+                            : delta >= task.QuantitativeDailyMin.Value;
+                        var tsq = new TaskService();
+                        if (dayMet) tsq.RecordCompletion(task.Id, _selectedDate);
+                        else tsq.RemoveCompletion(task.Id, _selectedDate);
                     }
                     repo.UpdateTask(task);
 

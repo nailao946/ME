@@ -89,6 +89,8 @@
                                            Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                 <TextBlock x:Name="MiniTotalTime" Text="" FontSize="10" FontWeight="Bold"
                                            Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="MiniTimeTrend" Text="" FontSize="10"
+                                           VerticalAlignment="Center" Margin="6,0,0,0" />
                             </DockPanel>
                         </Border>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
@@ -105,6 +107,8 @@
                                 <TextBlock x:Name="MiniCompletedCount" Text="0/0" FontSize="10" FontWeight="Bold"
                                            Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" />
+                                <TextBlock x:Name="MiniCompletedTrend" Text="" FontSize="10"
+                                           VerticalAlignment="Center" Margin="6,0,0,0" />
                             </DockPanel>
                         </Border>
                     </DockPanel>
