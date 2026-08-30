@@ -101,13 +101,16 @@ namespace ME.Services
                 return "!授权失败：" + code;
             }
             var token = r.GetProperty("access_token").GetString();
-            // 拉取用户名用于显示，失败不影响登录
+            // 先立即落盘 token——拉取用户名（api.github.com）可能很慢甚至超时，不能拖住登录完成
             c.EncryptedToken = SecureStore.Encrypt(token);
             StoreExpiry(c, r);
-            string account = "";
-            try { account = await FetchLoginAsync(c).ConfigureAwait(false); } catch { }
-            c.AccountName = account;
             Save(c);
+            try
+            {
+                var account = await FetchLoginAsync(c).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(account)) { c.AccountName = account; Save(c); }
+            }
+            catch { }
             return token;
         }
 

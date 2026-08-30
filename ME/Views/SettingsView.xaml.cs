@@ -169,9 +169,12 @@ namespace ME.Views
             _loginPollTimer?.Stop();
             _loginPollTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(Math.Max(3, _loginSession.Interval))
+                // 比要求的最小间隔多留 1 秒余量：网络往返时间有抖动，掐得太准会被 GitHub 判定轮询过快（slow_down）
+                Interval = TimeSpan.FromSeconds(Math.Max(3, _loginSession.Interval) + 1)
             };
             bool expired = false;
+            bool polling = false;   // 上一次轮询请求还没返回时跳过本次 Tick，避免请求堆积
+            int netFailures = 0;    // 连续网络失败次数：偶发抖动不打断授权，持续连不上才提示
             _loginPollTimer.Tick += async (s2, e2) =>
             {
                 if (_loginSession == null || _loginSession.ExpiresAt < DateTime.Now)
@@ -179,10 +182,39 @@ namespace ME.Views
                     if (!expired) { expired = true; _loginPollTimer.Stop(); SyncLoginStatus.Text = "授权超时，请重试"; SyncLoginBtn.IsEnabled = true; }
                     return;
                 }
+                if (polling) return;
+                polling = true;
                 string result;
                 try { result = await GitHubSyncService.LoginPollAsync(_loginSession); }
-                catch (Exception ex) { result = "!" + ex.Message; }
-                if (result == null) return; // 仍在等待
+                catch (Exception ex)
+                {
+                    // 网络抖动/超时不打断授权，静默重试到授权码过期；连续失败较久才给出提示
+                    netFailures++;
+                    if (netFailures == 3)
+                        SyncLoginStatus.Text = $"网络不稳定（{ex.Message}），仍在自动重试，授权成功后会自动完成，请稍候…";
+                    if (netFailures >= 10)
+                    {
+                        _loginPollTimer.Stop();
+                        SyncLoginStatus.Text = "长时间无法连接 GitHub，请检查网络或代理后重试";
+                        SyncLoginBtn.IsEnabled = true;
+                    }
+                    polling = false;
+                    return;
+                }
+                polling = false;
+                // GitHub 要求两次轮询至少间隔 Interval 秒，返回 slow_down 时要求会更宽；
+                // 定时器必须跟着放宽，否则之后每次轮询都「过快」，GitHub 一直回 slow_down 而不给
+                // token——表现为网页已授权、软件却永远停在等待（本版核心修复）
+                _loginPollTimer.Interval = TimeSpan.FromSeconds(Math.Min(60, Math.Max(3, _loginSession.Interval) + 1));
+                if (result == null)
+                {
+                    if (netFailures > 0)
+                    {
+                        netFailures = 0;
+                        SyncLoginStatus.Text = $"网络已恢复，继续等待授权…（代码 {_loginSession.UserCode}）";
+                    }
+                    return; // 仍在等待
+                }
                 _loginPollTimer.Stop();
                 if (result.StartsWith("!"))
                 {
