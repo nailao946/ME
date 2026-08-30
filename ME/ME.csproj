@@ -10,8 +10,8 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <DisableHardwareAcceleration>true</DisableHardwareAcceleration>
-    <ApplicationIcon>hobby_working_dailyroutine_life_time_management_icon_142245.ico</ApplicationIcon>
-    <Version>2.3.10.0</Version>
+    <ApplicationIcon>ME.ico</ApplicationIcon>
+    <Version>2.3.11.0</Version>
     <StartupObject>ME.App</StartupObject>
     <Authors>JOE</Authors>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
@@ -26,7 +26,7 @@
   </Target>
 
   <ItemGroup>
-    <Content Include="hobby_working_dailyroutine_life_time_management_icon_142245.ico">
+    <Content Include="ME.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

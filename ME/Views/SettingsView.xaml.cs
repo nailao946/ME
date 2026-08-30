@@ -101,10 +101,22 @@ namespace ME.Views
             {
                 try { SyncTokenBox.Password = SecureStore.Decrypt(c.EncryptedToken); } catch { }
             }
-            // 启动自动同步开关（赋值会触发 Checked/Unchecked，用标志跳过保存）
+            if (!string.IsNullOrWhiteSpace(c.EncryptedGiteeToken))
+            {
+                try { SyncGiteeTokenBox.Password = SecureStore.Decrypt(c.EncryptedGiteeToken); } catch { }
+            }
+            SyncWebDavUrlBox.Text = c.WebDavUrl;
+            SyncWebDavUserBox.Text = c.WebDavUser;
+            if (!string.IsNullOrWhiteSpace(c.EncryptedWebDavPass))
+            {
+                try { SyncWebDavPassBox.Password = SecureStore.Decrypt(c.EncryptedWebDavPass); } catch { }
+            }
+            // 同步方式与自动同步开关（赋值会触发事件，用标志跳过保存）
             _loadingSyncConfig = true;
+            SyncProviderBox.SelectedIndex = c.Provider == "gitee" ? 1 : c.Provider == "webdav" ? 2 : 0;
             AutoSyncToggle.IsChecked = c.AutoSyncOnStartup;
             _loadingSyncConfig = false;
+            ApplySyncProviderUI(CurrentProvider());
             var last = "";
             if (!string.IsNullOrEmpty(c.LastPushAt)) last += $"上次上传 {c.LastPushAt}  ";
             if (!string.IsNullOrEmpty(c.LastPullAt)) last += $"上次下载 {c.LastPullAt}  ";
@@ -131,7 +143,19 @@ namespace ME.Views
         private void RefreshAccountDisplay()
         {
             var c = GitHubSyncService.Load();
-            if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
+            if (c.Provider == "gitee")
+            {
+                SyncAccountText.Text = string.IsNullOrWhiteSpace(c.EncryptedGiteeToken)
+                    ? "未配置 Gitee 令牌"
+                    : (string.IsNullOrWhiteSpace(c.GiteeAccountName) ? "已保存 Gitee 令牌" : $"已配置：{c.GiteeAccountName}");
+            }
+            else if (c.Provider == "webdav")
+            {
+                SyncAccountText.Text = string.IsNullOrWhiteSpace(c.EncryptedWebDavPass)
+                    ? "未配置 WebDAV 账号"
+                    : $"已配置：{c.WebDavUser}";
+            }
+            else if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
             {
                 SyncAccountText.Text = string.IsNullOrWhiteSpace(c.AccountName)
                     ? "已登录 GitHub（Token 已保存）"
@@ -143,6 +167,42 @@ namespace ME.Views
                 SyncAccountText.Text = "未登录 GitHub 账号";
                 SyncLoginBtn.Content = "账号授权登录";
             }
+        }
+
+        /// <summary>下拉框当前选择的同步方式</summary>
+        private string CurrentProvider() =>
+            SyncProviderBox.SelectedIndex == 1 ? "gitee" : SyncProviderBox.SelectedIndex == 2 ? "webdav" : "github";
+
+        /// <summary>按同步方式显示/隐藏对应的凭据表单</summary>
+        private void ApplySyncProviderUI(string p)
+        {
+            var isGithub = p == "github";
+            var isGitee = p == "gitee";
+            var isWebDav = p == "webdav";
+            SyncGithubTokenRow.Visibility = isGithub ? Visibility.Visible : Visibility.Collapsed;
+            SyncGithubLoginPanel.Visibility = isGithub ? Visibility.Visible : Visibility.Collapsed;
+            SyncGiteeRow.Visibility = isGitee ? Visibility.Visible : Visibility.Collapsed;
+            SyncWebDavRows.Visibility = isWebDav ? Visibility.Visible : Visibility.Collapsed;
+            SyncRepoLabel.Text = isWebDav ? "文件夹" : "仓库";
+            SyncRepoBox.ToolTip = isWebDav
+                ? "云盘里存放数据的文件夹名，默认 ME-Data，一般不用改"
+                : "只填仓库名即可（自动创建私有仓库并挂到你的账号下），也可填 owner/仓库名";
+            SyncBranchLabel.Visibility = isWebDav ? Visibility.Collapsed : Visibility.Visible;
+            SyncBranchBox.Visibility = isWebDav ? Visibility.Collapsed : Visibility.Visible;
+            SyncBranchHint.Visibility = isWebDav ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void SyncProvider_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (_loadingSyncConfig) return;
+            var p = CurrentProvider();
+            // 分支默认值跟随同步方式：main ↔ master 互切时自动带过去，用户自定义分支不动
+            if (SyncBranchBox.Text.Trim() == "main" && p == "gitee") SyncBranchBox.Text = "master";
+            else if (SyncBranchBox.Text.Trim() == "master" && p == "github") SyncBranchBox.Text = "main";
+            SaveSyncConfig();
+            ApplySyncProviderUI(p);
+            RefreshAccountDisplay();
+            SyncStatusText.Text = "";
         }
 
         private System.Windows.Threading.DispatcherTimer _loginPollTimer;
@@ -258,22 +318,41 @@ namespace ME.Views
         private void SaveSyncConfig()
         {
             var c = GitHubSyncService.Load();
+            c.Provider = CurrentProvider();
             // 只填仓库名即可（如 ME-Data），账号前缀在上传/下载时自动补
             c.Repo = string.IsNullOrWhiteSpace(SyncRepoBox.Text) ? "ME-Data" : SyncRepoBox.Text.Trim();
-            c.Branch = string.IsNullOrWhiteSpace(SyncBranchBox.Text) ? "main" : SyncBranchBox.Text.Trim();
+            c.Branch = string.IsNullOrWhiteSpace(SyncBranchBox.Text)
+                ? (c.Provider == "gitee" ? "master" : "main")
+                : SyncBranchBox.Text.Trim();
             c.Proxy = SyncProxyBox.Text.Trim();
             if (!string.IsNullOrWhiteSpace(SyncTokenBox.Password))
                 c.EncryptedToken = SecureStore.Encrypt(SyncTokenBox.Password.Trim());
+            if (!string.IsNullOrWhiteSpace(SyncGiteeTokenBox.Password))
+                c.EncryptedGiteeToken = SecureStore.Encrypt(SyncGiteeTokenBox.Password.Trim());
+            c.WebDavUrl = SyncWebDavUrlBox.Text.Trim();
+            c.WebDavUser = SyncWebDavUserBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(SyncWebDavPassBox.Password))
+                c.EncryptedWebDavPass = SecureStore.Encrypt(SyncWebDavPassBox.Password.Trim());
             GitHubSyncService.Save(c);
+        }
+
+        /// <summary>按当前同步方式检查凭据是否已填，缺什么提示什么（上传/下载前调用）</summary>
+        private string SyncCredentialMissing()
+        {
+            var p = CurrentProvider();
+            if (p == "gitee" && SyncGiteeTokenBox.Password.Trim() == "")
+                return "请先填写 Gitee 私人令牌（gitee.com → 设置 → 私人令牌）";
+            if (p == "webdav" && (SyncWebDavUserBox.Text.Trim() == "" || SyncWebDavPassBox.Password.Trim() == ""))
+                return "请先填写 WebDAV 账号和密码";
+            if (p == "github" && SyncRepoBox.Text.Trim() == "" && SyncTokenBox.Password.Trim() == "")
+                return "请先登录 GitHub 账号或填写 Token";
+            return null;
         }
 
         private async void SyncPush_Click(object sender, RoutedEventArgs e)
         {
-            if (SyncRepoBox.Text.Trim() == "" && SyncTokenBox.Password.Trim() == "")
-            {
-                SyncStatusText.Text = "请先登录 GitHub 账号或填写 Token";
-                return;
-            }
+            var missing = SyncCredentialMissing();
+            if (missing != null) { SyncStatusText.Text = missing; return; }
             SaveSyncConfig();
             SyncPushBtn.IsEnabled = false; SyncPullBtn.IsEnabled = false;
             SyncStatusText.Text = "上传中…";
@@ -289,12 +368,9 @@ namespace ME.Views
 
         private async void SyncPull_Click(object sender, RoutedEventArgs e)
         {
-            if (SyncRepoBox.Text.Trim() == "" && SyncTokenBox.Password.Trim() == "")
-            {
-                SyncStatusText.Text = "请先登录 GitHub 账号或填写 Token";
-                return;
-            }
-            if (MessageBox.Show("下载会用仓库数据覆盖本机数据（本机会先自动备份）。继续？", "云同步下载",
+            var missing = SyncCredentialMissing();
+            if (missing != null) { SyncStatusText.Text = missing; return; }
+            if (MessageBox.Show("下载会用云端数据覆盖本机数据（本机会先自动备份）。继续？", "云同步下载",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             SaveSyncConfig();
             SyncPushBtn.IsEnabled = false; SyncPullBtn.IsEnabled = false;

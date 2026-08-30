@@ -281,13 +281,23 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- GitHub Cloud Sync (PC ↔ Android) -->
+                    <!-- 云同步 (PC ↔ Android)：GitHub / Gitee / WebDAV -->
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
-                            <TextBlock Text="GitHub 云同步（PC ↔ 安卓）" FontSize="16" FontWeight="Bold"
+                            <TextBlock Text="云同步（PC ↔ 安卓）" FontSize="16" FontWeight="Bold"
                                        Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
-                            <TextBlock Text="把数据上传到自己的 GitHub 私有仓库实现 PC / 安卓免费云同步。Token 需要 repo（Contents 读写）权限，用 DPAPI 加密保存，不会随数据上传。" FontSize="11"
+                            <TextBlock Text="把数据备份到你自己的云端（GitHub / Gitee 私有仓库，或坚果云等 WebDAV 网盘），与安卓端互通。令牌与密码用 DPAPI 加密保存，不会随数据上传。" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                            <!-- 同步方式 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="同步方式" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" Width="100" />
+                                <ComboBox x:Name="SyncProviderBox" Width="240" FontSize="12" SelectionChanged="SyncProvider_Changed">
+                                    <ComboBoxItem Content="GitHub（推荐，网页授权登录）" />
+                                    <ComboBoxItem Content="Gitee（国内直连快）" />
+                                    <ComboBoxItem Content="WebDAV（坚果云等网盘）" />
+                                </ComboBox>
+                            </StackPanel>
                             <!-- 启动自动同步 -->
                             <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="8" Padding="12"
                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,10">
@@ -304,26 +314,58 @@
                                 </StackPanel>
                             </Border>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                <TextBlock x:Name="SyncRepoLabel" Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />
                                 <TextBox x:Name="SyncRepoBox" Width="240" FontSize="12" Padding="8,5,8,5" Text="ME-Data"
                                          ToolTip="只填仓库名即可（自动创建私有仓库并挂到你的账号下），也可填 owner/仓库名" />
-                                <TextBlock Text="分支" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                <TextBlock x:Name="SyncBranchLabel" Text="分支" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Margin="16,0,0,0" Width="40" />
                                 <TextBox x:Name="SyncBranchBox" Width="80" FontSize="12" Padding="8,5,8,5" Text="main" />
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock x:Name="SyncBranchHint" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Margin="100,0,0,8" TextWrapping="Wrap"
+                                       Text="GitHub 默认 main，Gitee 默认 master；切换同步方式后如报分支错误，改成对应默认分支即可" />
+                            <StackPanel x:Name="SyncGithubTokenRow" Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock Text="GitHub Token" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />
                                 <PasswordBox x:Name="SyncTokenBox" Width="240" FontSize="12" Padding="8,5,8,5"
-                                             ToolTip="ghp_ 开头的 Personal Access Token（需要 repo 权限）" />
-                                <TextBlock Text="代理(可选)" FontSize="13" Foreground="{DynamicResource TextBrush}"
-                                           VerticalAlignment="Center" Margin="16,0,0,0" Width="70" />
-                                <TextBox x:Name="SyncProxyBox" Width="130" FontSize="12" Padding="8,5,8,5"
-                                         ToolTip="如 http://127.0.0.1:7897，留空直连" />
+                                             ToolTip="ghp_ 开头的 Personal Access Token（需要 repo 权限），已登录可留空" />
                             </StackPanel>
-                            <!-- 账号授权登录（GitHub Device Flow） -->
-                            <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="8" Padding="12"
+                            <StackPanel x:Name="SyncGiteeRow" Orientation="Horizontal" Margin="0,0,0,8" Visibility="Collapsed">
+                                <TextBlock Text="私人令牌" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" Width="100" />
+                                <PasswordBox x:Name="SyncGiteeTokenBox" Width="240" FontSize="12" Padding="8,5,8,5"
+                                             ToolTip="gitee.com → 设置 → 安全设置 → 私人令牌，生成时勾选 projects 与 user_info" />
+                            </StackPanel>
+                            <StackPanel x:Name="SyncWebDavRows" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="服务器地址" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                               VerticalAlignment="Center" Width="100" />
+                                    <TextBox x:Name="SyncWebDavUrlBox" Width="240" FontSize="12" Padding="8,5,8,5"
+                                             ToolTip="留空 = 坚果云 https://dav.jianguoyun.com/dav/，也可填 Nextcloud / 群晖等任意 WebDAV 地址" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="账号" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                               VerticalAlignment="Center" Width="100" />
+                                    <TextBox x:Name="SyncWebDavUserBox" Width="240" FontSize="12" Padding="8,5,8,5"
+                                             ToolTip="坚果云为注册手机号或邮箱" />
+                                    <TextBlock Text="密码" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                               VerticalAlignment="Center" Margin="16,0,0,0" Width="40" />
+                                    <PasswordBox x:Name="SyncWebDavPassBox" Width="130" FontSize="12" Padding="8,5,8,5"
+                                                 ToolTip="坚果云请在网页版「账户信息 → 安全选项 → 添加应用密码」生成，不能用登录密码" />
+                                </StackPanel>
+                                <TextBlock FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="100,0,0,8"
+                                           TextWrapping="Wrap"
+                                           Text="坚果云：登录网页版 → 账户信息 → 安全选项 → 添加应用密码，把生成的密码填到上面；免费版每月上传流量 1GB，同步文本数据足够" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="代理(可选)" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" Width="100" />
+                                <TextBox x:Name="SyncProxyBox" Width="240" FontSize="12" Padding="8,5,8,5"
+                                         ToolTip="如 http://127.0.0.1:7897，留空直连；三种同步方式都生效" />
+                            </StackPanel>
+                            <!-- 账号授权登录（GitHub Device Flow，仅 GitHub 方式） -->
+                            <Border x:Name="SyncGithubLoginPanel" Background="{DynamicResource BackgroundBrush}" CornerRadius="8" Padding="12"
                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,8">
                                 <StackPanel>
                                     <TextBlock x:Name="SyncAccountText" FontSize="13" FontWeight="SemiBold"

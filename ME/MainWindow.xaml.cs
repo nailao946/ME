@@ -495,7 +495,7 @@ namespace ME
                 _notifyIcon = new Forms.NotifyIcon();
                 _notifyIcon.Text = "ME";
 
-                var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hobby_working_dailyroutine_life_time_management_icon_142245.ico");
+                var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ME.ico");
                 if (File.Exists(iconPath))
                 {
                     _notifyIcon.Icon = new Icon(iconPath);

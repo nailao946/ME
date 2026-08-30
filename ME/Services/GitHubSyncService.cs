@@ -21,16 +21,22 @@ namespace ME.Services
     {
         public class SyncConfig
         {
+            public string Provider { get; set; } = "github"; // github | gitee | webdav
             public string EncryptedToken { get; set; } = "";
             public string EncryptedRefreshToken { get; set; } = ""; // GitHub App 开启「令牌过期」时用于自动续期
             public string TokenExpiresAt { get; set; } = "";        // 令牌到期本地时间；空 = 令牌不过期
-            public string Repo { get; set; } = "";       // owner/name
-            public string Branch { get; set; } = "main";
+            public string Repo { get; set; } = "";       // Git 供应商=仓库名（可 owner/name）；WebDAV=文件夹名
+            public string Branch { get; set; } = "main"; // 仅 Git 供应商（GitHub 默认 main，Gitee 默认 master）
             public string Proxy { get; set; } = "";      // 可选，如 http://127.0.0.1:7897
             public string LastPushAt { get; set; } = "";
             public string LastPullAt { get; set; } = "";
             public string LastSyncAt { get; set; } = "";  // 最近一次自动同步时间
             public string AccountName { get; set; } = ""; // 授权后显示的 GitHub 用户名
+            public string EncryptedGiteeToken { get; set; } = ""; // Gitee 私人令牌（DPAPI 加密）
+            public string GiteeAccountName { get; set; } = "";    // Gitee 用户名（显示用）
+            public string WebDavUrl { get; set; } = "";   // WebDAV 地址，空 = 坚果云 https://dav.jianguoyun.com/dav/
+            public string WebDavUser { get; set; } = "";  // WebDAV 账号（坚果云为注册手机号/邮箱）
+            public string EncryptedWebDavPass { get; set; } = ""; // WebDAV 密码/应用密码（DPAPI 加密）
             public bool AutoSyncOnStartup { get; set; } = true; // 启动软件时自动同步
             // 每个文件上次同步后的云端 sha，用于检测「云端比本地新」，避免覆盖其它设备的更新
             public Dictionary<string, string> FileShas { get; set; } = new Dictionary<string, string>();
@@ -160,44 +166,43 @@ namespace ME.Services
         }
 
         /// <summary>
-        /// 确保同步仓库存在：默认 ME-Data（私有），用户只填仓库名时自动挂到当前账号下（已存在则直接使用）。
-        /// 登录后和上传/下载前调用，用户无需手填 owner/ 前缀。
+        /// 确保同步目标存在（按所选同步方式：GitHub/Gitee 自动创建私有仓库，WebDAV 创建目录）。
+        /// 登录后和上传/下载前调用，用户无需手填 owner/ 前缀。返回用于展示的目标名。
         /// </summary>
         public static async Task<string> EnsureDefaultRepoAsync()
         {
             var c = Load();
-            if (string.IsNullOrWhiteSpace(c.EncryptedToken)) throw new Exception("尚未登录 GitHub 账号");
-            await EnsureFreshTokenAsync(c).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-Data";
-            var name = c.Repo.Contains('/') ? c.Repo.Substring(c.Repo.IndexOf('/') + 1) : c.Repo;
-            if (string.IsNullOrWhiteSpace(name)) name = "ME-Data";
-
-            var login = string.IsNullOrWhiteSpace(c.AccountName) ? await FetchLoginAsync(c).ConfigureAwait(false) : c.AccountName;
-
-            // 创建私有仓库（HTTP 422 = 已存在，直接使用）
-            try
-            {
-                var payload = new Dictionary<string, object> { ["name"] = name, ["private"] = true, ["auto_init"] = false };
-                using var client = CreateClient(c);
-                using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.github.com/user/repos")
-                {
-                    Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-                };
-                req.Headers.Authorization = AuthHeader(c);
-                using var resp = await client.SendAsync(req).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 422)
-                {
-                    var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    throw new Exception("创建仓库失败：" + DescribeApiError((int)resp.StatusCode, text));
-                }
-            }
-            catch (Exception ex) when (ex.Message.Contains("422")) { /* 已存在 */ }
-
-            if (string.IsNullOrWhiteSpace(c.Branch)) c.Branch = "main";
-            Save(c);
-            _resolvedRepo = $"{login}/{name}";
-            return _resolvedRepo;
+            await StoreFor(c).EnsureReadyAsync(c).ConfigureAwait(false);
+            return DisplayTarget(c);
         }
+
+        private static string DisplayTarget(SyncConfig c)
+        {
+            var repo = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo;
+            var name = repo.Contains('/') ? repo.Substring(repo.IndexOf('/') + 1) : repo;
+            if (c.Provider == "webdav")
+            {
+                var baseUrl = string.IsNullOrWhiteSpace(c.WebDavUrl) ? "https://dav.jianguoyun.com/dav/" : c.WebDavUrl.Trim();
+                return baseUrl.TrimEnd('/') + "/" + name;
+            }
+            var account = c.Provider == "gitee" ? c.GiteeAccountName : c.AccountName;
+            return $"{account}/{name}";
+        }
+
+        /// <summary>当前同步方式缺少凭据时返回提示文案，否则 null</summary>
+        private static string CredentialsMissing(SyncConfig c)
+        {
+            if (c.Provider == "gitee")
+                return string.IsNullOrWhiteSpace(c.EncryptedGiteeToken) ? "请先填写 Gitee 私人令牌（gitee.com → 设置 → 私人令牌）" : null;
+            if (c.Provider == "webdav")
+                return string.IsNullOrWhiteSpace(c.WebDavUser) || string.IsNullOrWhiteSpace(c.EncryptedWebDavPass)
+                    ? "请先填写 WebDAV 账号和密码" : null;
+            return string.IsNullOrWhiteSpace(c.EncryptedToken) ? "请先登录 GitHub 账号或填写 Token" : null;
+        }
+
+        private static ICloudStore StoreFor(SyncConfig c) =>
+            c.Provider == "gitee" ? new GiteeStore() :
+            c.Provider == "webdav" ? new WebDavStore() : new GitHubStore();
 
         /// <summary>把用户填的仓库名解析成 owner/name：只填 ME-Data 时自动补当前账号前缀</summary>
         private static async Task<string> ResolveRepoAsync(SyncConfig c)
@@ -211,6 +216,389 @@ namespace ME.Services
         }
         private static string _resolvedRepo;
 
+        /// <summary>内容指纹（WebDAV 没有 sha 概念，用内容 SHA1 当版本标识判断「云端是否被改过」）</summary>
+        private static string HashText(string text)
+        {
+            using var sha = System.Security.Cryptography.SHA1.Create();
+            return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(text)));
+        }
+
+        /// <summary>
+        /// 云端存储的统一抽象：上传/下载/智能同步只认这份接口，GitHub / Gitee / WebDAV 各自实现。
+        /// 版本标识：Git 供应商=文件 blob sha，WebDAV=内容 SHA1。
+        /// </summary>
+        private interface ICloudStore
+        {
+            string Label { get; }
+            Task EnsureReadyAsync(SyncConfig c);
+            /// <summary>列出 data 目录下所有 .json 文件：文件名 → 版本标识（目录不存在返回空表）</summary>
+            Task<Dictionary<string, string>> ListAsync(SyncConfig c);
+            /// <summary>读取文件内容；文件不存在返回 null</summary>
+            Task<string> ReadAsync(SyncConfig c, string name);
+            /// <summary>当前云端版本标识；文件不存在返回 null</summary>
+            Task<string> RevOfAsync(SyncConfig c, string name);
+            /// <summary>写入文件，返回新的云端版本标识</summary>
+            Task<string> WriteAsync(SyncConfig c, string name, string content, string prevRev);
+            string DescribeError(int status, string body);
+        }
+
+        private class GitHubStore : ICloudStore
+        {
+            public string Label => "GitHub";
+
+            public async Task EnsureReadyAsync(SyncConfig c)
+            {
+                if (string.IsNullOrWhiteSpace(c.EncryptedToken)) throw new Exception("尚未登录 GitHub 账号");
+                await EnsureFreshTokenAsync(c).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-Data";
+                var name = c.Repo.Contains('/') ? c.Repo.Substring(c.Repo.IndexOf('/') + 1) : c.Repo;
+                if (string.IsNullOrWhiteSpace(name)) name = "ME-Data";
+
+                var login = string.IsNullOrWhiteSpace(c.AccountName) ? await FetchLoginAsync(c).ConfigureAwait(false) : c.AccountName;
+
+                // 创建私有仓库（HTTP 422 = 已存在，直接使用）
+                try
+                {
+                    var payload = new Dictionary<string, object> { ["name"] = name, ["private"] = true, ["auto_init"] = false };
+                    using var client = CreateClient(c);
+                    using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.github.com/user/repos")
+                    {
+                        Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+                    };
+                    req.Headers.Authorization = AuthHeader(c);
+                    using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                    if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 422)
+                    {
+                        var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        throw new Exception("创建仓库失败：" + DescribeApiError((int)resp.StatusCode, text));
+                    }
+                }
+                catch (Exception ex) when (ex.Message.Contains("422")) { /* 已存在 */ }
+
+                if (string.IsNullOrWhiteSpace(c.Branch)) c.Branch = "main";
+                Save(c);
+                _resolvedRepo = $"{login}/{name}";
+            }
+
+            public async Task<Dictionary<string, string>> ListAsync(SyncConfig c)
+            {
+                var repo = await ResolveRepoAsync(c).ConfigureAwait(false);
+                var map = new Dictionary<string, string>();
+                var listing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data?ref={c.Branch}")).ConfigureAwait(false);
+                if (listing.ValueKind == JsonValueKind.Array)
+                    foreach (var item in listing.EnumerateArray())
+                    {
+                        var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
+                        var fsha = item.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
+                        if (!string.IsNullOrEmpty(name) && name.EndsWith(".json") && !string.IsNullOrEmpty(fsha))
+                            map[name] = fsha;
+                    }
+                return map;
+            }
+
+            public async Task<string> ReadAsync(SyncConfig c, string name)
+            {
+                var repo = await ResolveRepoAsync(c).ConfigureAwait(false);
+                var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{Uri.EscapeDataString(name)}?ref={c.Branch}")).ConfigureAwait(false);
+                var b64 = detail.GetProperty("content").GetString() ?? "";
+                return Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
+            }
+
+            public async Task<string> RevOfAsync(SyncConfig c, string name)
+            {
+                try
+                {
+                    var repo = await ResolveRepoAsync(c).ConfigureAwait(false);
+                    var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{Uri.EscapeDataString(name)}?ref={c.Branch}")).ConfigureAwait(false);
+                    return detail.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
+                }
+                catch { return null; } // 不存在则新建
+            }
+
+            public async Task<string> WriteAsync(SyncConfig c, string name, string content, string prevRev)
+            {
+                var repo = await ResolveRepoAsync(c).ConfigureAwait(false);
+                var payload = new Dictionary<string, object>
+                {
+                    ["message"] = $"ME 数据同步（PC）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    ["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                    ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch
+                };
+                if (!string.IsNullOrEmpty(prevRev)) payload["sha"] = prevRev;
+                var putResp = await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{Uri.EscapeDataString(name)}"), payload).ConfigureAwait(false);
+                try { return putResp.GetProperty("content").GetProperty("sha").GetString() ?? ""; } catch { return ""; }
+            }
+
+            public string DescribeError(int status, string body) => DescribeApiError(status, body);
+        }
+
+        private class GiteeStore : ICloudStore
+        {
+            public string Label => "Gitee";
+            private const string Api = "https://gitee.com/api/v5";
+
+            private static string Token(SyncConfig c)
+            {
+                var t = SecureStore.Decrypt(c.EncryptedGiteeToken);
+                if (string.IsNullOrWhiteSpace(t))
+                    throw new Exception("本机保存的 Gitee 令牌无法读取，请重新填写私人令牌");
+                return t;
+            }
+
+            private string Url(SyncConfig c, string path) =>
+                $"{Api}{path}{(path.Contains('?') ? '&' : '?')}access_token={Uri.EscapeDataString(Token(c))}";
+
+            private async Task<JsonElement> SendAsync(SyncConfig c, HttpMethod method, string path, object payload = null)
+            {
+                using var client = CreateClient(c);   // 复用统一客户端（代理/超时/UserAgent）
+                using var req = new HttpRequestMessage(method, Url(c, path));
+                if (payload != null)
+                    req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                    throw new Exception(DescribeError((int)resp.StatusCode, text));
+                if (string.IsNullOrWhiteSpace(text)) return default;
+                using var doc = JsonDocument.Parse(text);
+                return doc.RootElement.Clone();
+            }
+
+            private async Task<string> AccountAsync(SyncConfig c)
+            {
+                if (!string.IsNullOrWhiteSpace(c.GiteeAccountName)) return c.GiteeAccountName;
+                var user = await SendAsync(c, HttpMethod.Get, "/user").ConfigureAwait(false);
+                var login = user.TryGetProperty("login", out var lg) ? lg.GetString() : null;
+                if (string.IsNullOrWhiteSpace(login))
+                    throw new Exception("无法获取 Gitee 用户名，请检查令牌是否勾选了 user_info 与 projects 权限");
+                c.GiteeAccountName = login;
+                Save(c);
+                return login;
+            }
+
+            private string RepoName(SyncConfig c) =>
+                string.IsNullOrWhiteSpace(c.Repo) || c.Repo.Trim() == "" ? "ME-Data"
+                : (c.Repo.Contains('/') ? c.Repo.Substring(c.Repo.IndexOf('/') + 1) : c.Repo);
+
+            private async Task<string> FullRepoAsync(SyncConfig c) =>
+                c.Repo != null && c.Repo.Contains('/') ? c.Repo : $"{await AccountAsync(c).ConfigureAwait(false)}/{RepoName(c)}";
+
+            public async Task EnsureReadyAsync(SyncConfig c)
+            {
+                if (string.IsNullOrWhiteSpace(c.EncryptedGiteeToken))
+                    throw new Exception("请先填写 Gitee 私人令牌（gitee.com → 设置 → 私人令牌，勾选 projects 与 user_info）");
+                await AccountAsync(c).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(c.Repo)) c.Repo = "ME-Data";
+
+                // 创建私有仓库（已存在则直接使用）；Gitee 空仓库不能写 contents，auto_init 先生成初始提交
+                try
+                {
+                    await SendAsync(c, HttpMethod.Post, "/user/repos", new Dictionary<string, object>
+                    {
+                        ["name"] = RepoName(c), ["private"] = true, ["auto_init"] = true
+                    }).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    var m = ex.Message;
+                    if (!(m.Contains("已存在") || m.Contains("同名") || m.Contains("exist") || m.Contains("already")))
+                        throw new Exception("创建仓库失败：" + m);
+                }
+
+                if (string.IsNullOrWhiteSpace(c.Branch) || c.Branch.Trim() == "main") c.Branch = "master"; // Gitee 默认分支
+                Save(c);
+            }
+
+            public async Task<Dictionary<string, string>> ListAsync(SyncConfig c)
+            {
+                var full = await FullRepoAsync(c).ConfigureAwait(false);
+                var map = new Dictionary<string, string>();
+                var listing = await SendAsync(c, HttpMethod.Get, $"/repos/{full}/contents/data?ref={c.Branch}").ConfigureAwait(false);
+                if (listing.ValueKind == JsonValueKind.Array)
+                    foreach (var item in listing.EnumerateArray())
+                    {
+                        var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
+                        var sha = item.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
+                        if (!string.IsNullOrEmpty(name) && name.EndsWith(".json") && !string.IsNullOrEmpty(sha))
+                            map[name] = sha;
+                    }
+                return map;
+            }
+
+            public async Task<string> ReadAsync(SyncConfig c, string name)
+            {
+                var full = await FullRepoAsync(c).ConfigureAwait(false);
+                var detail = await SendAsync(c, HttpMethod.Get, $"/repos/{full}/contents/data/{Uri.EscapeDataString(name)}?ref={c.Branch}").ConfigureAwait(false);
+                var b64 = detail.GetProperty("content").GetString() ?? "";
+                return Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
+            }
+
+            public async Task<string> RevOfAsync(SyncConfig c, string name)
+            {
+                try
+                {
+                    var full = await FullRepoAsync(c).ConfigureAwait(false);
+                    var detail = await SendAsync(c, HttpMethod.Get, $"/repos/{full}/contents/data/{Uri.EscapeDataString(name)}?ref={c.Branch}").ConfigureAwait(false);
+                    return detail.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
+                }
+                catch { return null; }
+            }
+
+            public async Task<string> WriteAsync(SyncConfig c, string name, string content, string prevRev)
+            {
+                var full = await FullRepoAsync(c).ConfigureAwait(false);
+                var payload = new Dictionary<string, object>
+                {
+                    ["message"] = $"ME 数据同步（PC）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
+                    ["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(content)),
+                    ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "master" : c.Branch
+                };
+                if (!string.IsNullOrEmpty(prevRev)) payload["sha"] = prevRev;
+                var resp = await SendAsync(c, HttpMethod.Put, $"/repos/{full}/contents/data/{Uri.EscapeDataString(name)}", payload).ConfigureAwait(false);
+                try { return resp.GetProperty("content").GetProperty("sha").GetString() ?? ""; } catch { return ""; }
+            }
+
+            public string DescribeError(int status, string body) =>
+                status == 401
+                    ? "Gitee 令牌已失效（被撤销或已过期），请重新填写私人令牌"
+                    : $"HTTP {status}：{Truncate(body, 240)}";
+        }
+
+        private class WebDavStore : ICloudStore
+        {
+            public string Label => "WebDAV";
+
+            // 每次操作新建实例：ListAsync 预取的内容缓存在这里，Read/RevOf 直接命中，避免重复下载
+            private readonly Dictionary<string, string> _cache = new Dictionary<string, string>();
+
+            private string BaseUrl(SyncConfig c) =>
+                (string.IsNullOrWhiteSpace(c.WebDavUrl) ? "https://dav.jianguoyun.com/dav/" : c.WebDavUrl.Trim()).TrimEnd('/') + "/";
+
+            private string Folder(SyncConfig c)
+            {
+                var repo = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo.Trim();
+                var segs = repo.Split('/').Where(s => s.Length > 0).Select(Uri.EscapeDataString);
+                return BaseUrl(c) + string.Join("/", segs) + "/";
+            }
+
+            private HttpClient Client(SyncConfig c)
+            {
+                var pass = SecureStore.Decrypt(c.EncryptedWebDavPass);
+                if (string.IsNullOrWhiteSpace(c.WebDavUser) || string.IsNullOrWhiteSpace(pass))
+                    throw new Exception("请先填写 WebDAV 账号和密码");
+                var handler = new HttpClientHandler();
+                if (!string.IsNullOrWhiteSpace(c.Proxy))
+                {
+                    try { handler.Proxy = new System.Net.WebProxy(c.Proxy.Trim()); handler.UseProxy = true; } catch { }
+                }
+                var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(40) };
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("ME-PC");
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
+                    Convert.ToBase64String(Encoding.UTF8.GetBytes($"{c.WebDavUser.Trim()}:{pass}")));
+                return client;
+            }
+
+            public async Task EnsureReadyAsync(SyncConfig c)
+            {
+                if (string.IsNullOrWhiteSpace(c.Repo)) { c.Repo = "ME-Data"; Save(c); }
+                using var client = Client(c);
+                using var req = new HttpRequestMessage(new HttpMethod("MKCOL"), Folder(c));
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                var code = (int)resp.StatusCode;
+                // 201 = 已创建；405/301/409 = 已存在或父目录已存在，均可继续
+                if (code != 201 && code != 405 && code != 301 && code != 409 && code != 200)
+                {
+                    var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    throw new Exception("创建 WebDAV 目录失败：" + DescribeError(code, text));
+                }
+            }
+
+            public async Task<Dictionary<string, string>> ListAsync(SyncConfig c)
+            {
+                var map = new Dictionary<string, string>();
+                string body;
+                using (var client = Client(c))
+                {
+                    using var req = new HttpRequestMessage(new HttpMethod("PROPFIND"), Folder(c));
+                    req.Headers.Add("Depth", "1");
+                    req.Content = new StringContent(
+                        "<?xml version=\"1.0\"?><d:propfind xmlns:d=\"DAV:\"><d:prop><d:getcontentlength/></d:prop></d:propfind>",
+                        Encoding.UTF8, "application/xml");
+                    using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                    var code = (int)resp.StatusCode;
+                    body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    if (code == 404) return map;   // 目录还没建
+                    if (code != 207 && (code < 200 || code > 299))
+                        throw new Exception(DescribeError(code, body));
+                }
+
+                // 解析 multistatus：每个 <response> 里的 <href>；用 LocalName 匹配以兼容任意命名空间前缀
+                var doc = new System.Xml.Linq.XDocument();
+                try { doc = System.Xml.Linq.XDocument.Parse(body); } catch { return map; }
+                var folder = Folder(c);
+                foreach (var respEl in doc.Descendants().Where(e => e.Name.LocalName == "response"))
+                {
+                    var href = respEl.Descendants().FirstOrDefault(e => e.Name.LocalName == "href")?.Value;
+                    if (string.IsNullOrEmpty(href)) continue;
+                    var decoded = Uri.UnescapeDataString(href);
+                    if (decoded.EndsWith("/")) continue; // 目录本身或子目录
+                    var name = decoded.Split('/').Last();
+                    if (!name.EndsWith(".json")) continue;
+                    var content = await ReadRawAsync(c, name).ConfigureAwait(false);
+                    if (content == null) continue;
+                    _cache[name] = content;
+                    map[name] = HashText(content);
+                }
+                return map;
+            }
+
+            private async Task<string> ReadRawAsync(SyncConfig c, string name)
+            {
+                using var client = Client(c);
+                using var req = new HttpRequestMessage(HttpMethod.Get, Folder(c) + Uri.EscapeDataString(name));
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                var code = (int)resp.StatusCode;
+                if (code == 404) return null;
+                var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (code < 200 || code > 299)
+                    throw new Exception(DescribeError(code, text));
+                return text;
+            }
+
+            public async Task<string> ReadAsync(SyncConfig c, string name)
+            {
+                if (_cache.TryGetValue(name, out var cached)) return cached;
+                return await ReadRawAsync(c, name).ConfigureAwait(false);
+            }
+
+            public async Task<string> RevOfAsync(SyncConfig c, string name)
+            {
+                var content = await ReadAsync(c, name).ConfigureAwait(false);
+                return content == null ? null : HashText(content);
+            }
+
+            public async Task<string> WriteAsync(SyncConfig c, string name, string content, string prevRev)
+            {
+                using var client = Client(c);
+                using var req = new HttpRequestMessage(HttpMethod.Put, Folder(c) + Uri.EscapeDataString(name))
+                {
+                    Content = new StringContent(content, Encoding.UTF8, "application/json")
+                };
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                var code = (int)resp.StatusCode;
+                if (code < 200 || code > 299)
+                {
+                    var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    throw new Exception(DescribeError(code, text));
+                }
+                return HashText(content);
+            }
+
+            public string DescribeError(int status, string body) =>
+                status == 401 || status == 403
+                    ? "WebDAV 账号或密码不正确（坚果云请用网页版「安全选项 → 添加应用密码」生成的密码，不能用登录密码）"
+                    : $"HTTP {status}：{Truncate(body, 240)}";
+        }
+
         /// <summary>反馈提交目标仓库（项目 Issues，非用户的同步数据仓库）</summary>
         private const string FeedbackRepo = "nailao946/ME";
 
@@ -222,7 +610,7 @@ namespace ME.Services
         {
             var c = Load();
             if (string.IsNullOrWhiteSpace(c.EncryptedToken))
-                throw new Exception("尚未绑定 GitHub，请先在「设置 → 数据与备份」中登录后再提交反馈");
+                throw new Exception("提交反馈需要 GitHub 授权（与云同步方式无关）：请在「设置 → 数据与备份」切换到 GitHub 并登录后再提交");
             var t = (title ?? "").Trim();
             if (t.Length == 0) throw new Exception("请填写反馈标题");
             var text = (content ?? "").Trim();
@@ -430,33 +818,20 @@ namespace ME.Services
         private static async Task<string> SyncCoreAsync()
         {
             var c = Load();
-            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
-                return "✗ 请先登录 GitHub 账号";
+            var missing = CredentialsMissing(c);
+            if (missing != null) return "✗ " + missing;
             if (string.IsNullOrWhiteSpace(c.Repo))
             {
                 try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
                 catch (Exception ex) { return "✗ " + ex.Message; }
             }
-            string repo;
-            try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
-            catch (Exception ex) { return "✗ " + ex.Message; }
             Directory.CreateDirectory(DataDir);
+            var store = StoreFor(c);
 
-            // 云端文件清单 name -> sha
+            // 云端文件清单 name -> 版本标识
             var remote = new Dictionary<string, string>();
-            try
-            {
-                var listing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data?ref={c.Branch}")).ConfigureAwait(false);
-                if (listing.ValueKind == JsonValueKind.Array)
-                    foreach (var item in listing.EnumerateArray())
-                    {
-                        var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
-                        var fsha = item.TryGetProperty("sha", out var sh) ? sh.GetString() : null;
-                        if (!string.IsNullOrEmpty(name) && name.EndsWith(".json") && !string.IsNullOrEmpty(fsha))
-                            remote[name] = fsha;
-                    }
-            }
-            catch (Exception ex) when (ex.Message.Contains("404")) { /* 仓库还没有 data 目录，当作空 */ }
+            try { remote = await store.ListAsync(c).ConfigureAwait(false); }
+            catch (Exception ex) when (ex.Message.Contains("404")) { /* 云端还没有 data 目录，当作空 */ }
 
             var localNames = Directory.Exists(DataDir)
                 ? Directory.GetFiles(DataDir, "*.json").Select(Path.GetFileName).ToList()
@@ -499,27 +874,19 @@ namespace ME.Services
 
                     if (wantUpload)
                     {
-                        var content = Convert.ToBase64String(Encoding.UTF8.GetBytes(File.ReadAllText(localPath)));
-                        var payload = new Dictionary<string, object>
-                        {
-                            ["message"] = $"ME 数据同步（PC 自动）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                            ["content"] = content,
-                            ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch
-                        };
-                        if (remoteExists) payload["sha"] = rsha;
-                        var putResp = await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{name}"), payload).ConfigureAwait(false);
-                        try { newShas[name] = putResp.GetProperty("content").GetProperty("sha").GetString(); } catch { }
+                        var content = File.ReadAllText(localPath);
+                        var newRev = await store.WriteAsync(c, name, content, remoteExists ? rsha : null).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
                         newHashes[name] = localHash;
                         up++;
                     }
                     else
                     {
-                        var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{name}?ref={c.Branch}")).ConfigureAwait(false);
-                        var b64 = detail.GetProperty("content").GetString() ?? "";
-                        var text = Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
+                        var text = await store.ReadAsync(c, name).ConfigureAwait(false);
+                        if (text == null) throw new Exception("文件内容为空");
                         File.WriteAllText(localPath, text);
                         JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
-                        try { newShas[name] = detail.GetProperty("sha").GetString(); } catch { }
+                        newShas[name] = string.IsNullOrEmpty(rsha) ? HashText(text) : rsha;
                         newHashes[name] = HashFile(localPath);
                         down++;
                     }
@@ -547,7 +914,7 @@ namespace ME.Services
             try
             {
                 var c = Load();
-                if (!c.AutoSyncOnStartup || string.IsNullOrWhiteSpace(c.EncryptedToken)) return;
+                if (!c.AutoSyncOnStartup || CredentialsMissing(c) != null) return;
                 LastAutoSyncResult = await SyncAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -570,8 +937,8 @@ namespace ME.Services
         private static async Task<string> PushCoreAsync()
         {
             var c = Load();
-            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
-                return "✗ 请先登录 GitHub 账号或填写 Token";
+            var missing = CredentialsMissing(c);
+            if (missing != null) return "✗ " + missing;
             if (string.IsNullOrWhiteSpace(c.Repo))
             {
                 try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
@@ -580,9 +947,7 @@ namespace ME.Services
             if (!Directory.Exists(DataDir)) return "✗ 没有可上传的数据";
             var files = Directory.GetFiles(DataDir, "*.json");
             if (files.Length == 0) return "✗ 没有可上传的数据";
-            string repo;
-            try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
-            catch (Exception ex) { return "✗ " + ex.Message; }
+            var store = StoreFor(c);
             int ok = 0; int skipped = 0; string lastErr = null;
             var newShas = new Dictionary<string, string>(c.FileShas);
             var newHashes = new Dictionary<string, string>(c.FileHashes);
@@ -590,32 +955,19 @@ namespace ME.Services
             {
                 try
                 {
-                    var content = Convert.ToBase64String(Encoding.UTF8.GetBytes(File.ReadAllText(f)));
-                    string sha = null;
-                    try
-                    {
-                        var existing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{Path.GetFileName(f)}?ref={c.Branch}")).ConfigureAwait(false);
-                        sha = existing.GetProperty("sha").GetString();
-                    }
-                    catch { /* 不存在则新建 */ }
+                    var name = Path.GetFileName(f);
+                    var rev = await store.RevOfAsync(c, name).ConfigureAwait(false);
 
                     // 云端被其它设备更新过而本地没有先下载 → 跳过，避免覆盖
-                    if (c.FileShas.TryGetValue(Path.GetFileName(f), out var known) && sha != null && known != sha)
+                    if (c.FileShas.TryGetValue(name, out var known) && rev != null && known != rev)
                     {
                         skipped++;
                         continue;
                     }
 
-                    var payload = new Dictionary<string, object>
-                    {
-                        ["message"] = $"ME 数据同步（PC）· {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
-                        ["content"] = content,
-                        ["branch"] = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch
-                    };
-                    if (sha != null) payload["sha"] = sha;
-                    var putResp = await SendAsync(c, HttpMethod.Put, Api(repo, $"data/{Path.GetFileName(f)}"), payload).ConfigureAwait(false);
-                    try { newShas[Path.GetFileName(f)] = putResp.GetProperty("content").GetProperty("sha").GetString(); } catch { }
-                    newHashes[Path.GetFileName(f)] = HashFile(f);
+                    var newRev = await store.WriteAsync(c, name, File.ReadAllText(f), rev).ConfigureAwait(false);
+                    if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
+                    newHashes[name] = HashFile(f);
                     ok++;
                 }
                 catch (Exception ex) { lastErr = ex.Message; }
@@ -649,22 +1001,17 @@ namespace ME.Services
         private static async Task<string> PullCoreAsync()
         {
             var c = Load();
-            if (string.IsNullOrWhiteSpace(c.EncryptedToken))
-                return "✗ 请先登录 GitHub 账号或填写 Token";
-            string repo;
-            try { repo = await ResolveRepoAsync(c).ConfigureAwait(false); }
-            catch (Exception ex) { return "✗ " + ex.Message; }
-            JsonElement listing;
-            try
-            {
-                listing = await SendAsync(c, HttpMethod.Get, Api(repo, $"data?ref={c.Branch}")).ConfigureAwait(false);
-            }
+            var missing = CredentialsMissing(c);
+            if (missing != null) return "✗ " + missing;
+            var store = StoreFor(c);
+            Dictionary<string, string> remote;
+            try { remote = await store.ListAsync(c).ConfigureAwait(false); }
             catch (Exception ex) when (ex.Message.Contains("404"))
             {
-                return "仓库 data 目录为空，没有可下载的数据";
+                return "同步目录为空，没有可下载的数据";
             }
-            if (listing.ValueKind != JsonValueKind.Array || listing.GetArrayLength() == 0)
-                return "仓库 data 目录为空，没有可下载的数据";
+            if (remote.Count == 0)
+                return "同步目录为空，没有可下载的数据";
 
             // 本地备份
             if (Directory.Exists(DataDir))
@@ -679,25 +1026,19 @@ namespace ME.Services
             int n = 0; int total = 0; string lastErr = null;
             var newShas = new Dictionary<string, string>(c.FileShas);
             var newHashes = new Dictionary<string, string>(c.FileHashes);
-            foreach (var item in listing.EnumerateArray())
+            foreach (var kv in remote)
             {
-                var name = item.TryGetProperty("name", out var nm) ? nm.GetString() : null;
+                var name = kv.Key;
                 if (string.IsNullOrEmpty(name) || !name.EndsWith(".json")) continue;
                 total++;
                 try
                 {
-                    var detail = await SendAsync(c, HttpMethod.Get, Api(repo, $"data/{name}?ref={c.Branch}")).ConfigureAwait(false);
-                    var b64 = detail.GetProperty("content").GetString() ?? "";
-                    var text = Encoding.UTF8.GetString(Convert.FromBase64String(b64.Replace("\n", "")));
+                    var text = await store.ReadAsync(c, name).ConfigureAwait(false);
+                    if (text == null) throw new Exception("文件内容为空");
                     var localPath = Path.Combine(DataDir, name);
                     File.WriteAllText(localPath, text);
                     JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
-                    try
-                    {
-                        var fsha = detail.GetProperty("sha").GetString();
-                        if (fsha != null) newShas[name] = fsha;
-                    }
-                    catch { }
+                    newShas[name] = string.IsNullOrEmpty(kv.Value) ? HashText(text) : kv.Value;
                     newHashes[name] = HashFile(localPath);
                     n++;
                 }
