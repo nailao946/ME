@@ -105,7 +105,8 @@ namespace ME.Views
             {
                 try { SyncGiteeTokenBox.Password = SecureStore.Decrypt(c.EncryptedGiteeToken); } catch { }
             }
-            SyncWebDavUrlBox.Text = c.WebDavUrl;
+            // 服务器地址默认填坚果云（留空时运行时也会按坚果云处理，这里直接展示出来免得用户手填）
+            SyncWebDavUrlBox.Text = string.IsNullOrWhiteSpace(c.WebDavUrl) ? "https://dav.jianguoyun.com/dav/" : c.WebDavUrl;
             SyncWebDavUserBox.Text = c.WebDavUser;
             if (!string.IsNullOrWhiteSpace(c.EncryptedWebDavPass))
             {
@@ -199,6 +200,8 @@ namespace ME.Views
             // 分支默认值跟随同步方式：main ↔ master 互切时自动带过去，用户自定义分支不动
             if (SyncBranchBox.Text.Trim() == "main" && p == "gitee") SyncBranchBox.Text = "master";
             else if (SyncBranchBox.Text.Trim() == "master" && p == "github") SyncBranchBox.Text = "main";
+            // WebDAV 服务器地址默认填坚果云，避免留空让用户手填
+            if (p == "webdav" && SyncWebDavUrlBox.Text.Trim() == "") SyncWebDavUrlBox.Text = "https://dav.jianguoyun.com/dav/";
             SaveSyncConfig();
             ApplySyncProviderUI(p);
             RefreshAccountDisplay();

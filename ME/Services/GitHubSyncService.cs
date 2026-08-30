@@ -518,16 +518,46 @@ namespace ME.Services
             public async Task EnsureReadyAsync(SyncConfig c)
             {
                 if (string.IsNullOrWhiteSpace(c.Repo)) { c.Repo = "ME-Data"; Save(c); }
+                await EnsureDirsAsync(c).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// 逐级创建同步目录。坚果云等 WebDAV 服务不会隐式建父目录：父级缺失时 MKCOL/PUT
+            /// 一律 409（AncestorsNotFound）——实测坚果云返回 &lt;s:exception&gt;AncestorsNotFound&lt;/s:exception&gt;。
+            /// 旧版把 MKCOL 的 409 当「可继续」，目录没建成照样上传 → 每个文件都 409 失败。
+            /// </summary>
+            private async Task EnsureDirsAsync(SyncConfig c)
+            {
+                if (!Uri.TryCreate(BaseUrl(c), UriKind.Absolute, out var baseUri) ||
+                    (baseUri.Scheme != "http" && baseUri.Scheme != "https"))
+                    throw new Exception("WebDAV 服务器地址无效，请检查（坚果云为 https://dav.jianguoyun.com/dav/）");
+                var authority = baseUri.GetLeftPart(UriPartial.Authority);
+                var repo = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo.Trim();
+                var segs = repo.Split('/').Where(s => s.Length > 0).Select(Uri.EscapeDataString);
                 using var client = Client(c);
-                using var req = new HttpRequestMessage(new HttpMethod("MKCOL"), Folder(c));
-                using var resp = await client.SendAsync(req).ConfigureAwait(false);
-                var code = (int)resp.StatusCode;
-                // 201 = 已创建；405/301/409 = 已存在或父目录已存在，均可继续
-                if (code != 201 && code != 405 && code != 301 && code != 409 && code != 200)
+                var path = baseUri.AbsolutePath.TrimEnd('/');
+                foreach (var seg in segs)
                 {
-                    var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    throw new Exception("创建 WebDAV 目录失败：" + DescribeError(code, text));
+                    path += "/" + seg;
+                    var (code, body) = await SendDavAsync(client, "MKCOL", authority + path).ConfigureAwait(false);
+                    if (code == 409)
+                    {
+                        // 坚果云最终一致：刚建好的上级目录偶发立刻查不到，稍等重试一次
+                        await Task.Delay(800).ConfigureAwait(false);
+                        (code, body) = await SendDavAsync(client, "MKCOL", authority + path).ConfigureAwait(false);
+                    }
+                    // 201 = 已创建；405/301/200 = 目录已存在，均可继续
+                    if (code != 201 && code != 405 && code != 301 && code != 200)
+                        throw new Exception("创建 WebDAV 目录失败：" + DescribeError(code, body));
                 }
+            }
+
+            private static async Task<(int Code, string Body)> SendDavAsync(HttpClient client, string method, string url, string content = null)
+            {
+                using var req = new HttpRequestMessage(new HttpMethod(method), url);
+                if (content != null) req.Content = new StringContent(content, Encoding.UTF8, "application/json");
+                using var resp = await client.SendAsync(req).ConfigureAwait(false);
+                return ((int)resp.StatusCode, await resp.Content.ReadAsStringAsync().ConfigureAwait(false));
             }
 
             public async Task<Dictionary<string, string>> ListAsync(SyncConfig c)
@@ -596,24 +626,25 @@ namespace ME.Services
 
             public async Task<string> WriteAsync(SyncConfig c, string name, string content, string prevRev)
             {
+                var url = Folder(c) + Uri.EscapeDataString(name);
                 using var client = Client(c);
-                using var req = new HttpRequestMessage(HttpMethod.Put, Folder(c) + Uri.EscapeDataString(name))
+                var (code, text) = await SendDavAsync(client, "PUT", url, content).ConfigureAwait(false);
+                if (code == 409)
                 {
-                    Content = new StringContent(content, Encoding.UTF8, "application/json")
-                };
-                using var resp = await client.SendAsync(req).ConfigureAwait(false);
-                var code = (int)resp.StatusCode;
-                if (code < 200 || code > 299)
-                {
-                    var text = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    throw new Exception(DescribeError(code, text));
+                    // 目标目录在云端缺失（坚果云 AncestorsNotFound）或最终一致延迟：重建目录后重试一次
+                    await EnsureDirsAsync(c).ConfigureAwait(false);
+                    (code, text) = await SendDavAsync(client, "PUT", url, content).ConfigureAwait(false);
                 }
+                if (code < 200 || code > 299)
+                    throw new Exception(DescribeError(code, text));
                 return HashText(content);
             }
 
             public string DescribeError(int status, string body) =>
                 status == 401 || status == 403
                     ? "WebDAV 账号或密码不正确（坚果云请用网页版「安全选项 → 添加应用密码」生成的密码，不能用登录密码）"
+                    : status == 409
+                    ? "HTTP 409：目标文件夹在云端无法就位（自动创建未生效或请求过于频繁——坚果云免费版每 30 分钟限约 600 个请求），请稍后重试，或在坚果云客户端手动建好目标文件夹"
                     : $"HTTP {status}：{Truncate(body, 240)}";
         }
 
