@@ -124,7 +124,10 @@ namespace ME.Services
             {
                 var s = new SettingsRepository();
                 s.SetValue(Keys.Style, isGlass ? "Glass" : "Normal");
-                s.SetValue(Keys.Tone, isDark ? "Dark" : "Light");
+                // 注意：必须回写原始 Tone（可能是 System）。
+                // 之前这里写成解析后的 Light/Dark，会把「跟随系统」当场吃掉——
+                // 用户点跟随系统 → 落盘变成 Light → 看起来"点了没反应"。
+                s.SetValue(Keys.Tone, Tone);
                 // 保留旧键，便于旧逻辑 / 旧版本回读
                 s.SetValue(SettingsKeys.Theme, isGlass ? "Glass" : (isDark ? "Dark" : "Light"));
             }

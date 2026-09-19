@@ -45,6 +45,12 @@ namespace ME.Views
             BuildColorBalls();
             EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
             this.Unloaded += (s, e) => EventAggregator.Instance.Unsubscribe<string>(OnGlobalEvent);
+            // 从其它主页面切回设置时 Loaded 不会再触发，用 IsVisibleChanged 同步主题按钮选中态
+            this.IsVisibleChanged += (s, e) =>
+            {
+                if (IsVisible && SettingsNav != null && SettingsNav.SelectedIndex == 0)
+                    BuildThemeUi();
+            };
         }
 
         private void SettingsView_Loaded(object sender, RoutedEventArgs e)
@@ -775,7 +781,8 @@ namespace ME.Views
             {
                 _settingsRepo.SetValue(ThemeService.Keys.Style, v ? "Glass" : "Normal");
                 ThemeService.ApplyTheme();
-                SyncGlassPanel();
+                // 重建按钮组：胶囊的选中态是构建时写死的，不重建就会停留在旧选项上
+                BuildThemeUi();
             });
 
             // 深浅模式：浅色 / 深色 / 跟随系统
@@ -784,7 +791,7 @@ namespace ME.Views
                 {
                     _settingsRepo.SetValue(ThemeService.Keys.Tone, v);
                     ThemeService.ApplyTheme();
-                    SyncGlassPanel();
+                    BuildThemeUi();
                 });
 
             // 玻璃背景：渐变配色 / 背景图片 / 纯透明
@@ -793,7 +800,7 @@ namespace ME.Views
                 {
                     _settingsRepo.SetValue(ThemeService.Keys.GlassMode, v);
                     ThemeService.ApplyTheme();
-                    SyncGlassPanel();
+                    BuildThemeUi();
                 });
 
             BuildGradientSwatches();
@@ -902,7 +909,7 @@ namespace ME.Views
             _settingsRepo.SetValue(ThemeService.Keys.GlassImagePath, dlg.FileName);
             _settingsRepo.SetValue(ThemeService.Keys.GlassMode, "Image");
             ThemeService.ApplyTheme();
-            SyncGlassPanel();
+            BuildThemeUi(); // 同步刷新「玻璃背景」胶囊选中态（Image 变为选中）
         }
 
         private void AutoStartToggle_Changed(object sender, RoutedEventArgs e)

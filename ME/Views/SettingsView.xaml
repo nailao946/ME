@@ -8,8 +8,8 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左侧分类导航：样式与主菜单一致（透明底、圆角选中、同色悬停） -->
-        <Border Grid.Column="0" Background="{DynamicResource BackgroundBrush}">
+        <!-- 左侧分类导航：透明底让毛玻璃外壳透出来（普通主题下即窗口底色） -->
+        <Border Grid.Column="0" Background="Transparent">
             <ListBox x:Name="SettingsNav" BorderThickness="0" Background="Transparent" Margin="10"
                      SelectionChanged="SettingsNav_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemContainerStyle>
