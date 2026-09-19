@@ -231,6 +231,12 @@ MIT
 
 - Quantitative tasks and goals at 100% now remain completed on every date.
 
+### v2.3.22
+
+- **Module knowledge library**: every custom module can now hold HTML "library pages" with companion CSV — generate one with AI from the module's records, import a local HTML file, open it in the browser or export it; pages live in `html_library.json` and sync to Android automatically
+- Conflict resolution gains a third option "keep both" (the cloud copy is saved as `*.from-cloud.json` and keeps syncing)
+- New "auto upload on exit" option (best-effort, capped at 12s) and a sync decision-log export for troubleshooting
+
 ### v2.3.21
 
 - **Theme system split into style × tone**: "Normal" and "Glass" are now two independent styles, each with light / dark / follow-system; the glass style adds a window-opacity slider, a choice of gradient / background image / fully transparent backdrop and eight gradient palettes

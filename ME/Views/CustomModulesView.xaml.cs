@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -9,6 +12,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using ME.Data;
 using ME.Models;
+using ME.Services;
 
 namespace ME.Views
 {
@@ -196,6 +200,8 @@ namespace ME.Views
             var actions = new StackPanel { Orientation = Orientation.Horizontal };
             actions.Children.Add(FeishuAction("＋", "记一笔", (Brush)FindResource("PrimaryBrush"), (s, e) => ShowRecordDialog(m)));
             actions.Children.Add(FeishuAction("🕘", "全部记录", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ShowHistoryDialog(m)));
+            actions.Children.Add(FeishuAction("📚", "资料库", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ShowLibraryDialog(m)));
+            actions.Children.Add(FeishuAction("🧾", "导出 CSV", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ExportModule(m)));
             actions.Children.Add(FeishuAction("✎", "编辑", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ShowEditorDialog(m)));
             actions.Children.Add(FeishuAction("🗑", "删除", new SolidColorBrush(Color.FromRgb(255, 59, 48)), (s2, e2) =>
             {
@@ -1157,6 +1163,174 @@ namespace ME.Views
             root.Children.Add(saveBtn);
 
             RenderPreview();
+            ((Border)win.Tag).Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
+            win.ShowDialog();
+        }
+
+        // ============ 模块资料库（本地 HTML + AI 生成，随云同步互通） ============
+
+        /// <summary>把模块记录导出为 CSV 文件（用户选择保存位置）</summary>
+        private void ExportModule(CustomModule m)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = $"导出「{m.Name}」记录",
+                Filter = "CSV 文件|*.csv",
+                FileName = $"{m.Name}.csv"
+            };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                File.WriteAllText(dlg.FileName, Services.HtmlLibraryService.BuildDefaultCsv(m), Encoding.UTF8);
+                MessageBox.Show($"已导出 {m.Records.Count} 条记录到：\n{dlg.FileName}", "导出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { MessageBox.Show("导出失败：" + ex.Message, "导出", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        /// <summary>资料库：本模块绑定的 HTML 资料页（AI 生成 / 导入本地 HTML / 浏览器打开）</summary>
+        private void ShowLibraryDialog(CustomModule m)
+        {
+            var win = MakeDialogWindow($"资料库 · {m.Name}", 660, 560);
+            var root = new StackPanel { Margin = new Thickness(18) };
+
+            root.Children.Add(new TextBlock
+            {
+                Text = "把模块做成个人资料库：AI 可根据记录生成 HTML 资料页与配套 CSV（离线可开、随云同步互通），也可导入本地已有的 HTML。",
+                FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10)
+            });
+
+            var list = new StackPanel();
+
+            void RenderList()
+            {
+                list.Children.Clear();
+                var pages = HtmlLibraryRepository.GetFor(m.Id);
+                if (pages.Count == 0)
+                {
+                    list.Children.Add(new TextBlock
+                    {
+                        Text = "还没有资料页。点下方「AI 生成」或「导入本地 HTML」开始。",
+                        FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                        Margin = new Thickness(0, 4, 0, 4)
+                    });
+                    return;
+                }
+                foreach (var p in pages)
+                {
+                    var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                    var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                    info.Children.Add(new TextBlock
+                    {
+                        Text = p.Title, FontSize = 13, FontWeight = FontWeights.SemiBold,
+                        Foreground = (Brush)FindResource("TextBrush"), TextTrimming = TextTrimming.CharacterEllipsis
+                    });
+                    var tag = p.Source == "ai" ? "AI 生成" : "本地";
+                    info.Children.Add(new TextBlock
+                    {
+                        Text = $"{tag} · {p.UpdatedAt} · {p.SizeBytes / 1024.0:0.#} KB",
+                        FontSize = 10.5, Foreground = (Brush)FindResource("SecondaryTextBrush")
+                    });
+                    Grid.SetColumn(info, 0);
+
+                    Button Act(string content, string tip, RoutedEventHandler onClick)
+                    {
+                        var b = new Button
+                        {
+                            Content = content, Style = (Style)FindResource("SecondaryButtonStyle"),
+                            FontSize = 11, Padding = new Thickness(10, 4, 10, 4),
+                            Margin = new Thickness(6, 0, 0, 0), Cursor = Cursors.Hand, ToolTip = tip
+                        };
+                        b.Click += onClick;
+                        return b;
+                    }
+                    var openBtn = Act("打开", "用默认浏览器打开该资料页", (s2, e2) =>
+                    {
+                        try
+                        {
+                            var (htmlPath, _) = HtmlLibraryRepository.Export(p, Path.Combine(
+                                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                "ME", "HtmlExport"));
+                            Process.Start(new ProcessStartInfo(htmlPath) { UseShellExecute = true });
+                        }
+                        catch (Exception ex) { MessageBox.Show("打开失败：" + ex.Message); }
+                    });
+                    var csvBtn = Act("导出", "把该资料页导出为 .html + .csv 文件", (s2, e2) =>
+                    {
+                        var fbd = new System.Windows.Forms.FolderBrowserDialog { Description = "选择导出目录" };
+                        if (fbd.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                        try
+                        {
+                            var (hp, cp) = HtmlLibraryRepository.Export(p, fbd.SelectedPath);
+                            MessageBox.Show("已导出：\n" + hp + (cp == null ? "" : "\n" + cp), "导出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
+                        catch (Exception ex) { MessageBox.Show("导出失败：" + ex.Message); }
+                    });
+                    var delBtn = Act("删除", "删除该资料页", (s2, e2) =>
+                    {
+                        if (MessageBox.Show($"删除资料页「{p.Title}」？", "删除", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+                        HtmlLibraryRepository.Delete(p.Id);
+                        RenderList();
+                    });
+                    Grid.SetColumn(openBtn, 1); Grid.SetColumn(csvBtn, 2); Grid.SetColumn(delBtn, 3);
+                    row.Children.Add(info); row.Children.Add(openBtn); row.Children.Add(csvBtn); row.Children.Add(delBtn);
+                    list.Children.Add(row);
+                }
+            }
+            RenderList();
+
+            root.Children.Add(new Border
+            {
+                Style = (Style)FindResource("CardStyle"),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12),
+                Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 300, Content = list }
+            });
+
+            var ops = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+            var aiBtn = new Button { Content = "✨ AI 生成资料页", Style = (Style)FindResource("PrimaryButtonStyle"), FontSize = 12.5, Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand };
+            var importBtn = new Button { Content = "导入本地 HTML", Style = (Style)FindResource("SecondaryButtonStyle"), FontSize = 12.5, Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand };
+            var exportAllBtn = new Button { Content = "导出记录 CSV", Style = (Style)FindResource("SecondaryButtonStyle"), FontSize = 12.5, Padding = new Thickness(16, 7, 16, 7), Cursor = Cursors.Hand };
+            ops.Children.Add(aiBtn); ops.Children.Add(importBtn); ops.Children.Add(exportAllBtn);
+            root.Children.Add(ops);
+
+            var status = new TextBlock { FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap };
+            root.Children.Add(status);
+
+            importBtn.Click += (s, e) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Title = "选择 HTML 文件", Filter = "HTML|*.html;*.htm|所有文件|*.*" };
+                if (dlg.ShowDialog() != true) return;
+                try { HtmlLibraryService.ImportFile(m.Id, dlg.FileName); RenderList(); }
+                catch (Exception ex) { MessageBox.Show("导入失败：" + ex.Message); }
+            };
+            exportAllBtn.Click += (s, e) => ExportModule(m);
+
+            aiBtn.Click += async (s, e) =>
+            {
+                var hint = PromptInputDialog.Show(win, "AI 生成资料页", "想让它做成什么样？（可留空，例如：做一页可搜索的跑步记录看板）");
+                if (hint == null) return;
+                aiBtn.IsEnabled = false;
+                status.Text = "正在生成…（大模型可能需要十几秒）";
+                try
+                {
+                    var provider = new AiProviderRepository().GetDefault();
+                    await HtmlLibraryService.GenerateWithAiAsync(m, hint, provider);
+                    status.Text = "✓ 已生成并保存到资料库（会随云同步同步到安卓端）。";
+                    RenderList();
+                }
+                catch (Exception ex)
+                {
+                    status.Text = "✗ 生成失败：" + ex.Message;
+                }
+                aiBtn.IsEnabled = true;
+            };
+
             ((Border)win.Tag).Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
             win.ShowDialog();
         }

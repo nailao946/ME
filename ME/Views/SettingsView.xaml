@@ -351,8 +351,25 @@
                                     <TextBlock x:Name="AutoSyncStatusText" FontSize="11"
                                                Foreground="{DynamicResource SecondaryTextBrush}" Margin="24,4,0,0"
                                                TextWrapping="Wrap" Text="每次打开软件自动比对：云端较新的文件下载到本地，本地较新的上传到云端，两边都改过的跳过并提示。" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <CheckBox x:Name="AutoPushOnExitToggle" Checked="AutoPushOnExit_Changed" Unchecked="AutoPushOnExit_Changed"
+                                                  VerticalAlignment="Center" />
+                                        <TextBlock Text="退出软件时自动上传一次" Foreground="{DynamicResource TextBrush}" FontSize="13"
+                                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                    <TextBlock FontSize="11" Margin="24,4,0,0" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Text="改完忘传会让另一台设备下载到旧数据；勾选后退出前会自动把本机数据上传（最多等 12 秒，超时不阻塞退出）。" />
                                 </StackPanel>
                             </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="同步日志" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" Width="100" />
+                                <Button Content="导出本次同步决策日志" Click="SyncLog_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}" FontSize="12"
+                                        Padding="12,5,12,5" Cursor="Hand"
+                                        ToolTip="把最近一次同步的判定信息写到本地日志文件，方便排查「为什么没同步上」" />
+                            </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock x:Name="SyncRepoLabel" Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />

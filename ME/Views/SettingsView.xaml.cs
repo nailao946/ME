@@ -119,6 +119,7 @@ namespace ME.Views
             _loadingSyncConfig = true;
             SyncProviderBox.SelectedIndex = c.Provider == "gitee" ? 1 : c.Provider == "webdav" ? 2 : 0;
             AutoSyncToggle.IsChecked = c.AutoSyncOnStartup;
+            if (AutoPushOnExitToggle != null) AutoPushOnExitToggle.IsChecked = c.AutoPushOnExit;
             _loadingSyncConfig = false;
             ApplySyncProviderUI(CurrentProvider());
             var last = "";
@@ -454,7 +455,7 @@ namespace ME.Views
                 });
                 Grid.SetColumn(info, 0);
 
-                Button MakeBtn(string content, bool preferCloud)
+                Button MakeBtn(string content, bool? keep)
                 {
                     var b = new Button
                     {
@@ -468,7 +469,7 @@ namespace ME.Views
                         b.IsEnabled = false;
                         try
                         {
-                            await GitHubSyncService.ResolveConflictsAsync(preferCloud, file, provider);
+                            await GitHubSyncService.ResolveConflictsAsync(keep, file, provider);
                             row.Opacity = 0.45;
                             foreach (var child in row.Children.OfType<Button>()) child.IsEnabled = false;
                         }
@@ -477,8 +478,9 @@ namespace ME.Views
                     return b;
                 }
                 var localBtn = MakeBtn("用本机", false); Grid.SetColumn(localBtn, 1);
-                var cloudBtn = MakeBtn("用云端", true); Grid.SetColumn(cloudBtn, 2);
-                row.Children.Add(info); row.Children.Add(localBtn); row.Children.Add(cloudBtn);
+                var bothBtn = MakeBtn("两边都留", null); Grid.SetColumn(bothBtn, 2);
+                var cloudBtn = MakeBtn("用云端", true); Grid.SetColumn(cloudBtn, 3);
+                row.Children.Add(info); row.Children.Add(localBtn); row.Children.Add(bothBtn); row.Children.Add(cloudBtn);
                 list.Children.Add(row);
             }
             root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 220, Content = list });
@@ -496,6 +498,25 @@ namespace ME.Views
             win.ShowDialog();
             LoadSyncConfig();
             await Task.CompletedTask;
+        }
+
+        private void AutoPushOnExit_Changed(object sender, RoutedEventArgs e)
+        {
+            if (AutoPushOnExitToggle == null) return;
+            var c = GitHubSyncService.Load();
+            c.AutoPushOnExit = AutoPushOnExitToggle.IsChecked == true;
+            GitHubSyncService.Save(c);
+        }
+
+        /// <summary>把最近一次同步的判定信息写到本地日志，便于排查「为什么没同步上」</summary>
+        private void SyncLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var path = GitHubSyncService.WriteSyncLog();
+                MessageBox.Show("已写入日志：\n" + path, "同步日志", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { MessageBox.Show("导出失败：" + ex.Message); }
         }
 
         private void AnimateSettingCards()

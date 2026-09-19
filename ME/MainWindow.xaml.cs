@@ -808,6 +808,8 @@ namespace ME
 
         protected override void OnClosed(EventArgs e)
         {
+            // 退出前自动上传（可关）：改完忘传会让另一台设备下载到旧数据，这里兜底一次
+            try { GitHubSyncService.TryPushBeforeExit(); } catch { }
             _hwndSource?.RemoveHook(WindowProc);
             SharedTimerService.StopCurrent();
             CloseFloatingWindowPermanent();

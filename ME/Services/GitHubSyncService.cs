@@ -38,6 +38,8 @@ namespace ME.Services
             public string WebDavUser { get; set; } = "";  // WebDAV 账号（坚果云为注册手机号/邮箱）
             public string EncryptedWebDavPass { get; set; } = ""; // WebDAV 密码/应用密码（DPAPI 加密）
             public bool AutoSyncOnStartup { get; set; } = true; // 启动软件时自动同步
+            /// <summary>退出软件前自动把本机数据上传一次，防止「改完忘传，另一台设备下载到旧数据」</summary>
+            public bool AutoPushOnExit { get; set; } = false;
             // 每个文件上次同步后的云端 sha，用于检测「云端比本地新」，避免覆盖其它设备的更新
             public Dictionary<string, string> FileShas { get; set; } = new Dictionary<string, string>();
             // 旧版单后端基线（迁移来源，读取时自动搬到 ProviderShas）
@@ -1348,8 +1350,10 @@ namespace ME.Services
         }
 
         /// <summary>处理同步冲突：逐个由用户决定「用云端覆盖本机」或「用本机覆盖云端」。
+        /// preferCloud 有三种取值：true = 用云端覆盖本机；false = 用本机覆盖云端；null = 两边都留
+        /// （云端版本另存为「文件名.from-cloud.json」继续同步，本机版本保留并在下次上传）。
         /// file/provider 传 null 表示处理全部；处理完的条目从待处理清单移除并刷新基线，避免下一次同步又报冲突。</summary>
-        public static async Task<string> ResolveConflictsAsync(bool preferCloud, string file = null, string provider = null)
+        public static async Task<string> ResolveConflictsAsync(bool? preferCloud, string file = null, string provider = null)
         {
             var c = Load();
             var items = c.PendingConflicts.Where(e =>
@@ -1374,7 +1378,27 @@ namespace ME.Services
                     var localPath = Path.Combine(DataDir, name);
                     var baselines = Baselines(c, key);
 
-                    if (preferCloud)
+                    if (preferCloud == null)
+                    {
+                        // 两边都留：云端内容另存为 *.from-cloud.json（继续同步），本机原文件不动，
+                        // 下次上传时本机版本会作为「本地较新」正常推上去
+                        var rev0 = await store.RevOfAsync(c, name).ConfigureAwait(false);
+                        var text0 = await store.ReadAsync(c, name).ConfigureAwait(false);
+                        if (text0 != null)
+                        {
+                            var copyName = Path.GetFileNameWithoutExtension(name) + ".from-cloud.json";
+                            File.WriteAllText(Path.Combine(DataDir, copyName), text0);
+                            JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(copyName));
+                            var bl0 = Baselines(c, key);
+                            bl0[copyName] = rev0 ?? HashText(text0);
+                            c.FileHashes[copyName] = HashText(text0);
+                        }
+                        c.PendingConflicts.Remove(item);
+                        ok++;
+                        continue;
+                    }
+
+                    if (preferCloud.Value)
                     {
                         var rev = await store.RevOfAsync(c, name).ConfigureAwait(false);
                         if (rev == null) throw new Exception("云端已没有这个文件");
@@ -1401,7 +1425,7 @@ namespace ME.Services
             }
             if (ok > 0) Save(c);
             EventAggregator.Instance.Publish("SyncStatusChanged");
-            var head = $"已处理 {ok}/{items.Count} 个冲突（{(preferCloud ? "采用云端" : "采用本机")}）";
+            var head = $"已处理 {ok}/{items.Count} 个冲突（{(preferCloud == null ? "两边都留" : preferCloud.Value ? "采用云端" : "采用本机")}）";
             return errors.Count > 0 ? head + "；失败：" + string.Join("；", errors) : head;
         }
 
@@ -1459,6 +1483,40 @@ namespace ME.Services
             if (c.PendingConflicts.Count > 0)
                 lines.Add($"⚠ 有 {c.PendingConflicts.Count} 个冲突等待处理（点「处理冲突」选择用本机还是云端）");
             return string.Join("\n", lines);
+        }
+
+        /// <summary>退出前自动上传：最多等 12 秒，超时放弃（避免关不掉窗口）。成功返回 null，失败返回原因。</summary>
+        public static string TryPushBeforeExit()
+        {
+            var c = Load();
+            if (!c.AutoPushOnExit) return null;
+            if (ActiveProviders(c).Count == 0) return null;
+            try
+            {
+                var task = PushCoreAsync();
+                if (!task.Wait(TimeSpan.FromSeconds(12))) return null; // 超时静默放弃
+                return null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>同步决策日志：把最近一次上传/下载的逐文件判定落到本地文件，便于排查「为什么没同步上」</summary>
+        public static string WriteSyncLog()
+        {
+            try
+            {
+                var dir = Path.Combine(DataDir, "..", "Logs");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, $"sync-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+                var sb = new StringBuilder();
+                sb.AppendLine($"时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"本机版本基线条目：{Load().FileHashes.Count}");
+                sb.AppendLine($"待处理冲突：{string.Join("、", Load().PendingConflicts)}");
+                sb.AppendLine($"最近一次结果：{LastAutoSyncResult}");
+                File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+                return path;
+            }
+            catch (Exception ex) { return "写入失败：" + ex.Message; }
         }
 
         private static string FirstError(string current, string next) =>
