@@ -40,6 +40,8 @@ namespace ME.Services
             public bool AutoSyncOnStartup { get; set; } = true; // 启动软件时自动同步
             /// <summary>退出软件前自动把本机数据上传一次，防止「改完忘传，另一台设备下载到旧数据」</summary>
             public bool AutoPushOnExit { get; set; } = false;
+            /// <summary>最近 30 条同步记录（时间/动作/结果/耗时），设置页可查看</summary>
+            public List<string> SyncHistory { get; set; } = new List<string>();
             // 每个文件上次同步后的云端 sha，用于检测「云端比本地新」，避免覆盖其它设备的更新
             public Dictionary<string, string> FileShas { get; set; } = new Dictionary<string, string>();
             // 旧版单后端基线（迁移来源，读取时自动搬到 ProviderShas）
@@ -1116,11 +1118,28 @@ namespace ME.Services
         public static async Task<string> PushAsync()
         {
             SyncStatusService.SetRunning();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             string r;
             try { r = await PushCoreAsync().ConfigureAwait(false); }
             catch (Exception ex) { r = "✗ 上传失败：" + ex.Message; }
             SyncStatusService.Report(r, false);
+            RecordHistory("上传", r, sw.ElapsedMilliseconds);
             return r;
+        }
+
+        /// <summary>同步历史（最近 30 条）：时间 / 动作 / 结果 / 耗时，供「同步健康度」查看</summary>
+        public static void RecordHistory(string action, string result, long ms)
+        {
+            try
+            {
+                var c = Load();
+                var head = result != null && result.Length > 60 ? result.Substring(0, 60) + "…" : result;
+                c.SyncHistory.Insert(0, $"{DateTime.Now:MM-dd HH:mm} {action} {ms}ms｜{head?.Replace("\n", " ")}");
+                if (c.SyncHistory.Count > 30) c.SyncHistory.RemoveRange(30, c.SyncHistory.Count - 30);
+                Save(c);
+                EventAggregator.Instance.Publish("SyncStatusChanged");
+            }
+            catch { }
         }
 
         private static async Task<string> PushCoreAsync()
@@ -1222,10 +1241,12 @@ namespace ME.Services
         public static async Task<string> PullAsync()
         {
             SyncStatusService.SetRunning();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             string r;
             try { r = await PullCoreAsync().ConfigureAwait(false); }
             catch (Exception ex) { r = "✗ 下载失败：" + ex.Message; }
             SyncStatusService.Report(r, false);
+            RecordHistory("下载", r, sw.ElapsedMilliseconds);
             return r;
         }
 

@@ -71,5 +71,12 @@ namespace ME.Services
             }));
             return vals == "" ? (string.IsNullOrEmpty(r.Note) ? "（无字段值）" : r.Note) : vals;
         }
+
+        /// <summary>模块图标的 emoji（托盘菜单等非 WPF 场景用），越界回退第一个</summary>
+        public static string IconOf(int index)
+        {
+            string[] icons = { "❤️", "🏋️", "🏃", "💧", "🌙", "😊", "📖", "🎓", "💼", "🏠", "🛒", "☕", "🧘", "🎵", "🐾", "📚" };
+            return icons[Math.Max(0, Math.Min(icons.Length - 1, index))];
+        }
     }
 }

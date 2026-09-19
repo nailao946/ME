@@ -16,6 +16,12 @@ namespace ME.Models
         public string Type { get; set; } = "number";
         public string Unit { get; set; }
         public string Options { get; set; }
+        /// <summary>数值字段的最小值（null = 不限制），录入越界会被拦截</summary>
+        public double? Min { get; set; }
+        /// <summary>数值字段的最大值（null = 不限制）</summary>
+        public double? Max { get; set; }
+        /// <summary>数值字段的步长（null = 不限制），如 0.5 表示只允许 0.5 的整数倍</summary>
+        public double? Step { get; set; }
     }
 
     public class CustomModuleRecord

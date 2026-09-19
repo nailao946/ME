@@ -94,6 +94,13 @@ namespace ME.Views
         private void LoadSyncConfig()
         {
             var c = GitHubSyncService.Load();
+            // 同步健康度：最近 5 条记录（全部 30 条看 tooltip）
+            if (SyncHistoryText != null)
+            {
+                var lines = c.SyncHistory.Take(5).ToList();
+                SyncHistoryText.Text = lines.Count > 0 ? string.Join("\n", lines) : "（还没有同步记录，上传/下载一次后出现在这里）";
+                SyncHistoryText.ToolTip = c.SyncHistory.Count > 0 ? string.Join("\n", c.SyncHistory) : null;
+            }
             SyncRepoBox.Text = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo;
             var selectedProvider = string.IsNullOrWhiteSpace(c.Provider) ? "github" : c.Provider;
             SyncBranchBox.Text = c.ProviderBranches.TryGetValue(selectedProvider, out var savedBranch) && !string.IsNullOrWhiteSpace(savedBranch)
@@ -500,6 +507,13 @@ namespace ME.Views
             await Task.CompletedTask;
         }
 
+        private void GlobalHotkey_Changed(object sender, RoutedEventArgs e)
+        {
+            if (GlobalHotkeyToggle == null) return;
+            _settingsRepo.SetValue(SettingsKeys.GlobalHotkeyEnabled, (GlobalHotkeyToggle.IsChecked == true).ToString());
+            if (Window.GetWindow(this) is MainWindow mw) mw.ApplyGlobalHotkeySetting();
+        }
+
         private void AutoPushOnExit_Changed(object sender, RoutedEventArgs e)
         {
             if (AutoPushOnExitToggle == null) return;
@@ -705,6 +719,8 @@ namespace ME.Views
 
             AutoStartToggle.IsChecked = _settingsRepo.GetValue(SettingsKeys.AutoStart, "False") == "True";
             MinimizeToTrayToggle.IsChecked = _settingsRepo.GetValue(SettingsKeys.MinimizeToTray, "False") == "True";
+            if (GlobalHotkeyToggle != null)
+                GlobalHotkeyToggle.IsChecked = _settingsRepo.GetValue(SettingsKeys.GlobalHotkeyEnabled, "False") == "True";
             TrayBalloonToggle.IsChecked = _settingsRepo.GetValue(SettingsKeys.TrayBalloonEnabled, "True") == "True";
             SoundToggle.IsChecked = SoundService.IsEnabled();
             FocusSoundToggle.IsChecked = _settingsRepo.GetValue(SettingsKeys.FocusSoundEnabled, "True") == "True";

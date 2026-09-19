@@ -173,6 +173,13 @@
                                 <TextBlock Text="最小化到系统托盘" Foreground="{DynamicResource TextBrush}" FontSize="13"
                                            VerticalAlignment="Center" Margin="8,0,0,0" />
                             </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <CheckBox x:Name="GlobalHotkeyToggle" Checked="GlobalHotkey_Changed" Unchecked="GlobalHotkey_Changed"
+                                          VerticalAlignment="Center" />
+                                <TextBlock Text="全局快捷键 Ctrl+Alt+M 显隐主窗口" Foreground="{DynamicResource TextBrush}" FontSize="13"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                           ToolTip="在任何界面按 Ctrl+Alt+M 都能显示或隐藏 ME，隐藏时从托盘恢复" />
+                            </StackPanel>
                             <TextBlock Text="关闭窗口时隐藏到托盘而非退出" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" Margin="24,0,0,8" />
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -370,6 +377,11 @@
                                         Padding="12,5,12,5" Cursor="Hand"
                                         ToolTip="把最近一次同步的判定信息写到本地日志文件，方便排查「为什么没同步上」" />
                             </StackPanel>
+                            <TextBlock Text="最近同步记录（最多 30 条）" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,2" />
+                            <TextBlock x:Name="SyncHistoryText" FontSize="11" FontFamily="Consolas"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,4"
+                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="66" />
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock x:Name="SyncRepoLabel" Text="仓库" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />

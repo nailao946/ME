@@ -21,6 +21,8 @@ namespace ME.Models
         public const string TraySoundEnabled = "TraySoundEnabled";
         public const string TrayBalloonEnabled = "TrayBalloonEnabled";
         public const string FloatingWindowEnabled = "FloatingWindowEnabled";
+        /// <summary>全局快捷键 Ctrl+Alt+M 显隐主窗口（默认关）</summary>
+        public const string GlobalHotkeyEnabled = "GlobalHotkeyEnabled";
         public const string WeekStartDay = "WeekStartDay";
         public const string StatsIncludedTags = "StatsIncludedTags";
         public const string PomodoroAutoStart = "PomodoroAutoStart";

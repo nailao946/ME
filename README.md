@@ -231,6 +231,13 @@ MIT
 
 - Quantitative tasks and goals at 100% now remain completed on every date.
 
+### v2.3.23
+
+- **Quick capture from the tray**: the tray menu lists every custom module under "快速记一笔" and opens that module's record dialog directly
+- **Global hotkey**: optional Ctrl+Alt+M shows/hides the main window from anywhere (Settings → General)
+- **Number field constraints**: module fields can define min / max / step (e.g. only multiples of 0.5); the record dialog blocks out-of-range input on both platforms
+- **Sync health log**: the last 30 upload/download results with duration are kept and shown in Settings (desktop) and the sync page (Android)
+
 ### v2.3.22
 
 - **Module knowledge library**: every custom module can now hold HTML "library pages" with companion CSV — generate one with AI from the module's records, import a local HTML file, open it in the browser or export it; pages live in `html_library.json` and sync to Android automatically

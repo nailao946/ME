@@ -49,6 +49,23 @@ namespace ME.Views
             RenderDashboard();
         }
 
+        /// <summary>给托盘"快速记一笔"用：直接为指定模块打开记一笔弹窗（模块不存在时返回 false）</summary>
+        public bool TryOpenRecordDialog(int moduleId)
+        {
+            var m = _modules.FirstOrDefault(x => x.Id == moduleId)
+                    ?? CustomModuleRepository.GetAll().FirstOrDefault(x => x.Id == moduleId);
+            if (m == null) return false;
+            _selectedModuleId = m.Id;
+            RenderChips();
+            RenderDashboard();
+            ShowRecordDialog(m);
+            return true;
+        }
+
+        /// <summary>当前模块清单（托盘菜单生成用）</summary>
+        public IReadOnlyList<CustomModule> CurrentModules =>
+            _modules.Count > 0 ? _modules : CustomModuleRepository.GetAll();
+
         // ============ 模块 chips ============
 
         private void RenderChips()
@@ -1037,7 +1054,13 @@ namespace ME.Views
 
             // —— 字段编辑（带排序与类型说明） ——
             var fieldsPanel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-            var fields = initial?.Fields.Select(f => new FieldDraft { Label = f.Label, Type = f.Type, Unit = f.Unit ?? "", Options = f.Options ?? "" }).ToList()
+            var fields = initial?.Fields.Select(f => new FieldDraft
+            {
+                Label = f.Label, Type = f.Type, Unit = f.Unit ?? "", Options = f.Options ?? "",
+                Min = f.Min?.ToString(CultureInfo.InvariantCulture) ?? "",
+                Max = f.Max?.ToString(CultureInfo.InvariantCulture) ?? "",
+                Step = f.Step?.ToString(CultureInfo.InvariantCulture) ?? "",
+            }).ToList()
                          ?? new List<FieldDraft> { new FieldDraft { Label = "数值", Type = "number" } };
 
             void MoveField(int idx, int delta)
@@ -1106,6 +1129,40 @@ namespace ME.Views
                         optBox.TextChanged += (s, e) => f.Options = optBox.Text;
                         fieldsPanel.Children.Add(optBox);
                     }
+                    if (f.Type == "number")
+                    {
+                        // 数值约束：最小 / 最大 / 步长（可留空），录入时越界拦截
+                        var rangeRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+                        for (int c2 = 0; c2 < 6; c2++)
+                            rangeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = c2 % 2 == 0 ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
+                        TextBox RangeBox(string text, string tip)
+                        {
+                            return new TextBox
+                            {
+                                Text = text, FontSize = 12, Height = 30, Padding = new Thickness(6, 3, 6, 3),
+                                VerticalContentAlignment = VerticalAlignment.Center, ToolTip = tip, Margin = new Thickness(6, 0, 0, 0)
+                            };
+                        }
+                        TextBlock RangeLabel(string text) => new TextBlock
+                        {
+                            Text = text, FontSize = 11,
+                            Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        var minBox = RangeBox(f.Min, "最小值，可留空");
+                        var maxBox = RangeBox(f.Max, "最大值，可留空");
+                        var stepBox = RangeBox(f.Step, "步长，如 0.5 表示只允许 0.5 的整数倍，可留空");
+                        minBox.TextChanged += (s, e) => f.Min = minBox.Text;
+                        maxBox.TextChanged += (s, e) => f.Max = maxBox.Text;
+                        stepBox.TextChanged += (s, e) => f.Step = stepBox.Text;
+                        rangeRow.Children.Add(RangeLabel("最小")); Grid.SetColumn(rangeRow.Children[0], 0);
+                        rangeRow.Children.Add(minBox); Grid.SetColumn(minBox, 1);
+                        rangeRow.Children.Add(RangeLabel("最大")); Grid.SetColumn(rangeRow.Children[2], 2);
+                        rangeRow.Children.Add(maxBox); Grid.SetColumn(maxBox, 3);
+                        rangeRow.Children.Add(RangeLabel("步长")); Grid.SetColumn(rangeRow.Children[4], 4);
+                        rangeRow.Children.Add(stepBox); Grid.SetColumn(stepBox, 5);
+                        fieldsPanel.Children.Add(rangeRow);
+                    }
                 }
             }
             RenderFields();
@@ -1141,7 +1198,10 @@ namespace ME.Views
                         Key = $"f{i + 1}",
                         Label = f.Label.Trim(), Type = f.Type,
                         Unit = string.IsNullOrWhiteSpace(f.Unit) ? null : f.Unit.Trim(),
-                        Options = string.IsNullOrWhiteSpace(f.Options) ? null : f.Options
+                        Options = string.IsNullOrWhiteSpace(f.Options) ? null : f.Options,
+                        Min = ParseOpt(f.Min),
+                        Max = ParseOpt(f.Max),
+                        Step = ParseOpt(f.Step),
                     }).ToList();
                 if (validFields.Count == 0) { MessageBox.Show("至少需要一个字段"); return; }
                 if (initial == null)
@@ -1165,6 +1225,13 @@ namespace ME.Views
             RenderPreview();
             ((Border)win.Tag).Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
             win.ShowDialog();
+        }
+
+        /// <summary>解析可空数值约束输入（空/非法 → null），并在 min>max 之类的组合上做修正</summary>
+        private static double? ParseOpt(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            return double.TryParse(s.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : (double?)null;
         }
 
         // ============ 模块资料库（本地 HTML + AI 生成，随云同步互通） ============
@@ -1382,6 +1449,36 @@ namespace ME.Views
             var saveBtn = new Button { Content = "保存记录", Style = (Style)FindResource("PrimaryButtonStyle"), FontSize = 13, Padding = new Thickness(24, 7, 24, 7), Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Cursor = Cursors.Hand };
             saveBtn.Click += (s, e) =>
             {
+                // 数值字段约束校验：范围 + 步长（字段定义里配了才校验）
+                foreach (var f in m.Fields)
+                {
+                    if (f.Type != "number") continue;
+                    if (!values.TryGetValue(f.Key, out var raw) || string.IsNullOrWhiteSpace(raw)) continue;
+                    if (!double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                    {
+                        MessageBox.Show($"「{f.Label}」需要填数字（当前：{raw}）", "保存记录", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                    if (f.Min.HasValue && v < f.Min.Value)
+                    {
+                        MessageBox.Show($"「{f.Label}」不能小于 {f.Min.Value}（当前：{v}）", "保存记录", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                    if (f.Max.HasValue && v > f.Max.Value)
+                    {
+                        MessageBox.Show($"「{f.Label}」不能大于 {f.Max.Value}（当前：{v}）", "保存记录", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                    if (f.Step is > 0)
+                    {
+                        var steps = v / f.Step.Value;
+                        if (Math.Abs(steps - Math.Round(steps)) > 0.0001)
+                        {
+                            MessageBox.Show($"「{f.Label}」需要是 {f.Step.Value} 的整数倍（当前：{v}）", "保存记录", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return;
+                        }
+                    }
+                }
                 CustomModuleRepository.AddRecord(m.Id, new CustomModuleRecord
                 {
                     Date = dateBox.Text.Trim(),
@@ -1454,7 +1551,11 @@ namespace ME.Views
 
         // ============ 通用 ============
 
-        private class FieldDraft { public string Label; public string Type; public string Unit = ""; public string Options = ""; }
+        private class FieldDraft
+        {
+            public string Label; public string Type; public string Unit = ""; public string Options = "";
+            public string Min = ""; public string Max = ""; public string Step = "";
+        }
 
         private Grid FormRow(string label, UIElement input)
         {

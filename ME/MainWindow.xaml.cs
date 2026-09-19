@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -44,6 +45,7 @@ namespace ME
             {
                 _hwndSource = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
                 _hwndSource?.AddHook(WindowProc);
+                RegisterGlobalHotkey();
             };
 
             _isDarkTheme = ThemeService.IsDarkMode();
@@ -248,6 +250,10 @@ namespace ME
         private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")]
         private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         private const uint WM_NCLBUTTONDOWN = 0xA1;
         private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
         private const int WM_NCHITTEST = 0x84;
@@ -263,6 +269,13 @@ namespace ME
         /// <summary>WM_NCHITTEST：窗口边缘 10px 返回系统拉伸区域，保证 AllowsTransparency 窗口也能自由拉伸</summary>
         private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
+            // 全局快捷键（Ctrl+Alt+M 显隐主窗口）
+            if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID_SHOW)
+            {
+                Dispatcher.BeginInvoke(new Action(ToggleMainWindowVisibility));
+                handled = true;
+                return IntPtr.Zero;
+            }
             if (msg == WM_NCHITTEST && WindowState != WindowState.Maximized)
             {
                 var pt = new POINT
@@ -515,6 +528,12 @@ namespace ME
 
                 RebuildTrayMenu();
 
+                // 右键弹出菜单前重建：模块/主题等变化后无需重启即可反映到菜单
+                _notifyIcon.MouseUp += (s, ev) =>
+                {
+                    if (ev.Button == Forms.MouseButtons.Right) RebuildTrayMenu();
+                };
+
                 _notifyIcon.DoubleClick += (s, ev) => { ShowWithAnimation(); WindowState = WindowState.Normal; Activate(); };
 
                 var settingsRepo = new SettingsRepository();
@@ -589,6 +608,34 @@ namespace ME
             var quickTitle = new Forms.ToolStripMenuItem("快捷入口") { Enabled = false };
             quickTitle.MouseEnter += (s, ev) => quickTitle.BackColor = System.Drawing.Color.Transparent;
             menu.Items.Add(quickTitle);
+
+            // 快速记一笔：列出全部自定义模块，点击直接弹出该模块的记一笔弹窗
+            var quickRecord = new Forms.ToolStripMenuItem("快速记一笔 ▸");
+            var modules = _customModulesView?.CurrentModules
+                          ?? (System.Collections.Generic.IReadOnlyList<ME.Models.CustomModule>)
+                              ME.Data.CustomModuleRepository.GetAll().AsReadOnly();
+            if (modules.Count == 0)
+            {
+                var none = new Forms.ToolStripMenuItem("（还没有自定义模块）") { Enabled = false };
+                none.MouseEnter += (s2, ev2) => none.BackColor = System.Drawing.Color.Transparent;
+                quickRecord.DropDownItems.Add(none);
+            }
+            else
+            {
+                foreach (var m in modules.Take(15))
+                {
+                    var moduleId = m.Id;
+                    var item = new Forms.ToolStripMenuItem($"{ME.Services.FeishuCards.IconOf(m.Icon)} {m.Name}");
+                    item.Click += (s2, ev2) =>
+                    {
+                        Show(); WindowState = WindowState.Normal; Activate();
+                        UpdateView(6);
+                        _customModulesView?.TryOpenRecordDialog(moduleId);
+                    };
+                    quickRecord.DropDownItems.Add(item);
+                }
+            }
+            menu.Items.Add(quickRecord);
 
             void Quick(string label, int viewIndex)
             {
@@ -806,10 +853,67 @@ namespace ME
                     System.Windows.Media.Color.FromArgb(60, 128, 128, 128));
         }
 
+        // ========== GLOBAL HOTKEY (Ctrl+Alt+M 显隐主窗口) ==========
+        private const int HOTKEY_ID_SHOW = 0xB00B;
+        private const int WM_HOTKEY = 0x0312;
+        private bool _hotkeyHiddenByHotkey;
+
+        /// <summary>注册全局快捷键（设置里可关）：Ctrl+Alt+M 在任何界面显隐主窗口</summary>
+        private void RegisterGlobalHotkey()
+        {
+            try
+            {
+                var enabled = new SettingsRepository().GetValue(SettingsKeys.GlobalHotkeyEnabled, "False") == "True";
+                if (!enabled || _hwndSource == null) return;
+                const uint MOD_CONTROL = 0x0002, MOD_ALT = 0x0001;
+                if (RegisterHotKey(_hwndSource.Handle, HOTKEY_ID_SHOW, MOD_CONTROL | MOD_ALT, (uint)'M'))
+                    _hotkeyRegistered = true;
+            }
+            catch { }
+        }
+
+        private bool _hotkeyRegistered;
+
+        private void UnregisterGlobalHotkey()
+        {
+            try
+            {
+                if (_hotkeyRegistered && _hwndSource != null)
+                    UnregisterHotKey(_hwndSource.Handle, HOTKEY_ID_SHOW);
+                _hotkeyRegistered = false;
+            }
+            catch { }
+        }
+
+        /// <summary>开关切换后重注册全局快捷键（设置页调用）</summary>
+        public void ApplyGlobalHotkeySetting()
+        {
+            UnregisterGlobalHotkey();
+            RegisterGlobalHotkey();
+        }
+
+        /// <summary>WM_HOTKEY：显示/隐藏主窗口（隐藏时最小化到托盘，若开了托盘）</summary>
+        private void ToggleMainWindowVisibility()
+        {
+            if (WindowState == WindowState.Minimized || !IsVisible || _hotkeyHiddenByHotkey)
+            {
+                _hotkeyHiddenByHotkey = false;
+                ShowWithAnimation();
+                WindowState = WindowState.Normal;
+                Activate();
+            }
+            else
+            {
+                _hotkeyHiddenByHotkey = true;
+                Hide();
+            }
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             // 退出前自动上传（可关）：改完忘传会让另一台设备下载到旧数据，这里兜底一次
             try { GitHubSyncService.TryPushBeforeExit(); } catch { }
+            UnregisterGlobalHotkey();
             _hwndSource?.RemoveHook(WindowProc);
             SharedTimerService.StopCurrent();
             CloseFloatingWindowPermanent();
