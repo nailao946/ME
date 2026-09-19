@@ -1,10 +1,10 @@
 <div align="center">
 
-# ME — 个人管理系统（目标 · 任务 · 时间 · 健康）
+# ME — Personal Management System (Goals · Tasks · Time · Health)
 
-**简体中文** | [English](README_EN.md)
+[简体中文](README_CN.md) | **English**
 
-一款纯本地运行的个人管理系统（Windows 桌面端），帮助你规划目标、追踪时间、管理任务、记录健康数据，保护你的隐私数据安全。
+A fully local personal management system for Windows: plan goals, track time, manage tasks and record health data — your data never leaves your device.
 
 [![Release](https://img.shields.io/github/v/release/nailao946/ME)](https://github.com/nailao946/ME/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/nailao946/ME/total)](https://github.com/nailao946/ME/releases/latest)
@@ -13,183 +13,185 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![Stars](https://img.shields.io/github/stars/nailao946/ME?style=social)](https://github.com/nailao946/ME/stargazers)
 
-**⬇️ [下载最新版](https://github.com/nailao946/ME/releases/latest)** · 📱 [安卓版 ME-PE](https://github.com/nailao946/ME-PE)
+**⬇️ [Download the latest release](https://github.com/nailao946/ME/releases/latest)** · 📱 [Android version (ME-PE)](https://github.com/nailao946/ME-PE)
 
 </div>
 
----
-
-## 功能概览
-
-| 模块 | 功能 |
-|------|------|
-| 📋 任务列表 | 多类型任务、日期筛选、标签过滤、进度追踪、番茄钟计时 |
-| 🎯 目标管理 | 目标分类、标签系统、父子层级、自动进度计算 |
-| 📅 日历视图 | 月度日历、颜色标记、详情侧栏、任务统计（打卡率/剩余天数/连续打卡） |
-| 🗺️ 目标地图 | 树形结构可视化、进度环、全局概览 |
-| 📝 定期盘点 | 周/月/年统计、完成率趋势、目标进度列表 |
-| ⏱️ 时间追踪 | 标签计时、甘特图、饼图分布、番茄钟、右键管理、悬浮计时窗 |
-| 💚 健康 | 睡眠 / 身体测量 / 喝水 / 心情 / 尿酸 / 锻炼 / 久坐 / 用药 / 对比 / AI 分析 |
-| ⚙️ 设置 | 主题切换、边框颜色、开机自启、系统托盘、数据备份/导入、云同步、AI 供应商 |
+> **Note:** the app's UI is currently Chinese-only. The project is fully usable if you can read basic Chinese; issues and PRs in English are always welcome.
 
 ---
 
-## 健康模块（💚）
+## Feature Overview
 
-仿照苹果健康 App 的健康管理功能，纯本地存储：
-
-| 分类 | 功能 |
-|------|------|
-| 🏠 总览 | 人体健康图（点击部位查看数据）、详细信息汇总（身高/体重/BMI/平均睡眠/日均喝水/尿酸/用药）、导出健康报告 |
-| 😴 睡眠 | 记录入睡/起床时间，自动计算时长；今日/近7天/近30天统计与图表 |
-| ⚖️ 身体测量 | 记录体重+身高，自动计算 BMI 与体成分评估（偏瘦/正常/超重/肥胖）、体重趋势图 |
-| 💧 喝水 | 自定义喝水容器（名称 + ml，支持按直径/高度自动计算容量），按容器 +1/-1，目标改 ml 自动累加，今日/本周/本月统计与达标率 |
-| 😊 心情 | 一键记录今日心情（😊😐😔😢），近7天分布、近30天时间线 |
-| 💉 尿酸 | 录入尿酸值（含测量时间与性别），自动区分是否在正常范围（男 149~416 / 女 89~357），用颜色标识，近30天趋势 |
-| 🏃 锻炼 | 自定义锻炼项目（名称/目标量/单位），频率支持每日/隔日/每周指定几天；今日达标判定、近7天图表、历史记录 |
-| 🚶 久坐活动 | 起身活动一次点一下，累计今日次数 + 近7天统计；悬浮窗也有一键 +1 按钮 |
-| 💊 用药 | 用药记录（药名/类型/规格/频率/时间点/持续时间），可开启到点系统通知提醒 |
-| 📊 对比 | 多选健康参数（喝水/睡眠/体重/尿酸/心情）叠加趋势对比，直观看出关联 |
-| 🤖 AI 分析 | 把所选参数数据发给 AI 分析相关性（支持 DeepSeek 等多供应商，见"设置 → AI 分析"） |
-
-### 健康数据导入（小米运动健康）
-
-小米官方未开放实时接口，唯一官方数据通道为 **隐私中心导出**：
-
-1. 登录 [account.xiaomi.com](https://account.xiaomi.com) → 隐私中心 → 管理您的数据 → 小米运动健康 → 申请导出
-2. 下载 zip 压缩包
-3. 在「设置 → 云同步 → 导入小米健康数据」选择该 zip，自动解析睡眠与体重
+| Module | Features |
+|--------|----------|
+| 📋 Tasks | Multiple task types, date picker, tag filters, progress tracking, Pomodoro timer |
+| 🎯 Goals | Goal categories, tag system, parent-child hierarchy, automatic progress |
+| 📅 Calendar | Monthly view, color coding, detail sidebar, task stats (completion rate / days left / streak) |
+| 🗺️ Goal Map | Tree visualization, progress rings, global overview |
+| 📝 Review | Weekly / monthly / yearly stats, completion-rate trends, goal progress list |
+| ⏱️ Time Tracking | Tag timers, Gantt chart, pie charts, Pomodoro, right-click management, floating timer window |
+| 💚 Health | Sleep / body measurements / water / mood / uric acid / exercise / sedentary / medication / compare / AI analysis |
+| ⚙️ Settings | Theme switching, border color, auto-start, system tray, backup/restore, cloud sync, AI providers |
 
 ---
 
-## 核心功能详解
+## Health Module (💚)
 
-### 📋 任务管理
+Modeled after Apple's Health app, all data stored locally:
 
-- **多类型任务**：一次性、周期性（每日/工作日/周末/每周/每月/间隔/自定义）、量化任务
-- **自定义周期**：自定义任务支持设置"每周 N 次"、"每天 M 次"的目标次数
-- **日期筛选**：顶部横向日期条，支持左右滑动切换
-- **标签过滤**：点击标签按钮筛选不同分类的任务（选中态高亮）
-- **进度追踪**：量化任务自动计算完成百分比，周期任务显示当日完成次数
-- **子任务**：支持主任务下创建子任务，层级展示
+| Category | Features |
+|----------|----------|
+| 🏠 Overview | Body figure (tap a body part to see its data), detailed summary (height / weight / BMI / average sleep / daily water / uric acid / medication), export health report |
+| 😴 Sleep | Log bedtime / wake time with automatic duration; today / 7-day / 30-day stats and charts |
+| ⚖️ Body | Log weight + height, automatic BMI and body assessment (underweight / normal / overweight / obese), weight trend chart |
+| 💧 Water | Custom water containers (name + ml, capacity auto-computed from diameter / height), +1/-1 per container, daily / weekly / monthly stats and goal rate |
+| 😊 Mood | One-tap daily mood (😊😐😔😢), 7-day distribution, 30-day timeline |
+| 🩸 Uric acid | Log uric acid values (with measurement time & sex), automatic normal-range check (male 149–416 / female 89–357) with color coding, 30-day trend |
+| 🏃 Exercise | Custom exercise items (name / target / unit), daily / every-other-day / specific-weekdays frequency; today's achievement, 7-day chart, history |
+| 🚶 Sedentary | Tap once each time you get up and move — daily count + 7-day stats; one-tap +1 button in the floating window |
+| 💊 Medication | Medication records (name / type / dosage / frequency / time slots / duration), optional system notifications at scheduled times |
+| 📊 Compare | Overlay multiple health parameters (water / sleep / weight / uric acid / mood) on one trend chart to spot correlations |
+| 🤖 AI Analysis | Send selected parameters to an AI provider for correlation analysis (DeepSeek and any OpenAI-compatible service — see Settings → AI Analysis) |
 
-### ⏱️ 时间追踪
+### Importing health data (Xiaomi Mi Fitness)
 
-- **标签计时**：点击标签开始计时，再次点击停止；自动插入"闲时"记录填充空隙
-- **番茄钟**：可配置工作/短休息/长休息时长，自动切换阶段
-- **悬浮计时窗**：桌面悬浮显示当前计时，可折叠/展开/拖动/贴边，展开可看今日任务
-- **甘特图**：按标签分组展示当日时间分配，点击查看详情（时间范围、时长、占比、记录列表）
-- **饼图分布**：本周/本月标签用时分布，点击饼块查看该标签详细记录
-- **时间统计**：支持日/周/月/年四种维度，展示各标签累计用时
-- **右键管理**：右键标签可编辑或删除
+Xiaomi offers no public real-time API; the only official data channel is the **privacy-center export**:
 
-### 🎯 目标管理
-
-- **目标分类**：短期目标、长期目标、灵感目标三种时间框架
-- **标签系统**：自定义标签名称和颜色，便于分类管理
-- **父子层级**：支持目标嵌套，子目标完成自动更新父目标进度
-- **量化目标**：支持数值型目标追踪，自动计算完成百分比
-
-### 📅 日历视图
-
-- **月度日历**：直观展示每日任务分布
-- **颜色标记**：不同目标/任务用不同颜色区分
-- **任务统计**：打卡率、剩余天数、连续打卡（原"数据看板"已合并至此）
-- **详情侧栏**：点击日期查看当日任务详情
-
-### 📊 数据看板（已合并）
-
-数据看板功能已合并入 **日历视图** 右侧侧栏，不再单独存在。
-
-### 📝 定期盘点
-
-- **统计维度**：周/月/年三种时间维度
-- **完成率**：整体任务完成百分比
-- **趋势图表**：每日完成数量折线图
-- **目标进度**：各目标的完成进度列表
-
-### ⚙️ 设置
-
-- **主题模式**：浅色 / 深色 / 跟随系统（全局即时切换）
-- **窗口边框颜色**：5 种预设颜色 + 系统选色盘自定义颜色
-- **开机自启**：Windows 启动时自动运行
-- **系统托盘**：最小化到托盘、托盘通知气泡
-- **音效设置**：任务完成 / 专注结束提示音
-- **数据备份**：单独备份（按数据类型勾选，含健康/用药/容器/锻炼等）或全部备份为 JSON 文件
-- **数据导入**：从备份文件恢复数据
-- **云同步**：数据格式兼容 Web 版目标地图，为后续双端同步预留接口
-- **AI 分析**：多供应商管理（DeepSeek / 通义 / 智谱等任意 OpenAI 兼容服务），API Key 用 DPAPI 加密保存
+1. Sign in at [account.xiaomi.com](https://account.xiaomi.com) → Privacy Center → Manage your data → Mi Fitness → Request export
+2. Download the zip archive
+3. In "Settings → Cloud Sync → Import Xiaomi health data", pick the zip — sleep and weight are parsed automatically
 
 ---
 
-## 技术栈
+## Core Features in Detail
 
-| 类别 | 技术 |
-|------|------|
-| 框架 | .NET 8 WPF |
-| UI 库 | ModernWpf 0.9.6（Fluent Design 控件） |
-| 架构 | MVVM 模式（ViewModel + Code-Behind 混合） |
-| 存储 | JSON 文件本地存储（无数据库依赖） |
-| 主题 | DynamicResource 动态主题切换（浅色/深色） |
-| 窗口 | 自定义 WindowChrome（无边框圆角窗口） |
-| 托盘 | Windows Forms NotifyIcon |
-| 选色 | Windows Forms ColorDialog |
-| AI | OpenAI 兼容 Chat Completions API（DeepSeek 等） |
+### 📋 Task Management
 
-### 项目依赖
+- **Multiple task types**: one-time, recurring (daily / weekdays / weekends / weekly / monthly / interval / custom), quantitative
+- **Custom recurrence**: custom tasks support "N times per week" and "M times per day" targets
+- **Date picker**: horizontal date bar at the top, swipe left / right to switch days
+- **Tag filters**: click a tag button to filter task categories (selected state highlighted)
+- **Progress tracking**: quantitative tasks compute completion percentage automatically; recurring tasks show today's completion count
+- **Subtasks**: create subtasks under a main task, displayed hierarchically
+
+### ⏱️ Time Tracking
+
+- **Tag timers**: click a tag to start timing, click again to stop; automatic "idle" records fill the gaps
+- **Pomodoro**: configurable work / short break / long break durations with automatic phase switching
+- **Floating timer window**: always-on-top floating window showing the current timer — collapsible / draggable / edge-snapping, expandable to show today's tasks
+- **Gantt chart**: daily time allocation grouped by tag; click for details (time range, duration, share, record list)
+- **Pie chart**: weekly / monthly time distribution per tag; click a slice for that tag's detailed records
+- **Time statistics**: day / week / month / year dimensions showing accumulated time per tag
+- **Right-click management**: right-click a tag to edit or delete it
+
+### 🎯 Goal Management
+
+- **Goal categories**: short-term, long-term and idea goals (three time frames)
+- **Tag system**: custom tag names and colors for classification
+- **Parent-child hierarchy**: nested goals; completing a sub-goal updates the parent's progress automatically
+- **Quantitative goals**: numeric goal tracking with automatic progress percentage
+
+### 📅 Calendar View
+
+- **Monthly calendar**: intuitive view of each day's tasks
+- **Color coding**: different goals / tasks get different colors
+- **Task statistics**: completion rate, days left, streak (the former "Dashboard" was merged here)
+- **Detail sidebar**: click a date to see that day's task details
+
+### 📝 Review
+
+- **Dimensions**: weekly / monthly / yearly statistics
+- **Completion rate**: overall task completion percentage
+- **Trend charts**: daily completion-count line chart
+- **Goal progress**: progress list per goal
+
+### ⚙️ Settings
+
+- **Theme mode**: light / dark / follow system (instant global switching)
+- **Window border color**: 5 presets + system color picker
+- **Auto-start**: launch with Windows
+- **System tray**: minimize to tray, tray balloon notifications
+- **Sound effects**: task-completed / focus-ended notification sounds
+- **Backup**: selective backup (choose data types, incl. health / medication / containers / exercise) or full JSON backup
+- **Restore**: restore data from a backup file
+- **Cloud sync**: GitHub / Gitee / WebDAV with anti-overwrite protection — same data as the Android version
+- **AI analysis**: multi-provider management (DeepSeek / Tongyi / Zhipu / any OpenAI-compatible service); API keys encrypted with DPAPI
+
+---
+
+## Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Framework | .NET 8 WPF |
+| UI library | ModernWpf 0.9.6 (Fluent Design controls) |
+| Architecture | MVVM (ViewModel + code-behind hybrid) |
+| Storage | Local JSON files (no database) |
+| Theming | DynamicResource runtime theme switching (light / dark) |
+| Window | Custom WindowChrome (borderless rounded window) |
+| Tray | Windows Forms NotifyIcon |
+| Color picker | Windows Forms ColorDialog |
+| AI | OpenAI-compatible Chat Completions API (DeepSeek etc.) |
+
+### Dependency
 
 ```xml
 <PackageReference Include="ModernWpfUI" Version="0.9.6" />
 ```
 
-仅依赖 ModernWpfUI 一个 NuGet 包，其余均为 .NET 8 内置库。
+ModernWpfUI is the only NuGet package; everything else ships with .NET 8.
 
 ---
 
-## 数据存储
+## Data Storage
 
-数据存储在 `%LOCALAPPDATA%/ME/JsonData/` 目录下（纯 JSON，可直接复制备份，也方便后续安卓端读取同步）：
+Data lives under `%LOCALAPPDATA%/ME/JsonData/` (plain JSON — easy to copy and back up, and directly readable by the Android app):
 
-| 文件 | 内容 |
-|------|------|
-| `goals.json` | 目标数据 |
-| `tasks.json` | 任务数据 |
-| `tags.json` | 目标标签数据 |
-| `time_tags.json` | 时间标签数据 |
-| `time_records.json` | 时间记录数据 |
-| `focus_sessions.json` | 专注会话记录 |
-| `task_completions.json` | 任务完成打卡记录 |
-| `health_records.json` | 健康记录（睡眠/体重/喝水/心情/尿酸/锻炼/久坐） |
-| `medications.json` | 用药记录 |
-| `water_containers.json` | 喝水容器 |
-| `exercise_items.json` | 锻炼项目 |
-| `ai_providers.json` | AI 供应商配置（Key 经 DPAPI 加密） |
-| `settings.json` | 应用设置 |
+| File | Contents |
+|------|----------|
+| `goals.json` | Goals |
+| `tasks.json` | Tasks |
+| `tags.json` | Goal tags |
+| `time_tags.json` | Time tags |
+| `time_records.json` | Time records |
+| `focus_sessions.json` | Focus (Pomodoro) sessions |
+| `task_completions.json` | Task check-in records |
+| `health_records.json` | Health records (sleep / weight / water / mood / uric acid / exercise / sedentary) |
+| `medications.json` | Medication records |
+| `water_containers.json` | Water containers |
+| `exercise_items.json` | Exercise items |
+| `ai_providers.json` | AI provider config (keys encrypted with DPAPI) |
+| `settings.json` | App settings |
 
 ---
 
-## 安装运行
+## Install & Run
 
-### 环境要求
+### Requirements
 
 - Windows 10/11
 - .NET 8.0 Runtime
 
-### 从源码构建
+### Download
+
+Grab the latest prebuilt zip from [Releases](https://github.com/nailao946/ME/releases/latest), unzip and run `ME.exe`.
+
+### Build from source
 
 ```bash
-# 克隆项目
+# clone
 git clone https://github.com/nailao946/ME.git
 cd ME
 
-# 构建
+# build
 dotnet build "ME\ME.csproj"
 
-# 运行
+# run
 dotnet run --project "ME\ME.csproj"
 ```
 
-### 发布
+### Release build
 
 ```bash
 dotnet publish "ME\ME.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
@@ -197,23 +199,23 @@ dotnet publish "ME\ME.csproj" -c Release -r win-x64 --self-contained true -p:Pub
 
 ---
 
-## 设计风格
+## Design Style
 
-- **iOS/macOS 风格**：圆角卡片（12px）、柔和阴影、简洁布局
-- **深色模式**：完整深色主题支持，所有界面元素适配
-- **DynamicResource**：全局动态主题切换，即时生效
-- **自定义窗口**：无边框圆角窗口，自定义标题栏（最小化/最大化/关闭）
-- **主色调**：蓝色 (#007AFF)，可自定义窗口边框颜色
-- **中文界面**：全中文标签和提示
+- **iOS/macOS style**: rounded cards (12px), soft shadows, clean layout
+- **Dark mode**: full dark theme, all UI elements adapted
+- **DynamicResource**: global runtime theme switching, effective instantly
+- **Custom window**: borderless rounded window with custom title bar (minimize / maximize / close)
+- **Accent color**: blue (#007AFF), window border color customizable
+- **Chinese UI**: all labels and messages are in Chinese
 
 ---
 
-## 联系作者
+## Contact
 
-- 🔗 GitHub：[github.com/nailao946/ME](https://github.com/nailao946/ME)
-- 📱 微信：`shuaim888888`（点击设置页微信号可复制）
+- 🔗 GitHub: [github.com/nailao946/ME](https://github.com/nailao946/ME)
+- 📱 WeChat: `shuaim888888` (tap the WeChat number in Settings to copy)
 
-欢迎反馈建议、提交 Issue 与 PR！
+Feedback, issues and PRs are welcome — in either language!
 
 ---
 
@@ -221,153 +223,54 @@ dotnet publish "ME\ME.csproj" -c Release -r win-x64 --self-contained true -p:Pub
 
 MIT
 
-
 ---
 
-## v2.0.0 更新日志
+## Recent Updates
 
-- **UI 库迁移**：ModernWpf → [WPF-UI (lepoco)](https://github.com/lepoco/wpfui) Fluent 主题，深浅色跟随主题切换，修复夜间模式黑字问题
-- **GitHub 免费云同步**：设置 → GitHub 云同步，数据上传到自己的私有仓库（Token DPAPI 加密保存，支持自定义代理），与安卓端互通
-- **自定义模块**：左侧导航新增「自定义模块」，像「健康」一样创建任意记录块（数值/文本/时间/是否/单选字段），带趋势图，PC 与安卓数据互通，设置内附使用教程
-- **目标自定义颜色**：目标支持 ColorHex 自定义色（与安卓端互通）
-- **任务手动排序修复**：拖拽落点按分区计算，同时保存 Priority + SortOrder，主任务/子任务排序均正常
-- 安卓版：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)
+### v2.3.19
 
+- Quantitative tasks and goals at 100% now remain completed on every date.
 
----
+### v2.3.21
 
-## v2.1.0 更新日志
+- **Theme system split into style × tone**: "Normal" and "Glass" are now two independent styles, each with light / dark / follow-system; the glass style adds a window-opacity slider, a choice of gradient / background image / fully transparent backdrop and eight gradient palettes
+- **Tray menu rebuilt**: brand header, theme submenu with the six style × tone combinations, quick entries (tasks / calendar / modules / settings), a sound toggle and a one-tap cloud sync
+- **Custom module dashboard gains two widget types**: a per-day bar chart and an inline recent-records card (six widget types total); the record dialog now sizes itself to the number of fields
+- Removed the redundant "custom modules" entry from settings (the module page is the single entry point)
 
-- **窗口边框修复**：去掉窗口外圈投影留边，边框贴住窗口最边缘，不再有黑色一圈
-- **GitHub 账号授权登录**：设置 → GitHub 云同步 →「账号授权登录」，自动打开网页登录并点 Authorize 即可拿 Token（GitHub Device Flow，OAuth App「ME 目标地图」），无需再手动创建 PAT；仍保留手动填 Token 和退出登录
-- **自定义模块重做**：模块切换 chips + 模块仪表盘 —— 内置今日/本周/累计/连续天数统计卡；可自行添加统计组件（数值统计【求和/平均/最大/最小/最新/记录数 × 今日/本周/本月/全部】、趋势折线图、分布占比环形图、连续打卡），组件点击可改、可删；最近记录直显卡片
-- 安卓版：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)（同版本支持账号授权登录）
+### v2.3.20
 
+- **Task completion history**: one-off tasks and quantitative tasks that reach 100% now appear under "Done today" only on the day they were completed, then move to a new "Completed earlier" group showing the actual completion date; the "Today's goals" panel follows the same rule and no longer lists historically completed items
+- **Calendar view**: removed the check-in rate — the first stat card now reads "Today's tasks: Done / Not done"; the check-in streak counts a day as checked in as soon as any single task is completed that day (days without tasks never break the streak). Task statistics only count tasks that exist on that date, and quantitative tasks only when a daily target is set
+- **Cloud sync hardened**: upload pushes to every configured provider (GitHub / Gitee / WebDAV) and reports each one separately; "latest version" is now decided by content hashes and per-provider baselines instead of file timestamps, so downloading never overwrites local data that hasn't been uploaded yet (append-only files always merge, other files are kept with an explicit notice); Gitee fixed for missing response sha, wrong default branch and swallowed auth errors
+- **Cloud sync diagnostics and conflict resolution**: new "Diagnose connection" runs connect → list → read on every cloud and reports each step with timings; files changed on both sides are now listed under "Resolve conflicts" where each one can be kept from the local device or overwritten from the cloud
+- **Glass theme crash fixed**: theme brushes stay solid, the gradient moves to a dedicated window background key, and all brush casts go through a safe accessor
+- **Custom modules editor enriched**: icon picker with a visible selected state, quick-start templates, a colour swatch palette, field reordering and a live card preview; quantitative task cards now show "still needs +N today" for the daily target
 
----
+### v2.3.19
 
-## v2.2.0 更新日志
+- **Glass theme**: new "Glass" (frosted-glass) appearance option — gradient backdrop with translucent frosted cards
+- **Custom modules redesigned**: module cards now follow a Feishu-style layout — large-radius cards, tinted icon block, title with meta line and a record-count badge, a latest-record summary, a hairline divider and an icon+text action row
 
-- **GitHub 一键云同步**：账号授权登录成功后自动在你的账号下创建私有仓库 **ME-OKR** 并写入配置（已存在则直接用），上传/下载时若仓库未配置也会自动补建——登录完就能直接上传/下载，无需手填仓库名
-- **自定义模块弹窗显示修复**：输入框/下拉框统一显式高度，图标 emoji 强制 Segoe UI Emoji 字体，文字与符号不再被裁一半（原因见下）
-- 安卓版 v2.2.0：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)（喝水页重做、通知栏计时、子目标任务化、左滑操作、转场优化）
+### v2.3.18
 
+- Added bilingual UI preferences and synchronized goal completion history with today/past-completed sections.
 
----
+### v2.3.15
 
-## v2.2.1 更新日志
+- **Fixed WebDAV (Jianguoyun) uploads failing with HTTP 409**: Jianguoyun and other WebDAV services never create parent folders implicitly — uploading into a missing folder always returns 409 (AncestorsNotFound). The old code mistook the folder-creation request's 409 for "folder already exists, go ahead", so nothing was created and every file failed. The app now creates the sync folder level by level before uploading, and a 409 during upload triggers an automatic folder re-creation plus one retry; the server address defaults to Jianguoyun (https://dav.jianguoyun.com/dav/) and is pre-filled when switching to WebDAV
 
-- **修复自动建仓 HTTP 403**：登录后拉取账号名、创建 ME-OKR 仓库的请求此前漏带 Authorization 头（被 GitHub 当匿名请求限流拒绝），已修复——账号授权登录后自动建仓/配置现在可以正常走通
-- **仓库名只填 ME-OKR 即可**：不再强制 owner/name 格式，上传/下载时自动补当前账号前缀（nailao946/ME-OKR）；仓库输入框默认值即为 ME-OKR
-- **登录状态持久**：Token 加密保存在本机，重启应用后仍显示"已登录：账号名"（没有缓存账号名时会自动补拉一次），无需重复登录
-- 安卓版 v2.2.1：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)
+### v2.3.14
 
----
+- **Fixed Gitee upload failing with "sha is missing" (0/15 files)**: Gitee's API differs from GitHub's — creating a file requires POST, while PUT is strictly an update endpoint that must carry the file's sha (requests without one are rejected with HTTP 400 even when the file doesn't exist yet). New files previously went through a sha-less PUT, so every first-time upload failed. File creation now uses POST, with an automatic fallback to a sha-carrying update when the file turns out to exist. GitHub / WebDAV behavior unchanged; the Gitee repo stays interoperable with the Android version
 
-## v2.3.0 更新日志
+### v2.3.13
 
-- **两端功能对齐（PC ↔ 安卓互通）**：
-  - 心情五档统一（1=😢…5=😄，与安卓端一致；旧 0-3 记录显示时自动换算），同步到手机不再错位
-  - 时间页日历改为**圆角方块热力图**：每天的格子按时计时长深浅着色，悬停显示当天总时长（替代原来的小圆点）
-  - 健康总览卡片美化：彩色圆块图标 + 强调色数值，与安卓端风格一致
-  - 设置页重构为**分类导航**（外观 / 通用 / 专注与统计 / 数据与备份 / GitHub 同步 / 自定义模块 / AI 分析 / 关于），左侧大类右侧一页，不再是超长滚动页
-  - 自定义颜色全面改**圆形颜料盘**：时间标签编辑器去掉 Hex 输入，自定义模块编辑器改为点色球弹出色盘（色板与安卓端 24 色一致）
-- **云同步防覆盖**：记录每个文件上次同步后的云端版本（sha），上传时若发现云端文件比本地新（别的设备改过），自动跳过并提示"请先下载数据"，避免把手机端的新数据覆盖掉
-- 安卓版 v2.3.0：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)（盘点页时间统计、左滑交互修复、色盘选择器、目标/任务进度条、打卡率、任务关联时间标签、容器管理、设置分页）
+- **Review statistics reworked**: "Completed tasks" now shows **completed / total due**. Total due counts only tasks actually due that day — a recurring task scheduled for Sat/Sun doesn't count on Monday, subtasks don't count, quantitative tasks without a daily target don't count. Completion rate = completed ÷ total due. Quantitative tasks with a daily target (e.g. 1) count as completed once that day's check-in reaches the daily target; a finished quantitative task counts only up to the day it reached its target
+- **"vs previous period" on Review cards**: time invested and completion rate now show week-over-week / month-over-month / day-over-day changes — together with the existing completed-tasks trend, all three cards show green-up / red-down deltas at a glance
+- **"All" time chart fixed**: the time-statistics period "All" now draws a 12-month monthly comparison line instead of squeezing 365 days into an unreadable chart; daily line charts ("This month" etc.) thin out date labels automatically so they never overlap
+- **Task list "Today" panel**: time invested and completed x/y now compare against the previous day (green up / red down)
+- **Daily records for quantitative tasks**: once a no-schedule quantitative task has a daily target, a check-in whose daily increment reaches that target records a per-day completion — both the check-in heatmap and review statistics can now show quantitative completions by day
+- Android companion (v2.4.38): same statistics on the Review screen, "All" time stats as a 12-month monthly bar chart, fixed the check-in heatmap never lighting up for recurring tasks
 
----
-
-## v2.3.1 更新日志
-
-- **启动自动同步**：GitHub 云同步新增「启动软件时自动同步」开关（默认开启）——每次打开软件后台自动比对每个文件，云端较新的下载到本地、本地较新的上传到云端、两边都改过的跳过并提示，保证两边总是最新（设置页会显示本次启动的同步结果）
-- **设置页分类整理**：GitHub 云同步并入「数据与备份」分类；删除旧「云同步」卡（其中小米健康导入移入数据备份卡，保留可用）
-- **设置左侧分类导航样式与主菜单一致**（圆角选中、同色悬停、无边框透明底）
-- 安卓端无变化（仍为 v2.3.0）
-
----
-
-## v2.3.2 更新日志
-
-- 目标模型新增 `TimeTagId`（绑定时间标签）字段，与安卓端 v2.4.0 互通：安卓端给目标绑定时间标签后，PC 可正常读保该字段不丢失（PC 端绑定界面下一版补充）
-- 安卓版 v2.4.0：[github.com/nailao946/ME-PE](https://github.com/nailao946/ME-PE)（打卡率修复、左滑内圆角、拖动修复与落点虚影、目标拖动排序、量化交互对齐 PC、任务条时间标签、目标绑定时间标签、时间标签按钮组+管理、全色 HSV 调色盘、日期条紧凑+今天按钮）
-
----
-
-## v2.3.3 更新日志
-
-- 设置页右侧内容面板固定伸展宽度（原来收缩到内容宽度，导致只有一张卡的页面如"外观"比"数据备份"短）——现在每个分类页里的功能卡都等长、和最宽的页一致
-
-## v2.3.4 更新日志
-
-- **应用与仓库统一更名 ME**：窗口标题、托盘、关于页、健康报告落款全部改为「ME」（个人管理系统）；GitHub 源码仓库 OKR → **ME**，云同步数据仓库 ME-OKR → **ME-Data**（旧配置自动迁移，手机端同步不受影响）
-
-## v2.3.5 更新日志
-
-- **关于页新增「提意见 / Bug」反馈入口**：点击打开反馈弹窗，写完建议或问题一键提交，直接作为 Issue 创建到项目 GitHub 仓库（github.com/nailao946/ME）
-  - 复用「数据与备份」中已绑定的 GitHub 账号（任何账号都能在公开仓库提 issue，无需仓库写权限）
-  - 第一行自动作为 Issue 标题（过长截断），正文末尾自动附上版本号与系统信息，便于定位问题
-  - 未绑定 GitHub / 内容为空 / 网络失败均给出明确提示，提交中按钮禁用防重复提交
-
-## v2.3.15 更新日志
-
-- **修复 WebDAV（坚果云）上传报 HTTP 409 的问题**：坚果云等 WebDAV 服务不会隐式创建父目录——目标文件夹不存在时上传一律 409（AncestorsNotFound），而旧版把建目录请求的 409 误当成「目录已存在、可以继续」，导致目录没建成、每个文件都上传失败。现在上传前会逐级创建同步目录，上传遇 409 也会自动重建目录并重试一次；服务器地址留空时默认就是坚果云，切换到 WebDAV 时自动填好 https://dav.jianguoyun.com/dav/，不用再手动输入
-
-## v2.3.14 更新日志
-
-- **修复 Gitee 上传报「sha is missing」导致 0/15 全部失败的问题**：Gitee 的接口与 GitHub 不同——新建文件必须用 POST，PUT 只用于更新且必须携带文件 sha（不带 sha 一律报 400，即使文件并不存在）。此前新建文件走了不带 sha 的 PUT，首次上传全部失败。现新建改走 POST，撞上已存在时自动取最新 sha 转更新；GitHub / WebDAV 行为不变，Gitee 仓库依旧与安卓端互通
-
-## v2.3.13 更新日志
-
-- **定期盘点统计口径重做**：「完成任务」改为「完成数 / 总任务数」，总任务数只算当天该做的任务——周六周日的循环任务周一不计入、子任务不计入、未设每日目标的量化任务不计入；完成率 = 完成任务 ÷ 总任务数。量化任务设了每日目标（如 1）后，当天打卡达到每日目标就算入完成；已达标结束的量化任务只算到达标当天为止
-- **定期盘点「时间投入」「完成率」新增「较上期」**：本周比上周、本月比上月、今天比昨天；加上原有「完成任务」的较上期，三张卡片都能一眼看到涨跌（绿升红降）
-- **「时间统计」折线图看不清日期的问题**：点「全部」改为近 12 个月按月分组的月度对比折线（不再是 365 天挤成一团）；「本月」等按天折线的日期标签自动抽稀，只在放得下的位置显示，不再重叠
-- **任务列表「今日统计」新增「较昨日」**：时间投入与完成 x/y 都对比前一天（选中历史日期时对比前一天），绿升红降
-- **量化每日目标按天记录**：无周期的量化任务设了每日目标后，打卡当日增量达到每日目标即记录一条当日完成——打卡详情图与盘点统计都能按天看到量化任务的完成情况
-- 安卓端同步优化（v2.4.38）：盘点页同口径统计与「较上期」、时间统计「全部」改为近 12 个月月度柱状图、修复打卡图周期任务永不亮格的问题
-
-## v2.3.12 更新日志
-
-- **任务/子任务/目标新增「打卡详情」**：任务页与目标页的任务卡、子任务卡、目标卡右上角都有 ℹ️ 详细图标，点开即见「打卡图」——近 16 周每天一格的热力格，亮色=当天已完成、灰色=当天该做未做、浅色=无安排，鼠标悬停看具体日期；一目了然哪些天坚持了、哪些天漏了。窗口顶部还有统计卡：累计完成天数、连续打卡天数、近 30 天完成率（目标按「当天有任一关联任务完成」计算）
-- **任务/目标的编辑、子任务、删除按钮全部换成图标**（ℹ️ 详情 / ✎ 编辑 / ＋ 添加 / 🗑 删除），界面更清爽，悬停显示文字说明
-- **目标和任务的边框跟随标签颜色**：目标卡边框 = 目标标签色，任务/子任务卡边框 = 时间标签色（无时间标签时用目标标签色），与进度条、徽章同色系
-- **任务列表的任务名前并排显示两枚标签**：目标标签 + 时间标签（如「考研 数学 任务名」）；截止时间前新增该时间标签的累计用时（⌚ 12h30m，口径与目标管理界面一致）
-- **目标管理界面的任务/子任务名称前也加上时间标签徽章**（与目标条的目标标签徽章同款并排），原信息行里的小圆点改为徽章，不再重复显示
-
-## v2.3.11 更新日志
-
-- **新增 Gitee 与 WebDAV（坚果云）两种云同步方式**：设置 → 数据与备份的「同步方式」下拉可在 GitHub / Gitee / WebDAV 之间切换，与安卓端互通——Gitee 国内直连速度快（粘贴 gitee.com 私人令牌即可，自动建仓），WebDAV 支持坚果云、Nextcloud、群晖等任意网盘（填账号 + 应用密码，坚果云在「安全选项」生成应用密码）；三种方式的防覆盖保护、智能同步、启动自动同步、状态球表现完全一致，数据文件布局相同，换方式不丢数据
-- **应用图标更换**：桌面端图标换成与安卓端一致的「目标地图」图标（蓝色圆底 + 白色同心圆环 + 中心点），任务栏、资源管理器、托盘图标同步更新
-- 代理设置改为三种同步方式通用（GitHub / Gitee / WebDAV 均生效）
-
-## v2.3.10 更新日志
-
-- **修复网页已授权、软件却一直停在「等待」的问题**：GitHub 要求轮询取令牌的间隔不得小于规定值（返回 slow_down 时还会更宽），此前软件按固定 5 秒轮询、收到 slow_down 也没有放慢——一旦触发过一次限流，之后每次轮询都「过快」，GitHub 一直拒绝返回令牌，网页明明授权成功、软件却永远等待。现在轮询间隔会跟随 GitHub 的要求动态放宽（并多留 1 秒余量抵消网络抖动），授权完成后能立刻拿到令牌
-- **网络抖动不再打断授权**：轮询途中遇到网络超时/抖动不再直接报错终止，改为静默自动重试到授权码过期；连续失败会提示「网络不稳定，仍在自动重试」，网络恢复后自动继续。同时避免上一次请求未返回时叠加发送新请求
-- **授权完成更快**：拿到令牌后先立即保存（登录即刻生效），GitHub 用户名改为后台补拉——此前拉取用户名超时（最长 40 秒）会拖住整个登录完成的提示
-
-## v2.3.9 更新日志
-
-- **左下角新增云同步状态球**：小圆点实时反映同步状态——灰=未绑定/未同步，绿色呼吸闪烁=同步中，绿=已同步，红=同步失败；鼠标悬停显示最近一次同步结果，点一下立即触发一次完整云同步（先上传后下载，自动逐文件比较新旧，只传有变化的部分）
-- **同步轻提示（HUD）**：通过状态球触发的同步完成后，左下角弹出一条轻提示并自动淡出，不打断当前界面；同步失败同样红点提示
-- 设置页里的上传/下载、启动自动同步的结果也会同步反映到状态球颜色；未绑定 GitHub 时点状态球直接跳到「设置 → 数据与备份」
-
-## v2.3.8 更新日志
-
-- **修复云同步下载报 401 的体验**：GitHub 返回 401（令牌被撤销或过期）时，上传/下载/同步/反馈不再显示 GitHub 原始 JSON 报错，改为直接提示「GitHub 授权已失效，请在上方点重新授权重新登录一次即可恢复」；本机令牌读取失败也同样给出可操作指引
-- **GitHub 令牌自动续期**：GitHub App 开启「令牌过期」后，用户令牌 8 小时就失效（这正是本次下载报 401 的原因）——现在授权时保存 refresh_token，令牌到期前 10 分钟自动换新，上传/下载/同步/反馈请求前都会静默续期，不再需要每 8 小时手动重新授权
-
-## v2.3.7 更新日志
-
-- **关于页新增版本检测**：点「检查更新」对比 GitHub Releases 上发布的最新版本与本机版本——发现新版本时显示「点此前往下载」，点击直达发布页；已是最新、仓库未发布过版本、网络失败均有明确提示
-- 检测匿名访问公开仓库 API，无需登录绑定；若「数据与备份」的云同步配置了代理，检测请求自动走同一代理
-- 版本号从发布的 tag、Release 标题、附件文件名（如 ME-v2.3.7.zip）中自动提取并取最大值，预发布 Release 也参与比较
-
-## v2.3.6 更新日志
-
-- **反馈弹窗全面升级（参考成熟软件的 Issue 表单）**：
-  - 窗口加大（640×680），详细描述编辑框占满剩余空间
-  - **标题独立输入框**（限 80 字），不再用正文第一行当标题
-  - 新增**类型选择**：🐛 Bug 反馈 / 💡 功能建议 / 📮 其他，自动写入 Issue 正文并加标题前缀（`[Bug]` / `[建议]`），便于分类筛选
-  - 内容框按类型**预填规范模板**（Bug：问题描述/复现步骤/期望结果/实际结果；建议：建议内容/使用场景），切换类型且未编辑时自动替换，不覆盖已写内容
-  - 提交正文格式化为 Markdown（**反馈类型** + 用户内容 + 版本/系统落款），规范到 AI 可直接理解分析
-  - 空内容/模板原文未修改/网络失败均有明确提示，防重复提交
+📖 Full changelog (Chinese): [README_CN.md](README_CN.md) · 📱 Android version: [ME-PE](https://github.com/nailao946/ME-PE)

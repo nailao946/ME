@@ -531,24 +531,123 @@ namespace ME
             var isDark = ThemeService.IsDarkMode();
             var menu = new Forms.ContextMenuStrip();
             menu.Renderer = new ToolStripThemeRenderer(isDark);
-            menu.Padding = new System.Windows.Forms.Padding(4);
-            menu.Font = new System.Drawing.Font("Segoe UI", 10f);
+            menu.ShowImageMargin = false;
+            menu.ShowCheckMargin = false;
+            menu.Padding = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            menu.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.5f);
 
-            var showItem = new Forms.ToolStripMenuItem("显示主窗口");
+            // —— 品牌抬头（不可点，只作分组标题） ——
+            var brand = new Forms.ToolStripMenuItem("ME · 个人管理系统")
+            {
+                Enabled = false,
+                ForeColor = System.Drawing.Color.DimGray,
+                Font = new System.Drawing.Font("Microsoft YaHei UI", 8.5f, System.Drawing.FontStyle.Bold),
+            };
+            brand.MouseEnter += (s, ev) => brand.BackColor = System.Drawing.Color.Transparent;
+            menu.Items.Add(brand);
+
+            var showItem = new Forms.ToolStripMenuItem("显示主窗口      ");
+            showItem.Font = new System.Drawing.Font("Microsoft YaHei UI", 9.5f, System.Drawing.FontStyle.Bold);
             showItem.Click += (s, ev) => { Show(); WindowState = WindowState.Normal; Activate(); };
             menu.Items.Add(showItem);
 
-            _floatingMenuItem = new Forms.ToolStripMenuItem("显示悬浮窗");
-            _floatingMenuItem.Click += (s, ev) => ToggleFloatingWindow();
+            // —— 主题子菜单：普通（浅/深）与 毛玻璃（浅/深） ——
+            var themeItem = new Forms.ToolStripMenuItem("主题");
+            void ThemeLeaf(string label, bool glass, bool? dark)
+            {
+                var leaf = new Forms.ToolStripMenuItem(label) { Checked = IsCurrentThemeChoice(glass, dark) };
+                leaf.Click += (s, ev) =>
+                {
+                    var repo = new SettingsRepository();
+                    repo.SetValue(ThemeService.Keys.Style, glass ? "Glass" : "Normal");
+                    if (dark.HasValue) repo.SetValue(ThemeService.Keys.Tone, dark.Value ? "Dark" : "Light");
+                    else repo.SetValue(ThemeService.Keys.Tone, "System");
+                    ThemeService.ApplyTheme();
+                    RebuildTrayMenu();
+                };
+                themeItem.DropDownItems.Add(leaf);
+            }
+            ThemeLeaf("普通 · 浅色", false, false);
+            ThemeLeaf("普通 · 深色", false, true);
+            ThemeLeaf("普通 · 跟随系统", false, null);
+            themeItem.DropDownItems.Add(new Forms.ToolStripSeparator());
+            ThemeLeaf("毛玻璃 · 浅色", true, false);
+            ThemeLeaf("毛玻璃 · 深色", true, true);
+            ThemeLeaf("毛玻璃 · 跟随系统", true, null);
+            menu.Items.Add(themeItem);
+
+            _floatingMenuItem = new Forms.ToolStripMenuItem("显示悬浮窗")
+            {
+                Checked = _floatingWindow != null && _floatingWindow.IsVisible,
+            };
+            _floatingMenuItem.Click += (s, ev) => { ToggleFloatingWindow(); RebuildTrayMenu(); };
             menu.Items.Add(_floatingMenuItem);
 
             menu.Items.Add(new Forms.ToolStripSeparator());
 
-            var exitItem = new Forms.ToolStripMenuItem("退出");
+            // —— 快捷入口 ——
+            var quickTitle = new Forms.ToolStripMenuItem("快捷入口") { Enabled = false };
+            quickTitle.MouseEnter += (s, ev) => quickTitle.BackColor = System.Drawing.Color.Transparent;
+            menu.Items.Add(quickTitle);
+
+            void Quick(string label, int viewIndex)
+            {
+                var it = new Forms.ToolStripMenuItem(label);
+                it.Click += (s, ev) => { Show(); WindowState = WindowState.Normal; Activate(); UpdateView(viewIndex); };
+                menu.Items.Add(it);
+            }
+            Quick("任务列表", 0);
+            Quick("日历视图", 2);
+            Quick("自定义模块", 6);
+            Quick("设置", 7);
+
+            menu.Items.Add(new Forms.ToolStripSeparator());
+
+            // —— 提醒声音（可勾选） ——
+            var soundRepo = new SettingsRepository();
+            var soundItem = new Forms.ToolStripMenuItem("完成提示音")
+            {
+                Checked = soundRepo.GetValue(SettingsKeys.SoundEnabled, "True") == "True",
+            };
+            soundItem.Click += (s, ev) =>
+            {
+                var now = !(soundRepo.GetValue(SettingsKeys.SoundEnabled, "True") == "True");
+                soundRepo.SetValue(SettingsKeys.SoundEnabled, now.ToString());
+                soundItem.Checked = now;
+            };
+            menu.Items.Add(soundItem);
+
+            // —— 立即同步 ——
+            var syncItem = new Forms.ToolStripMenuItem("立即同步云端");
+            syncItem.Click += (s, ev) =>
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    var msg = await GitHubSyncService.SyncAsync(toast: true);
+                    AppNotifier.Show("云同步", msg);
+                });
+            };
+            menu.Items.Add(syncItem);
+
+            menu.Items.Add(new Forms.ToolStripSeparator());
+
+            var exitItem = new Forms.ToolStripMenuItem("退出")
+            {
+                ForeColor = System.Drawing.Color.Firebrick,
+            };
             exitItem.Click += (s, ev) => { _notifyIcon.Visible = false; CloseFloatingWindowPermanent(); Application.Current.Shutdown(); };
             menu.Items.Add(exitItem);
 
             _notifyIcon.ContextMenuStrip = menu;
+        }
+
+        /// <summary>托盘主题菜单的勾选状态：风格 + 深浅 都匹配才算选中</summary>
+        private static bool IsCurrentThemeChoice(bool glass, bool? dark)
+        {
+            if (ThemeService.IsGlass != glass) return false;
+            if (!dark.HasValue) return new SettingsRepository().GetValue(ThemeService.Keys.Tone, "") == "System";
+            return ThemeService.IsDarkMode() == dark.Value
+                && new SettingsRepository().GetValue(ThemeService.Keys.Tone, "") != "System";
         }
 
         public void SetTrayVisible(bool visible)

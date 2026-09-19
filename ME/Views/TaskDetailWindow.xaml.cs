@@ -288,7 +288,7 @@ namespace ME.Views
             {
                 var card = new Border
                 {
-                    Background = (SolidColorBrush)FindResource("CardBrush"),
+                    Background = ME.Services.ThemeService.Solid("CardBrush"),
                     CornerRadius = new CornerRadius(8),
                     Padding = new Thickness(14, 8, 14, 8),
                     Margin = new Thickness(0, 0, 8, 0)
@@ -346,7 +346,7 @@ namespace ME.Views
             gridRow.Children.Add(labelCol);
 
             var dueBrush = (SolidColorBrush)FindResource("BorderBrush");
-            var faintBrush = (SolidColorBrush)FindResource("CardBrush");
+            var faintBrush = ME.Services.ThemeService.Solid("CardBrush");
 
             for (int w = 0; w < HeatWeeks; w++)
             {

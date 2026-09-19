@@ -19,7 +19,7 @@
         <!-- Invisible resize border (8px all around) -->
         <Border x:Name="ResizeBorder" MouseLeftButtonDown="ResizeBorder_MouseLeftButtonDown"
                 Cursor="Arrow" Background="Transparent" />
-        <Border x:Name="WindowBorder" Background="{DynamicResource BackgroundBrush}" CornerRadius="12"
+        <Border x:Name="WindowBorder" Background="{DynamicResource WindowBackgroundBrush}" CornerRadius="12"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 Margin="0">
             <Border.Clip>
@@ -32,7 +32,7 @@
             </Grid.RowDefinitions>
 
             <!-- Custom Title Bar -->
-            <Border Grid.Row="0" Background="{DynamicResource BackgroundBrush}"
+            <Border Grid.Row="0" Background="{DynamicResource WindowBackgroundBrush}"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
                     MouseLeftButtonUp="TitleBar_MouseLeftButtonUp"
                     MouseMove="TitleBar_MouseMove">
@@ -82,7 +82,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Nav: same background as workspace, no border -->
-                <Border Grid.Column="0" Background="{DynamicResource BackgroundBrush}">
+                <Border Grid.Column="0" Background="{DynamicResource WindowBackgroundBrush}">
                     <DockPanel>
                         <!-- 左下角云同步状态球：灰=未绑定/未同步，呼吸绿=同步中，绿=已同步，红=失败；点击重同步 -->
                         <Border x:Name="SyncBallBtn" DockPanel.Dock="Bottom" Background="Transparent" Cursor="Hand"

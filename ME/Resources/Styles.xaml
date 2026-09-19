@@ -23,6 +23,8 @@
     <Color x:Key="NavSelectedHoverColor">#0066DD</Color>
 
     <!-- Brushes -->
+    <!-- 注意：BackgroundBrush / CardBrush 等必须始终是 SolidColorBrush（代码里有强转），
+         毛玻璃的渐变底放在 WindowBackgroundBrush 上，只有窗口外壳使用 -->
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}" />
     <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
     <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}" />
@@ -32,6 +34,7 @@
     <SolidColorBrush x:Key="NavHoverBrush" Color="{StaticResource NavHoverColor}" />
     <SolidColorBrush x:Key="NavSelectedBrush" Color="{StaticResource NavSelectedColor}" />
     <SolidColorBrush x:Key="NavSelectedHoverBrush" Color="{StaticResource NavSelectedHoverColor}" />
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource BackgroundColor}" />
 
     <!-- Corner Radius -->
     <CornerRadius x:Key="CardCornerRadius">12</CornerRadius>

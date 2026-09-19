@@ -59,6 +59,10 @@ namespace ME.Models
         private double _progress;
         public double Progress { get => _progress; set { _progress = value; OnPropertyChanged(); } }
 
+        // 目标首次达到 100% 的日期；与安卓端 GoalCompletedAt 对齐。
+        private DateTime? _goalCompletedAt;
+        public DateTime? GoalCompletedAt { get => _goalCompletedAt; set { _goalCompletedAt = value; OnPropertyChanged(); } }
+
         private bool _isArchived;
         public bool IsArchived { get => _isArchived; set { _isArchived = value; OnPropertyChanged(); } }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ME.Models;
@@ -21,6 +22,7 @@ namespace ME.Data
             var items = JsonStore.Load<WaterContainer>(FileName);
             var maxId = items.Count > 0 ? items.Max(c => c.Id) : 0;
             container.Id = maxId + 1;
+            container.Uid = string.IsNullOrEmpty(container.Uid) ? Guid.NewGuid().ToString("N") : container.Uid;
             items.Add(container);
             JsonStore.Save(FileName, items);
             return container.Id;

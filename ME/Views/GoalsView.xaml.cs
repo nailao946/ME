@@ -374,8 +374,32 @@ namespace ME.Views
                 goals.Add(g);
             }
 
-            BuildGoalTree(GoalsPanel, goals);
+            var today = DateTime.Today;
+            var active = goals.Where(g => !g.GoalCompletedAt.HasValue).ToList();
+            var todayDone = goals.Where(g => g.GoalCompletedAt.HasValue && g.GoalCompletedAt.Value.Date == today).ToList();
+            var pastDone = goals.Where(g => g.GoalCompletedAt.HasValue && g.GoalCompletedAt.Value.Date < today).ToList();
+
+            GoalsPanel.Children.Clear();
+            AddGoalSection("进行中", active, (SolidColorBrush)FindResource("SecondaryTextBrush"));
+            AddGoalSection("今日已完成", todayDone, (SolidColorBrush)FindResource("AccentGreenBrush"));
+            AddGoalSection("过去完成", pastDone, (SolidColorBrush)FindResource("SecondaryTextBrush"));
             AnimateGoalCards();
+        }
+
+        private void AddGoalSection(string title, List<Goal> goals, Brush color)
+        {
+            if (goals == null || goals.Count == 0) return;
+            GoalsPanel.Children.Add(new TextBlock
+            {
+                Text = $"{title} ({goals.Count})",
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = color,
+                Margin = new Thickness(4, 4, 0, 6)
+            });
+            var section = new StackPanel();
+            GoalsPanel.Children.Add(section);
+            BuildGoalTree(section, goals);
         }
 
         private void AnimateGoalCards()
@@ -467,6 +491,17 @@ namespace ME.Views
                     {
                         Text = "任务已过期", FontSize = 10, FontWeight = FontWeights.Bold,
                         Foreground = new SolidColorBrush(Color.FromRgb(255, 59, 48)),
+                        Margin = new Thickness(0, 2, 0, 0)
+                    });
+                }
+
+                if (goal.GoalCompletedAt.HasValue)
+                {
+                    textPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"完成于 {goal.GoalCompletedAt.Value:yyyy-MM-dd}", FontSize = 10,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = (SolidColorBrush)FindResource("AccentGreenBrush"),
                         Margin = new Thickness(0, 2, 0, 0)
                     });
                 }
@@ -563,7 +598,7 @@ namespace ME.Views
                 {
                     Value = 0, Maximum = 100, Height = 8,
                     Margin = new Thickness(0, 5, 0, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor
                 };
                 pb.Loaded += (s, e) =>
@@ -943,7 +978,7 @@ namespace ME.Views
                 {
                     Maximum = 100, Height = 4,
                     Margin = new Thickness(0, 4, 120, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor,
                     Value = 0
                 };
@@ -990,7 +1025,7 @@ namespace ME.Views
                 {
                     Maximum = 100, Height = 4,
                     Margin = new Thickness(0, 4, 120, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor,
                     Value = 0
                 };

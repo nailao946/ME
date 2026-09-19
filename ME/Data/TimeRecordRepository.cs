@@ -40,6 +40,7 @@ namespace ME.Data
         {
             var records = JsonStore.Load<TimeRecord>(FileName);
             record.Id = records.Count > 0 ? records.Max(r => r.Id) + 1 : 1;
+            record.Uid = string.IsNullOrEmpty(record.Uid) ? Guid.NewGuid().ToString("N") : record.Uid;
             records.Add(record);
             JsonStore.Save(FileName, records);
             return record.Id;

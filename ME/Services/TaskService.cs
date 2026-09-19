@@ -73,12 +73,16 @@ namespace ME.Services
             var task = _repo.GetTaskById(taskId);
             if (task != null && task.QuantitativeMode.HasValue)
             {
+                // 先落今日基线，再应用本次变更，确保本次增量计入今天而不是基线
+                EnsureQuantBaseline(task);
                 if (task.QuantitativeMode.Value == QuantitativeMode.Accumulate)
                     task.QuantitativeCurrent = (task.QuantitativeCurrent ?? 0) + value;
                 else
                     task.QuantitativeCurrent = value;
 
                 _repo.UpdateTask(task);
+                if ((task.QuantitativeDailyMin ?? 0) > 0)
+                    EvalQuantitativeDaily(task, DateTime.Today);
 
                 if (task.GoalId.HasValue)
                     RecalcGoalProgress(task.GoalId.Value);
@@ -336,6 +340,49 @@ namespace ME.Services
         }
 
         /// <summary>
+        /// 确保量化任务已落"今日基线"快照（跨日首次访问时以当前值滚动，漏几天也只落当天一次）。
+        /// 当日完成口径：Accumulate = 当前值 - 今日基线 >= 每日目标；Update = 当前值 >= 每日目标。
+        /// </summary>
+        public void EnsureQuantBaseline(TaskItem task)
+        {
+            if (task == null || task.Type != TaskType.Quantitative) return;
+            var today = DateTime.Today;
+            if (task.QuantSnapDate.HasValue && task.QuantSnapDate.Value.Date == today) return;
+            task.QuantSnapDate = today;
+            task.QuantSnapValue = task.QuantitativeCurrent ?? task.QuantitativeStart ?? 0;
+            _repo.UpdateTask(task);
+        }
+
+        /// <summary>
+        /// 量化任务每日目标的"当日完成"判定：按今日基线重算，达标写当日完成记录、不达标删除。
+        /// 历史日期不重算，直接查记录。
+        /// </summary>
+        public bool EvalQuantitativeDaily(TaskItem task, DateTime date)
+        {
+            if (task == null || task.Type != TaskType.Quantitative
+                || !task.QuantitativeDailyMin.HasValue || task.QuantitativeDailyMin.Value <= 0)
+                return false;
+
+            if (date.Date != DateTime.Today)
+                return _completionRepo.IsCompletedOnDate(task.Id, date.ToString("yyyy-MM-dd"));
+
+            EnsureQuantBaseline(task);
+            double dailyMin = task.QuantitativeDailyMin.Value;
+            double cur = task.QuantitativeCurrent ?? 0;
+            // 缺少基线时以「当前值」为基线（与安卓端一致），避免把历史累计量误算成今日增量
+            double snap = task.QuantSnapValue ?? cur;
+            // 累加模式：当日进度必须比上一日最终值（今日基线）增加 N 才算完成；
+            // 更新模式：当前值达到每日目标即算完成
+            bool dayMet = task.QuantitativeMode == QuantitativeMode.Update
+                ? cur >= dailyMin
+                : cur - snap >= dailyMin;
+
+            if (dayMet) RecordCompletion(task.Id, date);
+            else RemoveCompletion(task.Id, date);
+            return dayMet;
+        }
+
+        /// <summary>
         /// Determines if a task should display as completed on a given date.
         /// Handles all task types including combined recurring+quantitative.
         /// </summary>
@@ -349,17 +396,19 @@ namespace ME.Services
             {
                 double current = task.QuantitativeCurrent ?? 0;
 
-                // Full target reached → always completed
-                if (current >= task.QuantitativeTarget.Value) return true;
+                // 总目标达成后是永久完成状态；完成日期只用于历史分组，不限制展示日期。
+                if (current >= task.QuantitativeTarget.Value)
+                    return true;
 
                 // Combined recurring+quantitative: only count actual + clicks via completion record
                 if (task.RecurringPattern.HasValue)
                     return _completionRepo.IsCompletedOnDate(task.Id, dateStr);
 
-                // Non-recurring quantitative: check daily min
+                // 非周期量化：每日目标按当日记录判定（今天先按基线口径重算一次）
                 double dailyMin = task.QuantitativeDailyMin ?? 0;
-                if (dailyMin > 0 && current >= dailyMin) return true;
-                return false;
+                if (dailyMin <= 0) return false;
+                if (checkDate.Date == DateTime.Today) return EvalQuantitativeDaily(task, checkDate);
+                return _completionRepo.IsCompletedOnDate(task.Id, dateStr);
             }
 
             // Recurring-only tasks
@@ -506,62 +555,45 @@ namespace ME.Services
         }
 
         /// <summary>
-        /// 计算单个任务的打卡率、剩余天数、连续打卡天数（原数据看板统计逻辑，抽取为共享方法）。
-        /// 定量任务：今天用 IsTaskCompletedForDisplay 判定，历史日期查完成记录；无截止日期时从开始日算起。
+        /// 任务在日历统计卡的三项数据：今日是否完成、剩余天数、全局连续打卡天数。
+        /// 连续打卡新口径：每日只要完成至少一个任务即打卡成功；无任务日跳过不断签；
+        /// 今天尚未完成时不计入今天也不中断。
         /// </summary>
-        public (double checkInRate, int remainingDays, int streakDays) GetTaskCheckInStats(TaskItem task)
+        public (bool doneToday, int remainingDays, int streakDays) GetTaskCheckInStats(TaskItem task)
         {
-            if (task == null) return (0, 0, 0);
+            if (task == null) return (false, 0, 0);
 
-            int totalDays = 0, checkedDays = 0;
-            var startDate = (task.StartDate ?? task.CreatedAt).Date;
-            for (var date = startDate; date <= DateTime.Today; date = date.AddDays(1))
-            {
-                bool shouldShow = false, isCompleted = false;
-                if (task.Type == TaskType.Quantitative)
-                {
-                    shouldShow = date >= startDate &&
-                                 (!task.EndDate.HasValue || date <= task.EndDate.Value.Date);
-                    if (shouldShow)
-                        isCompleted = date == DateTime.Today
-                            ? IsTaskCompletedForDisplay(task, date)
-                            : _completionRepo.IsCompletedOnDate(task.Id, date.ToString("yyyy-MM-dd"));
-                }
-                else if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
-                {
-                    shouldShow = ShouldShowRecurringTaskOnDate(task, date);
-                    if (shouldShow) isCompleted = IsRecurringTaskCompletedOnDate(task, date);
-                }
-                if (shouldShow) { totalDays++; if (isCompleted) checkedDays++; }
-            }
-
-            double checkInRate = totalDays > 0 ? (double)checkedDays / totalDays * 100 : 0;
+            bool doneToday = TaskDoneOnDate(task, DateTime.Today);
             int remainingDays = task.EndDate.HasValue ? Math.Max(0, (task.EndDate.Value.Date - DateTime.Today).Days) : 0;
+            return (doneToday, remainingDays, GetGlobalCheckInStreak());
+        }
+
+        /// <summary>
+        /// 全局连续打卡天数：从今天往回，当日完成 ≥1 个任务即打卡成功；
+        /// 当日没有该做的任务则跳过不断签；今天还没完成时从昨天开始数。
+        /// </summary>
+        public int GetGlobalCheckInStreak()
+        {
+            var tasks = _repo.GetAllTasks().Where(t => !t.IsDeleted && !t.ParentTaskId.HasValue).ToList();
+            if (tasks.Count == 0) return 0;
+            var records = _completionRepo.GetAll();
+            var earliest = tasks.Min(t => (t.StartDate ?? t.CreatedAt).Date);
+            if (earliest > DateTime.Today) earliest = DateTime.Today;
+
+            bool IsDayDone(DateTime d) => tasks.Any(t => TaskDoneOnDate(t, d, records));
+            bool IsDayDue(DateTime d) => tasks.Any(t => TaskDueOnDate(t, d));
 
             int streak = 0;
-            var curDate = DateTime.Today;
-            while (curDate >= startDate)
+            var day = DateTime.Today;
+            if (!IsDayDone(day))
+                day = day.AddDays(-1); // 今天还没打卡：不计入也不中断
+            while (day >= earliest)
             {
-                bool shouldShow = false, isCompleted = false;
-                if (task.Type == TaskType.Quantitative)
-                {
-                    shouldShow = curDate >= startDate &&
-                                 (!task.EndDate.HasValue || curDate <= task.EndDate.Value.Date);
-                    if (shouldShow)
-                        isCompleted = curDate == DateTime.Today
-                            ? IsTaskCompletedForDisplay(task, curDate)
-                            : _completionRepo.IsCompletedOnDate(task.Id, curDate.ToString("yyyy-MM-dd"));
-                }
-                else if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
-                {
-                    shouldShow = ShouldShowRecurringTaskOnDate(task, curDate);
-                    if (shouldShow) isCompleted = IsRecurringTaskCompletedOnDate(task, curDate);
-                }
-                if (shouldShow) { if (isCompleted) streak++; else break; }
-                curDate = curDate.AddDays(-1);
+                if (IsDayDone(day)) { streak++; day = day.AddDays(-1); continue; }
+                if (!IsDayDue(day)) { day = day.AddDays(-1); continue; } // 无任务日跳过不断签
+                break;
             }
-
-            return (checkInRate, remainingDays, streak);
+            return streak;
         }
     }
 }

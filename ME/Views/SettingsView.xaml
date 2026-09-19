@@ -57,7 +57,6 @@
                 <ListBoxItem Content="⚙️  通用" />
                 <ListBoxItem Content="⏱  专注与统计" />
                 <ListBoxItem Content="💾  数据与备份" />
-                <ListBoxItem Content="🧩  自定义模块" />
                 <ListBoxItem Content="🤖  AI 分析" />
                 <ListBoxItem Content="ℹ️  关于" />
             </ListBox>
@@ -76,14 +75,55 @@
                             <TextBlock Text="外观设置" FontSize="16" FontWeight="Bold"
                                        Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                <TextBlock Text="主题模式" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                <TextBlock Text="语言 / Language" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                            VerticalAlignment="Center" Width="100" />
-                                <ComboBox x:Name="ThemeCombo" Width="120" SelectionChanged="ThemeCombo_Changed"
+                                <ComboBox x:Name="LanguageCombo" Width="120" SelectionChanged="LanguageCombo_Changed"
                                           Style="{StaticResource MacComboBoxStyle}">
-                                    <ComboBoxItem Content="浅色" Tag="Light" />
-                                    <ComboBoxItem Content="深色" Tag="Dark" />
-                                    <ComboBoxItem Content="跟随系统" Tag="System" />
+                                    <ComboBoxItem Content="跟随系统 / System" Tag="system" />
+                                    <ComboBoxItem Content="中文" Tag="zh" />
+                                    <ComboBoxItem Content="English" Tag="en" />
                                 </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <TextBlock Text="主题风格" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" Width="100" />
+                                <StackPanel x:Name="ThemeStylePanel" Orientation="Horizontal">
+                                    <!-- 主题风格按钮在代码后端生成（普通 / 毛玻璃） -->
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <TextBlock Text="深浅模式" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                           VerticalAlignment="Center" Width="100" />
+                                <StackPanel x:Name="ThemeTonePanel" Orientation="Horizontal">
+                                    <!-- 深浅模式按钮在代码后端生成（浅色 / 深色 / 跟随系统） -->
+                                </StackPanel>
+                            </StackPanel>
+                            <!-- 毛玻璃专属设置（仅毛玻璃风格下显示） -->
+                            <StackPanel x:Name="GlassOptionsPanel" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="玻璃背景" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                               VerticalAlignment="Center" Width="100" />
+                                    <StackPanel x:Name="GlassModePanel" Orientation="Horizontal">
+                                        <!-- 渐变配色 / 背景图片 / 纯透明 -->
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="渐变配色" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                               VerticalAlignment="Center" Width="100" />
+                                    <StackPanel x:Name="GlassGradientPanel" Orientation="Horizontal" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="窗口透明度" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                               VerticalAlignment="Center" Width="100" />
+                                    <Slider x:Name="GlassOpacitySlider" Width="170" Minimum="20" Maximum="100"
+                                            TickFrequency="5" IsSnapToTickEnabled="True"
+                                            ValueChanged="GlassOpacity_Changed" />
+                                    <TextBlock x:Name="GlassOpacityText" FontSize="12" Margin="10,0,0,0"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Width="40" />
+                                    <Button x:Name="GlassImageBtn" Content="选择图片…" Click="GlassImage_Click"
+                                            Style="{StaticResource SecondaryButtonStyle}" FontSize="12"
+                                            Padding="10,4,10,4" Margin="10,0,0,0" Cursor="Hand" />
+                                </StackPanel>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock Text="窗口边框颜色" FontSize="13" Foreground="{DynamicResource TextBrush}"
@@ -388,24 +428,19 @@
                                         Style="{StaticResource PrimaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
                                 <Button x:Name="SyncPullBtn" Content="下载数据" Click="SyncPull_Click"
                                         Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" Margin="0,0,8,0" />
+                                <Button x:Name="SyncDiagnoseBtn" Content="诊断连接" Click="SyncDiagnose_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" Margin="0,0,8,0"
+                                        ToolTip="逐个云端测试：连接 → 列目录 → 读文件，并给出各步耗时，用于定位同步失败" />
+                                <Button x:Name="SyncConflictBtn" Content="处理冲突" Click="SyncConflict_Click"
+                                        Style="{StaticResource DangerButtonStyle}" Padding="16,8" Margin="0,0,8,0"
+                                        Visibility="Collapsed"
+                                        ToolTip="双方都改过且无法自动合并的文件，逐个选择用本机还是用云端" />
                                 <TextBlock x:Name="SyncStatusText" FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            VerticalAlignment="Center" TextWrapping="Wrap" />
                             </StackPanel>
                             <TextBlock x:Name="SyncLastTimeText" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <StackPanel x:Name="Sec_Modules" Visibility="Collapsed">
-                    <!-- Custom Modules hint -->
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <TextBlock Text="自定义模块（可扩展记录块）" FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
-                            <TextBlock FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"
-                                       Text="教程：在左侧导航打开「自定义模块」→ 点「＋ 新建模块」→ 填名称、选颜色和图标 → 添加字段（如「跑步」类型数值，单位 km）→ 保存。之后在模块卡片上点「记一笔」录入，点「历史」看趋势图。模块数据存于 custom_modules.json，随备份/云同步在 PC 与安卓互通，每个模块可随时编辑。" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

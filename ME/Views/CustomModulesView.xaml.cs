@@ -115,8 +115,11 @@ namespace ME.Views
             var color = ParseColor(m.ColorHex);
             var root = new StackPanel();
 
-            // —— 模块标题行 ——
-            var headGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            // —— 模块主卡片（飞书卡片风格：头部信息 + 最近记录摘要 + 细分割线 + 底部操作区） ——
+            var headCard = FeishuCard();
+            var headRoot = new StackPanel();
+
+            var headGrid = new Grid();
             headGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             headGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -135,31 +138,66 @@ namespace ME.Views
 
             var titleCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
             titleCol.Children.Add(new TextBlock { Text = m.Name, FontSize = 17, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") });
-            var fieldsText = string.Join("、", m.Fields.Select(f => f.Label + (string.IsNullOrEmpty(f.Unit) ? "" : $"({f.Unit})")));
+            var fieldsText = string.Join(" · ", m.Fields.Select(f => f.Label + (string.IsNullOrEmpty(f.Unit) ? "" : $"（{f.Unit}）")));
             titleCol.Children.Add(new TextBlock
             {
-                Text = $"{(fieldsText == "" ? "无字段" : fieldsText)} · 共 {m.Records.Count} 条记录",
-                FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush")
+                Text = fieldsText == "" ? "暂无字段" : fieldsText,
+                FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                TextTrimming = TextTrimming.CharacterEllipsis
             });
             Grid.SetColumn(titleCol, 1);
 
-            var btns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            Button MakeBtn(string content, RoutedEventHandler onClick, bool primary = false)
+            // 记录数徽标（飞书卡片右上角常见的信息胶囊）
+            var countBadge = new Border
             {
-                var b = new Button
+                CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center,
+                Background = new SolidColorBrush(Color.FromArgb(34, color.R, color.G, color.B)),
+                Padding = new Thickness(10, 4, 10, 4)
+            };
+            countBadge.Child = new TextBlock
+            {
+                Text = $"{m.Records.Count} 条", FontSize = 12, FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(color)
+            };
+            Grid.SetColumn(countBadge, 2);
+
+            headGrid.Children.Add(iconBox); headGrid.Children.Add(titleCol); headGrid.Children.Add(countBadge);
+            headRoot.Children.Add(headGrid);
+
+            // 最近一条记录摘要
+            var last = m.Records.OrderByDescending(r => r.Date).ThenByDescending(r => r.Time).FirstOrDefault();
+            if (last != null)
+            {
+                var summary = new Border
                 {
-                    Content = content,
-                    Style = (Style)FindResource(primary ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
-                    Padding = new Thickness(13, 6, 13, 6), FontSize = 12, Margin = new Thickness(6, 0, 0, 0),
-                    Cursor = Cursors.Hand
+                    CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8),
+                    Margin = new Thickness(0, 10, 0, 0),
+                    Background = (Brush)FindResource("BackgroundBrush")
                 };
-                b.Click += onClick;
-                return b;
+                var sumSp = new StackPanel();
+                sumSp.Children.Add(new TextBlock
+                {
+                    Text = $"最近记录 · {last.Date} {last.Time}",
+                    FontSize = 10.5, Foreground = (Brush)FindResource("SecondaryTextBrush")
+                });
+                sumSp.Children.Add(new TextBlock
+                {
+                    Text = RecordValuesText(m, last), FontSize = 12,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis
+                });
+                summary.Child = sumSp;
+                headRoot.Children.Add(summary);
             }
-            btns.Children.Add(MakeBtn("＋ 记一笔", (s, e) => ShowRecordDialog(m), primary: true));
-            btns.Children.Add(MakeBtn("全部记录", (s, e) => ShowHistoryDialog(m)));
-            btns.Children.Add(MakeBtn("编辑", (s, e) => ShowEditorDialog(m)));
-            btns.Children.Add(MakeBtn("删除", (s2, e2) =>
+
+            headRoot.Children.Add(FeishuDivider());
+
+            // 底部操作区：主操作在左，危险操作靠右
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            actions.Children.Add(FeishuAction("＋", "记一笔", (Brush)FindResource("PrimaryBrush"), (s, e) => ShowRecordDialog(m)));
+            actions.Children.Add(FeishuAction("🕘", "全部记录", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ShowHistoryDialog(m)));
+            actions.Children.Add(FeishuAction("✎", "编辑", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ShowEditorDialog(m)));
+            actions.Children.Add(FeishuAction("🗑", "删除", new SolidColorBrush(Color.FromRgb(255, 59, 48)), (s2, e2) =>
             {
                 if (MessageBox.Show($"确定删除「{m.Name}」及其全部 {m.Records.Count} 条记录吗？", "删除模块",
                         MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
@@ -167,10 +205,10 @@ namespace ME.Views
                 if (_selectedModuleId == m.Id) _selectedModuleId = 0;
                 Reload();
             }));
-            Grid.SetColumn(btns, 2);
+            headRoot.Children.Add(actions);
 
-            headGrid.Children.Add(iconBox); headGrid.Children.Add(titleCol); headGrid.Children.Add(btns);
-            root.Children.Add(headGrid);
+            headCard.Child = headRoot;
+            root.Children.Add(headCard);
 
             // —— 内置统计行（今日 / 本周 / 全部 / 连续） ——
             var builtins = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, 0, 10) };
@@ -195,7 +233,7 @@ namespace ME.Views
                 BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1, 1, 1, 1),
                 Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 10),
                 Child = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-                ToolTip = "添加统计组件（数值统计 / 趋势图 / 分布占比 / 连续打卡）"
+                ToolTip = "添加统计组件（数值统计 / 趋势图 / 柱状图 / 分布占比 / 连续打卡 / 最近记录）"
             };
             addCard.Child = new TextBlock
             {
@@ -213,25 +251,32 @@ namespace ME.Views
             var recent = m.Records.OrderByDescending(r => r.Date).ThenByDescending(r => r.Time).Take(6).ToList();
             if (recent.Count > 0)
             {
-                var card = new Border
-                {
-                    Style = (Style)FindResource("CardStyle"), Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(14)
-                };
+                var card = FeishuCard();
                 var sp = new StackPanel();
-                sp.Children.Add(new TextBlock { Text = "最近记录", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 8) });
+                sp.Children.Add(new TextBlock { Text = "最近记录", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 8) });
                 foreach (var r in recent) sp.Children.Add(BuildRecordRow(m, r, reloadAfterDelete: false));
-                var more = new TextBlock
-                {
-                    Text = "查看全部记录 →", FontSize = 11.5, Cursor = Cursors.Hand, Margin = new Thickness(0, 6, 0, 0),
-                    Foreground = (Brush)FindResource("PrimaryBrush")
-                };
-                more.MouseLeftButtonDown += (s, e) => ShowHistoryDialog(m);
-                sp.Children.Add(more);
+                sp.Children.Add(FeishuDivider());
+                var moreRow = new StackPanel { Orientation = Orientation.Horizontal };
+                moreRow.Children.Add(FeishuAction("🕘", "查看全部记录", (Brush)FindResource("PrimaryBrush"), (s, e) => ShowHistoryDialog(m)));
+                moreRow.Children.Add(FeishuAction("＋", "记一笔", (Brush)FindResource("SecondaryTextBrush"), (s, e) => ShowRecordDialog(m)));
+                sp.Children.Add(moreRow);
                 card.Child = sp;
                 root.Children.Add(card);
             }
             return root;
         }
+
+        // ============ 飞书卡片风格基础件（实现下沉到 Services/FeishuCards.cs，供多页复用） ============
+
+        private Border FeishuCard(double padding = 16) => Services.FeishuCards.Card(this, padding);
+
+        private FrameworkElement FeishuDivider() => Services.FeishuCards.Divider(this);
+
+        private FrameworkElement FeishuAction(string icon, string label, Brush fg, MouseButtonEventHandler onClick)
+            => Services.FeishuCards.Action(this, icon, label, fg, onClick);
+
+        private static string RecordValuesText(CustomModule m, CustomModuleRecord r)
+            => Services.FeishuCards.RecordValuesText(m, r);
 
         private FrameworkElement BuildStatCell(string label, string value, Color color)
         {
@@ -239,7 +284,7 @@ namespace ME.Views
             {
                 Background = (Brush)FindResource("CardBrush"),
                 BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 10, 14, 10),
+                CornerRadius = new CornerRadius(14), Padding = new Thickness(16, 12, 16, 12),
                 Margin = new Thickness(0, 0, 10, 0), MinWidth = 110
             };
             var sp = new StackPanel();
@@ -310,6 +355,8 @@ namespace ME.Views
                 "chart" => BuildWidgetChartBody(m, w, color),
                 "pie" => BuildWidgetPieBody(m, w, color),
                 "streak" => BuildWidgetStreakBody(m, w, color),
+                "bars" => BuildWidgetBarsBody(m, w, color),
+                "recent" => BuildWidgetRecentBody(m, w, color),
                 _ => BuildWidgetStatBody(m, w, color)
             };
             card.Child = body;
@@ -323,6 +370,8 @@ namespace ME.Views
             return w.Type switch
             {
                 "chart" => $"{fname} · 近 {w.Days} 天趋势",
+                "bars" => $"{fname} · 近 {w.Days} 天柱状图",
+                "recent" => "最近记录",
                 "pie" => $"{fname} · 分布",
                 "streak" => f == null ? "连续打卡" : $"{fname} · 连续",
                 _ => $"{AggName(w.Agg)}{RangeName(w.Range)} · {fname}"
@@ -390,6 +439,84 @@ namespace ME.Views
             if (f == null) return WidgetShell(WidgetTitle(m, w), m.ColorHex, new TextBlock { Text = "字段不存在", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush") });
             var canvas = BuildTrendCanvas(m, f, w.Days, 200, 74);
             return WidgetShell(WidgetTitle(m, w), m.ColorHex, canvas);
+        }
+
+        /// <summary>柱状图组件：近 N 天每天合计的数值（按天分桶，直观对比每日投入）</summary>
+        private FrameworkElement BuildWidgetBarsBody(CustomModule m, CustomDashboardWidget w, Color color)
+        {
+            var f = m.Fields.FirstOrDefault(x => x.Key == w.FieldKey);
+            if (f == null) return WidgetShell(WidgetTitle(m, w), m.ColorHex, new TextBlock { Text = "字段不存在", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush") });
+
+            var today = DateTime.Today;
+            int days = Math.Max(3, w.Days);
+            var buckets = new (string Label, double Value)[days];
+            for (int i = 0; i < days; i++)
+            {
+                var d = today.AddDays(-(days - 1 - i));
+                buckets[i] = (d.ToString("MM/dd"), 0);
+            }
+            foreach (var r in m.Records)
+            {
+                if (!DateTime.TryParse(r.Date, out var rd)) continue;
+                int idx = (rd.Date - today.AddDays(-(days - 1))).Days;
+                if (idx < 0 || idx >= days) continue;
+                if (r.Values.TryGetValue(f.Key, out var v) && double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var n))
+                    buckets[idx].Value += n;
+            }
+            double max = buckets.Max(b => b.Value);
+            var grid = new Grid { Height = 74, VerticalAlignment = VerticalAlignment.Bottom };
+            for (int i = 0; i < days; i++)
+            {
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                double ratio = max <= 0 ? 0 : buckets[i].Value / max;
+                var barWrap = new Grid { VerticalAlignment = VerticalAlignment.Bottom, Height = 74 };
+                var bar = new Border
+                {
+                    Height = Math.Max(3, 68 * ratio), VerticalAlignment = VerticalAlignment.Bottom,
+                    CornerRadius = new CornerRadius(2, 2, 0, 0),
+                    Background = new SolidColorBrush(Color.FromArgb(190, color.R, color.G, color.B)),
+                    ToolTip = $"{buckets[i].Label}：{buckets[i].Value:0.#}"
+                };
+                barWrap.Children.Add(bar);
+                Grid.SetColumn(barWrap, i);
+                grid.Children.Add(barWrap);
+            }
+            var labels = new TextBlock
+            {
+                Text = $"{buckets.First().Label} — {buckets.Last().Label}", FontSize = 9,
+                Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            var sp = new StackPanel();
+            sp.Children.Add(grid);
+            sp.Children.Add(labels);
+            return WidgetShell(WidgetTitle(m, w), m.ColorHex, sp);
+        }
+
+        /// <summary>最近记录组件：直接把最新几条记录铺在卡片里，不用点开历史就能看到</summary>
+        private FrameworkElement BuildWidgetRecentBody(CustomModule m, CustomDashboardWidget w, Color color)
+        {
+            var recent = m.Records.OrderByDescending(r => r.Date).ThenByDescending(r => r.Time).Take(5).ToList();
+            if (recent.Count == 0)
+                return WidgetShell(WidgetTitle(m, w), m.ColorHex, new TextBlock { Text = "暂无记录", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush") });
+            var sp = new StackPanel();
+            foreach (var r in recent)
+            {
+                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+                row.Children.Add(new TextBlock
+                {
+                    Text = RecordValuesText(m, r), FontSize = 11.5,
+                    Foreground = (Brush)FindResource("TextBrush"),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+                row.Children.Add(new TextBlock
+                {
+                    Text = $"{r.Date} {r.Time}", FontSize = 9.5,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush")
+                });
+                sp.Children.Add(row);
+            }
+            return WidgetShell(WidgetTitle(m, w), m.ColorHex, sp);
         }
 
         private FrameworkElement BuildWidgetPieBody(CustomModule m, CustomDashboardWidget w, Color color)
@@ -461,7 +588,7 @@ namespace ME.Views
 
             root.Children.Add(new TextBlock { Text = "组件类型", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 6) });
             var typePanel = new UniformGrid { Columns = 4 };
-            var typeOpts = new[] { ("stat", "数值统计"), ("chart", "趋势图"), ("pie", "分布占比"), ("streak", "连续打卡") };
+            var typeOpts = new[] { ("stat", "数值统计"), ("chart", "趋势图"), ("bars", "柱状图"), ("pie", "分布占比"), ("streak", "连续打卡"), ("recent", "最近记录") };
             var typeBtns = new List<Button>();
             foreach (var (tp, name) in typeOpts)
             {
@@ -729,60 +856,193 @@ namespace ME.Views
 
         private void AddModule_Click(object sender, RoutedEventArgs e) => ShowEditorDialog(null);
 
+        /// <summary>快速模板：一键填好常用模块的字段（图标/颜色/字段），再按需微调</summary>
+        private static readonly (string Name, int Icon, string Color, (string Label, string Type, string Unit, string Options)[] Fields)[] ModulePresets =
+        {
+            ("跑步", 2, "#FF6B6B", new[] { ("距离", "number", "km", ""), ("路线", "text", "", ""), ("体感", "select", "", "轻松,正常,吃力") }),
+            ("喝水", 3, "#5AC8FA", new[] { ("杯数", "number", "杯", "") }),
+            ("体重", 1, "#8E8E93", new[] { ("体重", "number", "kg", "") }),
+            ("阅读", 6, "#AF52DE", new[] { ("页数", "number", "页", ""), ("状态", "select", "", "想读,在读,读完") }),
+            ("日记", 15, "#4F6EF7", new[] { ("标题", "text", "", ""), ("心情", "select", "", "好,中,差") }),
+            ("睡眠", 4, "#2E9E5B", new[] { ("时长", "number", "小时", ""), ("入睡", "time", "", "") }),
+        };
+
+        private static readonly string[] ColorPresets =
+        {
+            "#4F6EF7", "#2E9E5B", "#7C5CE0", "#E05C8A", "#E0883C", "#2BA8A8",
+            "#FF6B6B", "#5AC8FA", "#AF52DE", "#E0A93C", "#8E8E93", "#1C1C1E"
+        };
+
         private void ShowEditorDialog(CustomModule initial)
         {
-            var win = MakeDialogWindow(initial == null ? "新建模块" : "编辑模块", 560, 620);
+            var win = MakeDialogWindow(initial == null ? "新建模块" : "编辑模块", 640, 720);
 
             var root = new StackPanel { Margin = new Thickness(18) };
+            string name = initial?.Name ?? "";
+            int iconIdx = initial?.Icon ?? 0;
+            string colorHex = initial?.ColorHex ?? "#4F6EF7";
 
-            var nameBox = new TextBox { Text = initial?.Name ?? "", FontSize = 13, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
+            // —— 实时预览：所见即所得的模块卡头部 ——
+            var previewCard = FeishuCard(14);
+            root.Children.Add(new TextBlock { Text = "预览", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 0, 0, 4) });
+            root.Children.Add(previewCard);
+
+            void RenderPreview()
+            {
+                var c = ParseColor(colorHex);
+                var head = new Grid();
+                head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                head.Children.Add(new Border
+                {
+                    Width = 40, Height = 40, CornerRadius = new CornerRadius(11),
+                    Background = new SolidColorBrush(Color.FromArgb(38, c.R, c.G, c.B)),
+                    Child = new TextBlock
+                    {
+                        Text = ModuleIcons[Math.Min(iconIdx, ModuleIcons.Length - 1)], FontSize = 19,
+                        FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"),
+                        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+                    }
+                });
+                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0) };
+                col.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(name) ? "模块名称" : name, FontSize = 15, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") });
+                col.Children.Add(new TextBlock { Text = "记录会显示在这里", FontSize = 10.5, Foreground = (Brush)FindResource("SecondaryTextBrush") });
+                Grid.SetColumn(col, 1);
+                head.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    Background = new SolidColorBrush(Color.FromArgb(34, c.R, c.G, c.B)),
+                    Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock { Text = "0 条", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(c) }
+                });
+                previewCard.Child = head;
+            }
+
+            // —— 快速模板（先只建芯片，点击行为在所有局部变量声明完之后统一挂接） ——
+            var presetChips = new List<(Border Chip, (string Name, int Icon, string Color, (string Label, string Type, string Unit, string Options)[] Fields) Preset)>();
+            var presetRow = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+            foreach (var p in ModulePresets)
+            {
+                var chip = new Border
+                {
+                    CornerRadius = new CornerRadius(14), Padding = new Thickness(11, 5, 11, 5),
+                    Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand,
+                    Background = (Brush)FindResource("CardBrush"), BorderBrush = (Brush)FindResource("BorderBrush"),
+                    BorderThickness = new Thickness(1), ToolTip = "点击套用该模板的字段"
+                };
+                var sp = new StackPanel { Orientation = Orientation.Horizontal };
+                sp.Children.Add(new TextBlock { Text = ModuleIcons[p.Icon], FontSize = 12, FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"), VerticalAlignment = VerticalAlignment.Center });
+                sp.Children.Add(new TextBlock { Text = p.Name, FontSize = 12, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource("TextBrush") });
+                chip.Child = sp;
+                presetChips.Add((chip, p));
+                presetRow.Children.Add(chip);
+            }
+
+            // —— 名称 ——
+            var nameBox = new TextBox { Text = name, FontSize = 13, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
+            nameBox.TextChanged += (s, e) => { name = nameBox.Text; RenderPreview(); };
             root.Children.Add(FormRow("模块名称", nameBox));
 
-            int iconIdx = initial?.Icon ?? 0;
-            var iconPanel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-            for (int i = 0; i < ModuleIcons.Length; i++)
-            {
-                int idx = i;
-                var b = new Button
-                {
-                    Content = ModuleIcons[i], FontSize = 16, Width = 40, Height = 36,
-                    Padding = new Thickness(0),
-                    FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"),
-                    Margin = new Thickness(0, 0, 4, 4),
-                    Style = (Style)FindResource("SecondaryButtonStyle"), Cursor = Cursors.Hand
-                };
-                b.Click += (s, e) => iconIdx = idx;
-                iconPanel.Children.Add(b);
-            }
-            root.Children.Add(FormRow("图标（点击选中）", iconPanel));
+            root.Children.Add(new TextBlock { Text = "快速模板", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 10, 0, 2) });
+            root.Children.Add(presetRow);
 
-            string colorHex = initial?.ColorHex ?? "#4F6EF7";
-            // 颜色：圆形颜料盘（点击色球按钮弹出，不再手输颜色代码）
-            var colorBtn = new Button { Height = 34, Width = 150, Padding = new Thickness(0), Cursor = Cursors.Hand };
+            // —— 图标（带选中态：主题色描边 + 淡底 + 右上角 ✓） ——
+            var iconPanel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var emojiFont = new System.Windows.Media.FontFamily("Segoe UI Emoji");
+            FrameworkElement BuildIconButton(int i)
+            {
+                var c = ParseColor(colorHex);
+                bool selected = i == iconIdx;
+                var grid = new Grid { Width = 42, Height = 42 };
+                grid.Children.Add(new TextBlock
+                {
+                    Text = ModuleIcons[i], FontSize = 19, FontFamily = emojiFont,
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+                });
+                if (selected)
+                {
+                    grid.Children.Add(new Border
+                    {
+                        Width = 15, Height = 15, CornerRadius = new CornerRadius(8),
+                        Background = new SolidColorBrush(c),
+                        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                        Margin = new Thickness(0, 1, 1, 0),
+                        Child = new TextBlock
+                        {
+                            Text = "✓", FontSize = 9, Foreground = Brushes.White,
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+                        }
+                    });
+                }
+                var b = new Border
+                {
+                    Child = grid, Cursor = Cursors.Hand,
+                    CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6),
+                    Background = selected ? new SolidColorBrush(Color.FromArgb(40, c.R, c.G, c.B)) : Brushes.Transparent,
+                    BorderBrush = selected ? new SolidColorBrush(c) : (Brush)FindResource("BorderBrush"),
+                    BorderThickness = new Thickness(selected ? 2 : 1)
+                };
+                b.MouseEnter += (s2, e2) => { if (i != iconIdx) b.Background = (Brush)FindResource("NavHoverBrush"); };
+                b.MouseLeave += (s2, e2) => { if (i != iconIdx) b.Background = Brushes.Transparent; };
+                b.MouseLeftButtonDown += (s2, e2) => { iconIdx = i; RenderIcons(); RenderPreview(); };
+                return b;
+            }
+            void RenderIcons()
+            {
+                iconPanel.Children.Clear();
+                for (int i = 0; i < ModuleIcons.Length; i++) iconPanel.Children.Add(BuildIconButton(i));
+            }
+            RenderIcons();
+            root.Children.Add(new TextBlock { Text = "图标（点选后带 ✓ 选中标记）", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 10, 0, 2) });
+            root.Children.Add(iconPanel);
+
+            // —— 颜色：预设色球 + 自定义 ——
+            var colorRow = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+            var colorBtn = new Button { Height = 30, Width = 96, Padding = new Thickness(0), Cursor = Cursors.Hand, Margin = new Thickness(8, 0, 0, 0), Style = (Style)FindResource("SecondaryButtonStyle"), Content = "自定义…" };
             void RenderColorBtn()
             {
-                var p = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-                p.Children.Add(new System.Windows.Shapes.Ellipse
+                colorRow.Children.Clear();
+                foreach (var hex in ColorPresets)
                 {
-                    Width = 14, Height = 14,
-                    Fill = new SolidColorBrush(ParseColor(colorHex)),
-                    Margin = new Thickness(0, 0, 6, 0)
-                });
-                p.Children.Add(new TextBlock { Text = "点击选择颜色", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-                colorBtn.Content = p;
+                    var ball = new Border
+                    {
+                        Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Cursor = Cursors.Hand,
+                        Margin = new Thickness(0, 0, 6, 0),
+                        Background = new SolidColorBrush(ParseColor(hex)),
+                        BorderBrush = string.Equals(hex, colorHex, StringComparison.OrdinalIgnoreCase)
+                            ? (Brush)FindResource("TextBrush") : (Brush)FindResource("BorderBrush"),
+                        BorderThickness = new Thickness(string.Equals(hex, colorHex, StringComparison.OrdinalIgnoreCase) ? 2 : 1)
+                    };
+                    var h = hex; // 捕获
+                    ball.MouseLeftButtonDown += (s2, e2) => { colorHex = h; RenderColorBtn(); RenderIcons(); RenderPreview(); };
+                    colorRow.Children.Add(ball);
+                }
+                colorRow.Children.Add(colorBtn);
             }
             colorBtn.Click += (s, e) =>
             {
                 var picked = ColorPaletteDialog.Show(win, colorHex);
-                if (picked != null) { colorHex = picked; RenderColorBtn(); }
+                if (picked != null) { colorHex = picked; RenderColorBtn(); RenderIcons(); RenderPreview(); }
             };
             RenderColorBtn();
-            root.Children.Add(FormRow("颜色", colorBtn));
+            root.Children.Add(new TextBlock { Text = "颜色", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 10, 0, 2) });
+            root.Children.Add(colorRow);
 
-            // 字段编辑
+            // —— 字段编辑（带排序与类型说明） ——
             var fieldsPanel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
             var fields = initial?.Fields.Select(f => new FieldDraft { Label = f.Label, Type = f.Type, Unit = f.Unit ?? "", Options = f.Options ?? "" }).ToList()
                          ?? new List<FieldDraft> { new FieldDraft { Label = "数值", Type = "number" } };
+
+            void MoveField(int idx, int delta)
+            {
+                int target = idx + delta;
+                if (target < 0 || target >= fields.Count) return;
+                var f = fields[idx];
+                fields.RemoveAt(idx);
+                fields.Insert(target, f);
+                RenderFields();
+            }
 
             void RenderFields()
             {
@@ -794,11 +1054,11 @@ namespace ME.Views
                     var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
 
                     var labelBox = new TextBox { Text = f.Label, FontSize = 12, Height = 30, Padding = new Thickness(6, 3, 6, 3), VerticalContentAlignment = VerticalAlignment.Center };
                     labelBox.TextChanged += (s, e) => f.Label = labelBox.Text;
@@ -812,11 +1072,21 @@ namespace ME.Views
                     unitBox.TextChanged += (s, e) => f.Unit = unitBox.Text;
                     Grid.SetColumn(unitBox, 4);
 
-                    var delBtn = new Button { Content = "移除", Style = (Style)FindResource("DangerButtonStyle"), FontSize = 11, Padding = new Thickness(6, 4, 6, 4) };
-                    delBtn.Click += (s, e) => { if (fields.Count > 1) { fields.RemoveAt(idx); RenderFields(); } };
-                    Grid.SetColumn(delBtn, 6);
+                    var ops = new StackPanel { Orientation = Orientation.Horizontal };
+                    Button OpBtn(string content, string tip, RoutedEventHandler onClick)
+                    {
+                        var b = new Button { Content = content, Style = (Style)FindResource("SecondaryButtonStyle"), FontSize = 11, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 4, 0), Cursor = Cursors.Hand, ToolTip = tip };
+                        b.Click += onClick;
+                        return b;
+                    }
+                    ops.Children.Add(OpBtn("↑", "上移", (s2, e2) => MoveField(idx, -1)));
+                    ops.Children.Add(OpBtn("↓", "下移", (s2, e2) => MoveField(idx, 1)));
+                    var delBtn = OpBtn("✕", "移除字段", (s2, e2) => { if (fields.Count > 1) { fields.RemoveAt(idx); RenderFields(); } });
+                    delBtn.Style = (Style)FindResource("DangerButtonStyle");
+                    ops.Children.Add(delBtn);
+                    Grid.SetColumn(ops, 6);
 
-                    row.Children.Add(labelBox); row.Children.Add(typeCombo); row.Children.Add(unitBox); row.Children.Add(delBtn);
+                    row.Children.Add(labelBox); row.Children.Add(typeCombo); row.Children.Add(unitBox); row.Children.Add(ops);
                     fieldsPanel.Children.Add(row);
 
                     if (f.Type == "select")
@@ -834,7 +1104,22 @@ namespace ME.Views
             }
             RenderFields();
 
-            root.Children.Add(new TextBlock { Text = "字段定义", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 10, 0, 4) });
+            // 挂接快速模板（此时 nameBox / fields / RenderXxx 均已就绪）
+            foreach (var (chip, p) in presetChips)
+            {
+                chip.MouseLeftButtonDown += (s, e) =>
+                {
+                    if (initial != null && MessageBox.Show("套用模板会覆盖当前字段定义，继续吗？", "套用模板", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+                    name = p.Name;
+                    nameBox.Text = p.Name;
+                    iconIdx = p.Icon;
+                    colorHex = p.Color;
+                    fields = p.Fields.Select(f => new FieldDraft { Label = f.Label, Type = f.Type, Unit = f.Unit, Options = f.Options }).ToList();
+                    RenderColorBtn(); RenderIcons(); RenderPreview(); RenderFields();
+                };
+            }
+
+            root.Children.Add(new TextBlock { Text = "字段定义（↑↓ 调整记录时的填写顺序）", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 10, 0, 2) });
             root.Children.Add(fieldsPanel);
             var addFieldBtn = new Button { Content = "＋ 添加字段", Style = (Style)FindResource("SecondaryButtonStyle"), FontSize = 12, Padding = new Thickness(10, 5, 10, 5), HorizontalAlignment = HorizontalAlignment.Left, Cursor = Cursors.Hand };
             addFieldBtn.Click += (s, e) => { fields.Add(new FieldDraft { Label = "", Type = "number" }); RenderFields(); };
@@ -871,6 +1156,7 @@ namespace ME.Views
             };
             root.Children.Add(saveBtn);
 
+            RenderPreview();
             ((Border)win.Tag).Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
             win.ShowDialog();
         }
@@ -879,7 +1165,9 @@ namespace ME.Views
 
         private void ShowRecordDialog(CustomModule m)
         {
-            var win = MakeDialogWindow($"记录 · {m.Name}", 520, 560);
+            // 自适应：高度随字段数量伸缩（少量字段时窗口更紧凑，多字段时封顶并内部滚动）
+            int height = Math.Min(780, 190 + m.Fields.Count * 64 + (m.Fields.Any(f => f.Type == "select") ? 30 : 0) + 130);
+            var win = MakeDialogWindow($"记录 · {m.Name}", 500, height);
             var root = new StackPanel { Margin = new Thickness(18) };
             var values = new Dictionary<string, string>();
 

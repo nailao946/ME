@@ -17,12 +17,12 @@ namespace ME.Views
     public partial class ReviewView : UserControl
     {
         private enum ReviewPeriod { Today, Week, Month, All }
-        private ReviewPeriod _currentPeriod = ReviewPeriod.Week;
+        private ReviewPeriod _currentPeriod = ReviewPeriod.Today;
         private readonly TaskCompletionRepository _completionRepo;
         private readonly TimeRecordRepository _timeRecordRepo;
         private readonly TimeTagRepository _timeTagRepo;
         private HashSet<int> _selectedTagIds = new HashSet<int>();
-        private ReviewPeriod _statsPeriod = ReviewPeriod.Week;
+        private ReviewPeriod _statsPeriod = ReviewPeriod.Today;
         private bool _tagsInited = false;
 
         private static readonly Color[] LineChartColors = new[]

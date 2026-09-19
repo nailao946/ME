@@ -22,7 +22,7 @@
                                 Style="{StaticResource SecondaryButtonStyle}" Padding="16,6" Margin="0,0,6,0" />
                         <Button x:Name="WeeklyBtn" Content="本周" Click="PeriodBtn_Click"
                                 Tag="Week"
-                                Style="{StaticResource PrimaryButtonStyle}" Padding="16,6" Margin="0,0,6,0" />
+                                Style="{StaticResource SecondaryButtonStyle}" Padding="16,6" Margin="0,0,6,0" />
                         <Button x:Name="MonthlyBtn" Content="本月" Click="PeriodBtn_Click"
                                 Tag="Month"
                                 Style="{StaticResource SecondaryButtonStyle}" Padding="16,6" Margin="0,0,6,0" />

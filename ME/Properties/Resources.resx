@@ -114,4 +114,15 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="NavTasks"><value>任务列表</value></data>
+  <data name="NavGoals"><value>目标管理</value></data>
+  <data name="NavCalendar"><value>日历视图</value></data>
+  <data name="NavReviews"><value>定期盘点</value></data>
+  <data name="NavTime"><value>时间追踪</value></data>
+  <data name="NavHealth"><value>健康</value></data>
+  <data name="NavModules"><value>自定义模块</value></data>
+  <data name="NavSettings"><value>设置</value></data>
+  <data name="LanguageSystem"><value>跟随系统 / System</value></data>
+  <data name="LanguageChinese"><value>中文</value></data>
+  <data name="LanguageEnglish"><value>English</value></data>
 </root>

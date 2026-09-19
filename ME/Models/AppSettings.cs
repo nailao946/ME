@@ -9,6 +9,7 @@ namespace ME.Models
     public static class SettingsKeys
     {
         public const string Theme = "Theme";
+        public const string Language = "Language";
         public const string CornerRadius = "CornerRadius";
         public const string FocusSoundEnabled = "FocusSoundEnabled";
         public const string SoundEnabled = "SoundEnabled";

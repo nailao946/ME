@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Reflection;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 using ME.Data;
 using ME.Models;
@@ -68,7 +69,6 @@ namespace ME.Views
             (Sec_General, "通用"),
             (Sec_Focus, "专注与统计"),
             (Sec_Data, "数据与备份"),
-            (Sec_Modules, "自定义模块"),
             (Sec_AI, "AI 分析"),
             (Sec_About, "关于"),
         };
@@ -95,7 +95,10 @@ namespace ME.Views
         {
             var c = GitHubSyncService.Load();
             SyncRepoBox.Text = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo;
-            SyncBranchBox.Text = string.IsNullOrWhiteSpace(c.Branch) ? "main" : c.Branch;
+            var selectedProvider = string.IsNullOrWhiteSpace(c.Provider) ? "github" : c.Provider;
+            SyncBranchBox.Text = c.ProviderBranches.TryGetValue(selectedProvider, out var savedBranch) && !string.IsNullOrWhiteSpace(savedBranch)
+                ? savedBranch
+                : (selectedProvider == "gitee" ? "master" : "main");
             SyncProxyBox.Text = c.Proxy;
             if (!string.IsNullOrWhiteSpace(c.EncryptedToken))
             {
@@ -327,6 +330,9 @@ namespace ME.Views
             c.Branch = string.IsNullOrWhiteSpace(SyncBranchBox.Text)
                 ? (c.Provider == "gitee" ? "master" : "main")
                 : SyncBranchBox.Text.Trim();
+            // 分支按平台分别保存，GitHub/Gitee 同时启用时互不覆盖
+            if (c.ProviderBranches == null) c.ProviderBranches = new Dictionary<string, string>();
+            c.ProviderBranches[c.Provider] = c.Branch;
             c.Proxy = SyncProxyBox.Text.Trim();
             if (!string.IsNullOrWhiteSpace(SyncTokenBox.Password))
                 c.EncryptedToken = SecureStore.Encrypt(SyncTokenBox.Password.Trim());
@@ -388,6 +394,110 @@ namespace ME.Views
             LoadSyncConfig();
         }
 
+        /// <summary>连接诊断：逐个云端测「连接 → 列目录 → 读文件」，把失败原因定位到具体环节</summary>
+        private async void SyncDiagnose_Click(object sender, RoutedEventArgs e)
+        {
+            SaveSyncConfig();
+            SyncDiagnoseBtn.IsEnabled = false;
+            SyncStatusText.Text = "诊断中…";
+            try { SyncStatusText.Text = await GitHubSyncService.DiagnoseAsync(); }
+            catch (Exception ex) { SyncStatusText.Text = "诊断失败：" + ex.Message; }
+            SyncDiagnoseBtn.IsEnabled = true;
+            LoadSyncConfig();
+        }
+
+        /// <summary>冲突处理：逐个文件选择用本机还是用云端，处理完刷新基线不再重复报冲突</summary>
+        private async void SyncConflict_Click(object sender, RoutedEventArgs e)
+        {
+            var items = GitHubSyncService.PendingConflicts();
+            if (items.Count == 0) { SyncStatusText.Text = "没有待处理的冲突"; return; }
+
+            var owner = Window.GetWindow(this);
+            var win = new Window
+            {
+                Title = $"处理 {items.Count} 个同步冲突",
+                Width = 560, Height = 380,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize,
+                ShowInTaskbar = false,
+                Background = (Brush)FindResource("BackgroundBrush")
+            };
+            var root = new StackPanel { Margin = new Thickness(16) };
+            root.Children.Add(new TextBlock
+            {
+                Text = "这些文件在本机和云端都被改过、无法自动合并。请逐个选择保留哪一边；处理后不会再次提示。",
+                FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10)
+            });
+
+            var list = new StackPanel();
+            foreach (var raw in items)
+            {
+                var sep = raw.IndexOf('|');
+                var provider = sep > 0 ? raw.Substring(0, sep) : "";
+                var file = sep > 0 ? raw.Substring(sep + 1) : raw;
+                var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                info.Children.Add(new TextBlock
+                {
+                    Text = file, FontSize = 12.5, FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("TextBrush"), TextTrimming = TextTrimming.CharacterEllipsis
+                });
+                info.Children.Add(new TextBlock
+                {
+                    Text = GitHubSyncService.ProviderLabel(provider), FontSize = 10.5,
+                    Foreground = (Brush)FindResource("SecondaryTextBrush")
+                });
+                Grid.SetColumn(info, 0);
+
+                Button MakeBtn(string content, bool preferCloud)
+                {
+                    var b = new Button
+                    {
+                        Content = content,
+                        Style = (Style)FindResource("SecondaryButtonStyle"),
+                        FontSize = 11, Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0),
+                        Cursor = Cursors.Hand
+                    };
+                    b.Click += async (s2, e2) =>
+                    {
+                        b.IsEnabled = false;
+                        try
+                        {
+                            await GitHubSyncService.ResolveConflictsAsync(preferCloud, file, provider);
+                            row.Opacity = 0.45;
+                            foreach (var child in row.Children.OfType<Button>()) child.IsEnabled = false;
+                        }
+                        catch (Exception ex) { MessageBox.Show(ex.Message, "处理失败"); b.IsEnabled = true; }
+                    };
+                    return b;
+                }
+                var localBtn = MakeBtn("用本机", false); Grid.SetColumn(localBtn, 1);
+                var cloudBtn = MakeBtn("用云端", true); Grid.SetColumn(cloudBtn, 2);
+                row.Children.Add(info); row.Children.Add(localBtn); row.Children.Add(cloudBtn);
+                list.Children.Add(row);
+            }
+            root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 220, Content = list });
+
+            var closeBtn = new Button
+            {
+                Content = "完成", Style = (Style)FindResource("PrimaryButtonStyle"),
+                Padding = new Thickness(20, 6, 20, 6), Margin = new Thickness(0, 12, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            closeBtn.Click += (s2, e2) => win.Close();
+            root.Children.Add(closeBtn);
+
+            win.Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
+            win.ShowDialog();
+            LoadSyncConfig();
+            await Task.CompletedTask;
+        }
+
         private void AnimateSettingCards()
         {
             Dispatcher.BeginInvoke(new Action(() =>
@@ -441,7 +551,7 @@ namespace ME.Views
 
                 if (def.Color == "CUSTOM")
                 {
-                    ball.Background = (SolidColorBrush)FindResource("CardBrush");
+                    ball.Background = ME.Services.ThemeService.Solid("CardBrush");
                     ball.Child = new TextBlock
                     {
                         Text = "+",
@@ -493,7 +603,7 @@ namespace ME.Views
                     }
                     else if (ballColor == "CUSTOM")
                     {
-                        ball.Background = (SolidColorBrush)FindResource("CardBrush");
+                        ball.Background = ME.Services.ThemeService.Solid("CardBrush");
                         if (ball.Child is TextBlock tb) tb.Text = "+";
                     }
                 }
@@ -563,15 +673,11 @@ namespace ME.Views
 
         private void LoadSettings()
         {
-            var theme = _settingsRepo.GetValue(SettingsKeys.Theme, "Light");
-            foreach (ComboBoxItem item in ThemeCombo.Items)
-            {
-                if (item.Tag?.ToString() == theme)
-                {
-                    ThemeCombo.SelectedItem = item;
-                    break;
-                }
-            }
+            var language = _settingsRepo.GetValue(SettingsKeys.Language, LanguageService.System);
+            foreach (ComboBoxItem item in LanguageCombo.Items)
+                if (item.Tag?.ToString() == language) { LanguageCombo.SelectedItem = item; break; }
+
+            BuildThemeUi();
 
             var borderColor = _settingsRepo.GetValue(SettingsKeys.WindowBorderColor, "#007AFF");
             UpdateColorBallSelection();
@@ -615,13 +721,151 @@ namespace ME.Views
             }
         }
 
-        private void ThemeCombo_Changed(object sender, SelectionChangedEventArgs e)
+        private void LanguageCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
-            if (ThemeCombo.SelectedItem is ComboBoxItem item)
+            if (LanguageCombo.SelectedItem is ComboBoxItem item && item.Tag != null)
+                LanguageService.SetLanguage(item.Tag.ToString());
+        }
+
+        // ============ 主题：风格（普通/毛玻璃）× 深浅 × 毛玻璃背景 ============
+
+        private bool _suppressGlassSlider;
+
+        private void BuildThemeUi()
+        {
+            // 主题风格：普通 / 毛玻璃
+            BuildPillGroup(ThemeStylePanel, new[] { ("普通", false), ("毛玻璃", true) }, isGlass => isGlass == ThemeService.IsGlass, v =>
             {
-                var theme = item.Tag?.ToString() ?? "Light";
-                ThemeService.ApplyTheme(theme);
+                _settingsRepo.SetValue(ThemeService.Keys.Style, v ? "Glass" : "Normal");
+                ThemeService.ApplyTheme();
+                SyncGlassPanel();
+            });
+
+            // 深浅模式：浅色 / 深色 / 跟随系统
+            BuildPillGroup(ThemeTonePanel, new[] { ("浅色", "Light"), ("深色", "Dark"), ("跟随系统", "System") },
+                v => v == CurrentToneForUi(), v =>
+                {
+                    _settingsRepo.SetValue(ThemeService.Keys.Tone, v);
+                    ThemeService.ApplyTheme();
+                    SyncGlassPanel();
+                });
+
+            // 玻璃背景：渐变配色 / 背景图片 / 纯透明
+            BuildPillGroup(GlassModePanel, new[] { ("渐变配色", "Gradient"), ("背景图片", "Image"), ("纯透明", "Transparent") },
+                v => v == ThemeService.GlassMode, v =>
+                {
+                    _settingsRepo.SetValue(ThemeService.Keys.GlassMode, v);
+                    ThemeService.ApplyTheme();
+                    SyncGlassPanel();
+                });
+
+            BuildGradientSwatches();
+
+            _suppressGlassSlider = true;
+            GlassOpacitySlider.Value = ThemeService.GlassOpacity;
+            _suppressGlassSlider = false;
+            GlassOpacityText.Text = ThemeService.GlassOpacity + "%";
+            SyncGlassPanel();
+        }
+
+        private string CurrentToneForUi() => ThemeService.Tone;
+
+        /// <summary>胶囊分段按钮组（选中 = 主题色底白字）</summary>
+        private void BuildPillGroup<T>(Panel host, (string Label, T Value)[] items, Func<T, bool> isSelected, Action<T> onSelect)
+        {
+            host.Children.Clear();
+            foreach (var (label, value) in items)
+            {
+                var v = value;
+                var selected = isSelected(v);
+                var ball = host == GlassGradientPanel ? Colors.Transparent : TryGetAccent();
+                var btn = new Button
+                {
+                    Content = label,
+                    Style = (Style)FindResource(selected ? "PrimaryButtonStyle" : "SecondaryButtonStyle"),
+                    FontSize = 12, Padding = new Thickness(13, 6, 13, 6),
+                    Margin = new Thickness(0, 0, 6, 0), Cursor = Cursors.Hand
+                };
+                btn.Click += (s, e) => onSelect(v);
+                host.Children.Add(btn);
             }
+        }
+
+        private Color TryGetAccent() => Colors.Transparent;
+
+        private void BuildGradientSwatches()
+        {
+            GlassGradientPanel.Children.Clear();
+            for (int i = 0; i < ThemeService.GlassGradients.Length; i++)
+            {
+                int idx = i;
+                var p = ThemeService.GlassGradients[i];
+                bool selected = idx == ThemeService.GlassGradientIndex;
+                var colors = ThemeService.IsDarkMode() ? p.Dark : p.Light;
+                var brush = new LinearGradientBrush
+                {
+                    StartPoint = new Point(0, 0), EndPoint = new Point(1, 1),
+                    GradientStops = new GradientStopCollection
+                    {
+                        new GradientStop((Color)ColorConverter.ConvertFromString(colors[0]), 0),
+                        new GradientStop((Color)ColorConverter.ConvertFromString(colors[1]), 0.5),
+                        new GradientStop((Color)ColorConverter.ConvertFromString(colors[2]), 1),
+                    }
+                };
+                var ball = new Border
+                {
+                    Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Cursor = Cursors.Hand,
+                    Background = brush, Margin = new Thickness(0, 0, 6, 0),
+                    BorderBrush = selected ? (Brush)FindResource("TextBrush") : (Brush)FindResource("BorderBrush"),
+                    BorderThickness = new Thickness(selected ? 2 : 1),
+                    ToolTip = p.Name
+                };
+                ball.MouseLeftButtonDown += (s, e) =>
+                {
+                    _settingsRepo.SetValue(ThemeService.Keys.GlassGradient, idx.ToString());
+                    ThemeService.ApplyTheme();
+                    BuildGradientSwatches();
+                };
+                GlassGradientPanel.Children.Add(ball);
+            }
+        }
+
+        /// <summary>毛玻璃子设置只在毛玻璃风格下显示；渐变/纯透明模式隐藏选图按钮</summary>
+        private void SyncGlassPanel()
+        {
+            GlassOptionsPanel.Visibility = ThemeService.IsGlass ? Visibility.Visible : Visibility.Collapsed;
+            GlassImageBtn.Visibility = ThemeService.GlassMode == "Image" ? Visibility.Visible : Visibility.Collapsed;
+            GlassGradientPanel.Visibility = ThemeService.GlassMode == "Gradient" ? Visibility.Visible : Visibility.Collapsed;
+            if (ThemeService.IsGlass)
+            {
+                _suppressGlassSlider = true;
+                GlassOpacitySlider.Value = ThemeService.GlassOpacity;
+                _suppressGlassSlider = false;
+                GlassOpacityText.Text = ThemeService.GlassOpacity + "%";
+            }
+        }
+
+        private void GlassOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_suppressGlassSlider) return;
+            var v = (int)e.NewValue;
+            if (GlassOpacityText != null) GlassOpacityText.Text = v + "%";
+            _settingsRepo?.SetValue(ThemeService.Keys.GlassOpacity, v.ToString());
+            ThemeService.ApplyTheme();
+        }
+
+        private void GlassImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "选择毛玻璃背景图片",
+                Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp;*.webp|所有文件|*.*"
+            };
+            if (dlg.ShowDialog() != true) return;
+            _settingsRepo.SetValue(ThemeService.Keys.GlassImagePath, dlg.FileName);
+            _settingsRepo.SetValue(ThemeService.Keys.GlassMode, "Image");
+            ThemeService.ApplyTheme();
+            SyncGlassPanel();
         }
 
         private void AutoStartToggle_Changed(object sender, RoutedEventArgs e)

@@ -81,9 +81,9 @@
                     </DockPanel>
 
 
-                    <!-- Row 2: Stats (single horizontal line) -->
-                    <DockPanel>
-                        <Border Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,3" Margin="0,0,6,0" Height="22">
+                    <!-- Row 2: today's total, time breakdown, then task completion -->
+                    <StackPanel>
+                        <Border Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,3" Height="22">
                             <DockPanel>
                                 <TextBlock Text="今日统计" FontSize="10"
                                            Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -94,13 +94,13 @@
                             </DockPanel>
                         </Border>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                                      Margin="0,0,6,0" Height="22">
+                                      Height="48" Margin="0,4,0,0">
                             <StackPanel x:Name="MiniStatsPanel" Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="暂无数据" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" />
                             </StackPanel>
                         </ScrollViewer>
                         <Border x:Name="MiniTaskSummary" Visibility="Collapsed"
-                                Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,3" Height="22">
+                                Background="{DynamicResource CardBrush}" CornerRadius="6" Padding="8,3" Height="22" Margin="0,4,0,0">
                             <DockPanel>
                                 <TextBlock Text="完成" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"
                                            VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -111,7 +111,7 @@
                                            VerticalAlignment="Center" Margin="6,0,0,0" />
                             </DockPanel>
                         </Border>
-                    </DockPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>

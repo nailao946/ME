@@ -23,7 +23,11 @@ namespace ME.Services
 
         public int CreateGoal(Goal goal) => _repo.InsertGoal(goal);
 
-        public void UpdateGoal(Goal goal) => _repo.UpdateGoal(goal);
+        public void UpdateGoal(Goal goal)
+        {
+            RefreshCompletion(goal);
+            _repo.UpdateGoal(goal);
+        }
 
         public void DeleteGoal(int id) => _repo.SoftDeleteGoal(id);
 
@@ -37,7 +41,23 @@ namespace ME.Services
             if (goal != null)
             {
                 goal.Progress = progress;
+                RefreshCompletion(goal);
                 _repo.UpdateGoal(goal);
+            }
+        }
+
+        /// <summary>同步目标完成日期：达到 100% 当天进入今日完成，回退后回到进行中。</summary>
+        public void RefreshCompletion(Goal goal)
+        {
+            if (goal == null) return;
+            if (goal.Progress >= 100.0)
+            {
+                if (!goal.GoalCompletedAt.HasValue)
+                    goal.GoalCompletedAt = System.DateTime.Now;
+            }
+            else
+            {
+                goal.GoalCompletedAt = null;
             }
         }
     }

@@ -39,6 +39,7 @@ namespace ME.Data
             var maxId = records.Count > 0 ? records.Max(r => r.Id) : 0;
             record.Id = maxId + 1;
             record.CreatedAt = DateTime.Now;
+            record.Uid = string.IsNullOrEmpty(record.Uid) ? Guid.NewGuid().ToString("N") : record.Uid;
             records.Add(record);
             JsonStore.Save(FileName, records);
             return record.Id;
@@ -59,6 +60,7 @@ namespace ME.Data
                 var maxId = records.Count > 0 ? records.Max(r => r.Id) : 0;
                 record.Id = maxId + 1;
                 record.CreatedAt = DateTime.Now;
+                record.Uid = string.IsNullOrEmpty(record.Uid) ? Guid.NewGuid().ToString("N") : record.Uid;
                 records.Add(record);
             }
             JsonStore.Save(FileName, records);

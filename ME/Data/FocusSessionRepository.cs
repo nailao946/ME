@@ -27,6 +27,7 @@ namespace ME.Data
             var sessions = JsonStore.Load<FocusSession>(FileName);
             var maxId = sessions.Count > 0 ? sessions.Max(s => s.Id) : 0;
             session.Id = maxId + 1;
+            session.Uid = string.IsNullOrEmpty(session.Uid) ? Guid.NewGuid().ToString("N") : session.Uid;
             sessions.Add(session);
             JsonStore.Save(FileName, sessions);
             return session.Id;

@@ -20,6 +20,7 @@ namespace ME
             EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnWindowLoaded));
             Data.DatabaseHelper.Initialize();
             ThemeService.Initialize();
+            LanguageService.Initialize();
             Services.AppNotifier.Init();
             new Services.MedicationReminderService();
             try { IdleTimeService.BackfillAllDates(); } catch { }

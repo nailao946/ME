@@ -67,5 +67,14 @@ namespace ME.Properties
                 resourceCulture = value;
             }
         }
+
+        internal static string NavTasks => ResourceManager.GetString("NavTasks", resourceCulture);
+        internal static string NavGoals => ResourceManager.GetString("NavGoals", resourceCulture);
+        internal static string NavCalendar => ResourceManager.GetString("NavCalendar", resourceCulture);
+        internal static string NavReviews => ResourceManager.GetString("NavReviews", resourceCulture);
+        internal static string NavTime => ResourceManager.GetString("NavTime", resourceCulture);
+        internal static string NavHealth => ResourceManager.GetString("NavHealth", resourceCulture);
+        internal static string NavModules => ResourceManager.GetString("NavModules", resourceCulture);
+        internal static string NavSettings => ResourceManager.GetString("NavSettings", resourceCulture);
     }
 }

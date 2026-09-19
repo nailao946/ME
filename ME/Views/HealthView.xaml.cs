@@ -45,7 +45,7 @@ namespace ME.Views
         private readonly MedicationRepository _medRepo = new MedicationRepository();
         private readonly ExerciseRepository _exerciseRepo = new ExerciseRepository();
         private readonly AiProviderRepository _aiProviderRepo = new AiProviderRepository();
-        private string _currentTab = "sleep";
+        private string _currentTab = "overview";
         private bool _loadingUric;
         private string _aiSystemPrompt = AiPromptDialog.DefaultAiSystemPrompt;
 

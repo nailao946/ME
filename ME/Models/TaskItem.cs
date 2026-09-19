@@ -134,6 +134,13 @@ namespace ME.Models
         private double? _quantitativeDailyMin;
         public double? QuantitativeDailyMin { get => _quantitativeDailyMin; set { _quantitativeDailyMin = value; OnPropertyChanged(); } }
 
+        // 量化每日目标基线快照：当日完成 = 当前值 - 基线值 >= 每日目标（跨日时以首次访问的当前值滚动落基线）
+        private DateTime? _quantSnapDate;
+        public DateTime? QuantSnapDate { get => _quantSnapDate; set { _quantSnapDate = value; OnPropertyChanged(); } }
+
+        private double? _quantSnapValue;
+        public double? QuantSnapValue { get => _quantSnapValue; set { _quantSnapValue = value; OnPropertyChanged(); } }
+
         private bool _countTowardsParent;
         public bool CountTowardsParent { get => _countTowardsParent; set { _countTowardsParent = value; OnPropertyChanged(); } }
 

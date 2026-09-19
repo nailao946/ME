@@ -130,6 +130,45 @@ namespace ME.Views
             }
         }
 
+        /// <summary>
+        /// 日历统计口径：只显示该日期存在的任务；量化任务须设置了每日目标，
+        /// 已达标的量化任务只算到达标当天。
+        /// </summary>
+        private bool TaskOccursOnCalendar(TaskItem task, TaskService taskService, DateTime date)
+        {
+                bool isCombined = task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue;
+                bool isCycle = task.Type == TaskType.Recurring || isCombined;
+
+                if (task.Type == TaskType.Quantitative)
+                {
+                    // 未设每日目标的量化任务不参与日历统计
+                    if (!task.QuantitativeDailyMin.HasValue || task.QuantitativeDailyMin.Value <= 0)
+                        return false;
+                    // 已达标的量化任务只算到达标当天
+                    if (task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0
+                        && (task.QuantitativeCurrent ?? 0) >= task.QuantitativeTarget.Value
+                        && (!task.CompletedAt.HasValue || task.CompletedAt.Value.Date < date.Date))
+                        return false;
+                }
+
+                // 非循环类的永久完成项（单次任务 / 纯量化达标）只算完成当天，
+                // 之后归入任务列表的「过去完成」，不再出现在日历的任务统计里
+                if (!isCycle && task.IsCompleted)
+                {
+                    var cd = (task.CompletedAt ?? task.LastCompletedDate ?? task.StartDate ?? task.CreatedAt).Date;
+                    if (cd != date.Date) return false;
+                }
+
+            if ((task.Type == TaskType.Recurring || isCombined) && task.RecurringPattern.HasValue)
+                return taskService.ShouldShowRecurringTaskOnDate(task, date);
+
+            if (task.StartDate.HasValue && task.EndDate.HasValue)
+                return task.StartDate.Value.Date <= date.Date && task.EndDate.Value.Date >= date.Date;
+            if (task.StartDate.HasValue)
+                return task.StartDate.Value.Date <= date.Date;
+            return task.CreatedAt.Date == date.Date;
+        }
+
         private void LoadCalendar()
         {
             MonthTitle.Text = _currentMonth.ToString("yyyy年MM月");
@@ -165,23 +204,8 @@ namespace ME.Views
                     if (task.IsDeleted) continue;
                     if (task.ParentTaskId.HasValue) continue;
 
-                    bool showOnThisDate = false;
-                    bool isCompletedOnDate = false;
-
-                    if ((task.Type == TaskType.Recurring || (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)) && task.RecurringPattern.HasValue)
-                    {
-                        showOnThisDate = taskService.ShouldShowRecurringTaskOnDate(task, date);
-                        if (showOnThisDate)
-                            isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
-                    }
-                    else
-                    {
-                        if (task.StartDate.HasValue && task.EndDate.HasValue)
-                            showOnThisDate = task.StartDate.Value.Date <= date.Date && task.EndDate.Value.Date >= date.Date;
-                        else if (!task.StartDate.HasValue && task.CreatedAt.Date == date.Date)
-                            showOnThisDate = true;
-                        isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
-                    }
+                    bool showOnThisDate = TaskOccursOnCalendar(task, taskService, date);
+                    bool isCompletedOnDate = showOnThisDate && taskService.IsTaskCompletedForDisplay(task, date);
 
                     if (showOnThisDate)
                     {
@@ -291,6 +315,7 @@ namespace ME.Views
 
             CalendarGrid.ItemsSource = days;
             LoadDayTasks(_selectedDate);
+            UpdateGlobalStats();
             AnimateCalendarCells();
         }
 
@@ -382,23 +407,8 @@ namespace ME.Views
                 if (task.IsDeleted) continue;
                 if (task.ParentTaskId.HasValue) continue;
 
-                bool show = false;
-                bool isCompletedOnDate = false;
-
-                if ((task.Type == TaskType.Recurring || (task.Type == TaskType.Quantitative && task.RecurringPattern.HasValue)) && task.RecurringPattern.HasValue)
-                {
-                    show = taskService.ShouldShowRecurringTaskOnDate(task, date);
-                    if (show)
-                        isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
-                }
-                else
-                {
-                    if (task.StartDate.HasValue && task.EndDate.HasValue)
-                        show = task.StartDate.Value.Date <= date.Date && task.EndDate.Value.Date >= date.Date;
-                    else if (!task.StartDate.HasValue && task.CreatedAt.Date == date.Date)
-                        show = true;
-                    isCompletedOnDate = taskService.IsTaskCompletedForDisplay(task, date);
-                }
+                bool show = TaskOccursOnCalendar(task, taskService, date);
+                bool isCompletedOnDate = show && taskService.IsTaskCompletedForDisplay(task, date);
 
                 if (!show) continue;
 
@@ -418,6 +428,8 @@ namespace ME.Views
                 else
                     pendingTasks.Add((task, tagName, tagColor));
             }
+
+            // 统计卡一在 UpdateGlobalStats 里按「今天」的数据刷新（与所选日期无关）
 
             if (pendingTasks.Count == 0 && completedTasks.Count == 0)
             {
@@ -467,6 +479,56 @@ namespace ME.Views
             }
 
             AnimateDayTaskCards();
+        }
+
+        /// <summary>
+        /// 统计卡一「今日任务」：只显示 已完成 / 未完成，不展示任何百分比式的打卡率。
+        /// 计数（完成数/总数）以小字附在下方，方便对照当天的任务量。
+        /// </summary>
+        private void UpdateTodayTaskStatus(int completedCount, int pendingCount)
+        {
+            int total = completedCount + pendingCount;
+            bool allDone = total > 0 && pendingCount == 0;
+            CheckInRateText.Text = total == 0 ? "无任务" : (allDone ? "已完成" : "未完成");
+            CheckInRateText.Foreground = total == 0
+                ? (SolidColorBrush)FindResource("SecondaryTextBrush")
+                : allDone ? (SolidColorBrush)FindResource("AccentGreenBrush")
+                          : (SolidColorBrush)FindResource("PrimaryBrush");
+            TodayTaskCountText.Text = total == 0 ? "" : $"{completedCount}/{total}";
+        }
+
+        /// <summary>
+        /// 初始化统计卡二三：剩余天数 = 今天起到本月末仍有未完成任务的天数；
+        /// 连续打卡 = 当日完成任意一个任务即算打卡成功（无任务日跳过不断签）。
+        /// 点选具体任务卡片后会被该任务的数据覆盖。
+        /// </summary>
+        private void UpdateGlobalStats()
+        {
+            var taskService = new TaskService();
+            var allTasks = new TaskRepository().GetAllTasks()
+                .Where(t => !t.IsDeleted && !t.ParentTaskId.HasValue).ToList();
+            var records = new TaskCompletionRepository().GetAll();
+            var today = DateTime.Today;
+
+            // 剩余天数：本月内（含今天）还存在未完成任务的天数
+            var monthEnd = new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month));
+            int remaining = 0;
+            for (var d = today; d <= monthEnd; d = d.AddDays(1))
+            {
+                bool hasDue = allTasks.Any(t => taskService.TaskDueOnDate(t, d));
+                bool anyDone = allTasks.Any(t => taskService.TaskDoneOnDate(t, d, records));
+                if (hasDue && !anyDone) remaining++;
+            }
+            RemainingDaysText.Text = remaining.ToString();
+
+            // 统计卡一：今日任务 已完成 / 未完成（不展示打卡率）
+            int todayDone = allTasks.Count(t => taskService.TaskDueOnDate(t, today) && taskService.TaskDoneOnDate(t, today, records));
+            int todayDue = allTasks.Count(t => taskService.TaskDueOnDate(t, today));
+            UpdateTodayTaskStatus(todayDone, Math.Max(0, todayDue - todayDone));
+
+            // 连续打卡：当天只要完成任意一个任务即打卡成功
+            int streak = taskService.GetGlobalCheckInStreak();
+            StreakDaysText.Text = $"{streak}天";
         }
 
         private void AnimateDayTaskCards()
@@ -637,7 +699,7 @@ namespace ME.Views
                 {
                     Value = pbValue, Maximum = 100, Height = 6,
                     Margin = new Thickness(0, 4, 0, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor
                 });
             }
@@ -662,7 +724,6 @@ namespace ME.Views
         {
             _selectedTask = task;
             var stats = new TaskService().GetTaskCheckInStats(task);
-            CheckInRateText.Text = $"{(int)Math.Round(stats.checkInRate)}%";
             RemainingDaysText.Text = stats.remainingDays.ToString();
             StreakDaysText.Text = $"{stats.streakDays}天";
             StatsHint.Visibility = Visibility.Collapsed;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
@@ -73,8 +74,28 @@ namespace ME.ViewModels
             var taskRepo = new Data.TaskRepository();
             var tags = tagRepo.GetAllTags();
             var allTasks = taskRepo.GetAllTasks();
+            var taskService = new Services.TaskService();
             foreach (var g in goals)
             {
+                var oldProgress = g.Progress;
+                var goalTasks = allTasks.Where(t => t.GoalId == g.Id && !t.IsDeleted).ToList();
+                if (g.QuantitativeTarget.HasValue && g.QuantitativeTarget.Value > (g.QuantitativeStart ?? 0))
+                {
+                    var start = g.QuantitativeStart ?? 0;
+                    g.Progress = Math.Max(0, Math.Min(100,
+                        ((g.QuantitativeCurrent ?? start) - start) /
+                        (g.QuantitativeTarget.Value - start) * 100));
+                }
+                else if (goalTasks.Count > 0)
+                {
+                    g.Progress = taskService.CalcGoalProgress(g.Id).progress;
+                }
+                _goalService.RefreshCompletion(g);
+                if (Math.Abs(oldProgress - g.Progress) > 0.001 ||
+                    (g.Progress >= 100 && !g.GoalCompletedAt.HasValue) ||
+                    (g.Progress < 100 && g.GoalCompletedAt.HasValue))
+                    _goalService.UpdateGoal(g);
+
                 if (g.TagId.HasValue)
                 {
                     var tag = tags.Find(t => t.Id == g.TagId.Value);

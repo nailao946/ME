@@ -47,6 +47,7 @@ namespace ME.Data
             var maxId = records.Count > 0 ? records.Max(r => r.Id) : 0;
             record.Id = maxId + 1;
             record.CompletedAt = record.CompletedAt == default ? DateTime.Now : record.CompletedAt;
+            record.Uid = string.IsNullOrEmpty(record.Uid) ? Guid.NewGuid().ToString("N") : record.Uid;
             records.Add(record);
             JsonStore.Save(FileName, records);
             return record.Id;

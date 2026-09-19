@@ -1,6 +1,8 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using ME.Core;
+using ME.Services;
 
 namespace ME.ViewModels
 {
@@ -29,18 +31,28 @@ namespace ME.ViewModels
         {
             NavItems = new ObservableCollection<NavItem>
             {
-                new NavItem { Name = "任务列表", Icon = "📋", ViewIndex = 0 },
-                new NavItem { Name = "目标管理", Icon = "🎯", ViewIndex = 1 },
-                new NavItem { Name = "日历视图", Icon = "📅", ViewIndex = 2 },
-                new NavItem { Name = "定期盘点", Icon = "📈", ViewIndex = 3 },
-                new NavItem { Name = "时间追踪", Icon = "⏱️", ViewIndex = 4 },
-                new NavItem { Name = "健康", Icon = "❤️", ViewIndex = 5 },
-                new NavItem { Name = "自定义模块", Icon = "🧩", ViewIndex = 6 },
-                new NavItem { Name = "设置", Icon = "⚙️", ViewIndex = 7 },
+                new NavItem { Name = Properties.Resources.NavTasks, Icon = "📋", ViewIndex = 0 },
+                new NavItem { Name = Properties.Resources.NavGoals, Icon = "🎯", ViewIndex = 1 },
+                new NavItem { Name = Properties.Resources.NavCalendar, Icon = "📅", ViewIndex = 2 },
+                new NavItem { Name = Properties.Resources.NavReviews, Icon = "📈", ViewIndex = 3 },
+                new NavItem { Name = Properties.Resources.NavTime, Icon = "⏱️", ViewIndex = 4 },
+                new NavItem { Name = Properties.Resources.NavHealth, Icon = "❤️", ViewIndex = 5 },
+                new NavItem { Name = Properties.Resources.NavModules, Icon = "🧩", ViewIndex = 6 },
+                new NavItem { Name = Properties.Resources.NavSettings, Icon = "⚙️", ViewIndex = 7 },
             };
 
-            _currentViewTitle = "任务列表";
+            _currentViewTitle = Properties.Resources.NavTasks;
             NavigateCommand = new RelayCommand(Navigate);
+            LanguageService.LanguageChanged += OnLanguageChanged;
+        }
+
+        private void OnLanguageChanged(object sender, EventArgs e)
+        {
+            var selected = CurrentViewIndex;
+            var labels = new[] { Properties.Resources.NavTasks, Properties.Resources.NavGoals, Properties.Resources.NavCalendar, Properties.Resources.NavReviews, Properties.Resources.NavTime, Properties.Resources.NavHealth, Properties.Resources.NavModules, Properties.Resources.NavSettings };
+            for (var i = 0; i < NavItems.Count; i++) NavItems[i].Name = labels[i];
+            CurrentViewTitle = labels[Math.Max(0, Math.Min(selected, labels.Length - 1))];
+            OnPropertyChanged(nameof(NavItems));
         }
 
         private void Navigate(object parameter)
@@ -53,9 +65,10 @@ namespace ME.ViewModels
         }
     }
 
-    public class NavItem
+    public class NavItem : ViewModelBase
     {
-        public string Name { get; set; }
+        private string _name;
+        public string Name { get => _name; set => SetProperty(ref _name, value); }
         public string Icon { get; set; }
         public int ViewIndex { get; set; }
     }

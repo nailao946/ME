@@ -22,6 +22,7 @@ namespace ME.Views
         private int _visibleDays = 14;
         private int? _filterTagId;
         private double _availableWidth = 800;
+        private bool _globalEventsSubscribed;
 
         // Drag state (matching GoalsView pattern)
         private bool _isDragging;
@@ -46,7 +47,8 @@ namespace ME.Views
             LoadMiniStats();
             LoadMiniTagBar();
 
-            EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
+            SubscribeGlobalEvents();
+            this.Loaded += (s, e) => SubscribeGlobalEvents();
 
             var pomo = SharedPomodoroService.Instance;
             pomo.TimerUpdated += (time, mode) =>
@@ -94,6 +96,7 @@ namespace ME.Views
             ThemeService.ThemeChanged += OnThemeChanged;
             this.Unloaded += (s, e) =>
             {
+                UnsubscribeGlobalEvents();
                 SharedTimerService.TimerUpdated -= OnMiniTimerUpdated;
                 SharedTimerService.RunningStateChanged -= OnMiniRunningChanged;
                 SharedTimerService.PausedStateChanged -= OnMiniPausedChanged;
@@ -390,7 +393,6 @@ namespace ME.Views
             if (tagTime.Count == 0)
             {
                 MiniStatsPanel.Children.Add(new TextBlock { Text = "暂无数据", FontSize = 11, Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush") });
-                return;
             }
             foreach (var kv in tagTime)
             {
@@ -455,8 +457,9 @@ namespace ME.Views
                 foreach (var task in allTasks)
                 {
                     if (task.ParentTaskId.HasValue) continue;
-                    if (taskService.TaskDueOnDate(task, _selectedDate)) total++;
-                    if (taskService.TaskDoneOnDate(task, _selectedDate)) completed++;
+                    var due = taskService.TaskDueOnDate(task, _selectedDate);
+                    if (due) total++;
+                    if (due && taskService.TaskDoneOnDate(task, _selectedDate)) completed++;
                 }
 
                 // 较昨日（选中非今天时对比前一天）
@@ -466,8 +469,9 @@ namespace ME.Views
                 foreach (var task in allTasks)
                 {
                     if (task.ParentTaskId.HasValue) continue;
-                    if (taskService.TaskDueOnDate(task, prevDate)) prevTotal++;
-                    if (taskService.TaskDoneOnDate(task, prevDate)) prevCompleted++;
+                    var prevDue = taskService.TaskDueOnDate(task, prevDate);
+                    if (prevDue) prevTotal++;
+                    if (prevDue && taskService.TaskDoneOnDate(task, prevDate)) prevCompleted++;
                 }
 
                 if (total > 0)
@@ -519,18 +523,40 @@ namespace ME.Views
             }
         }
 
+        private void SubscribeGlobalEvents()
+        {
+            if (_globalEventsSubscribed) return;
+            EventAggregator.Instance.Subscribe<string>(OnGlobalEvent);
+            _globalEventsSubscribed = true;
+        }
+
+        private void UnsubscribeGlobalEvents()
+        {
+            if (!_globalEventsSubscribed) return;
+            EventAggregator.Instance.Unsubscribe<string>(OnGlobalEvent);
+            _globalEventsSubscribed = false;
+        }
+
+        private void RefreshTaskSurface()
+        {
+            if (!this.IsVisible) return;
+            LoadData();
+            LoadMiniStats();
+        }
+
         private void OnGlobalEvent(string message)
         {
-            if (message != "DayChanged") return;
+            if (message != "DayChanged" && message != "TaskCompleted") return;
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                _selectedDate = DateTime.Today;
-                _stripStartDate = DateTime.Today.AddDays(-3);
-                if (!this.IsVisible) return;
-                BuildDateStrip();
-                BuildTagFilter();
-                LoadData();
-                LoadMiniStats();
+                if (message == "DayChanged")
+                {
+                    _selectedDate = DateTime.Today;
+                    _stripStartDate = DateTime.Today.AddDays(-3);
+                    BuildDateStrip();
+                    BuildTagFilter();
+                }
+                RefreshTaskSurface();
             }));
         }
 
@@ -660,7 +686,7 @@ namespace ME.Views
                     {
                         _selectedDate = d;
                         BuildDateStrip();
-                        LoadData();
+                        RefreshTaskSurface();
                     }
                 };
                 DateStrip.Children.Add(dayPanel);
@@ -687,7 +713,7 @@ namespace ME.Views
             _selectedDate = DateTime.Today;
             _stripStartDate = DateTime.Today.AddDays(-3);
             BuildDateStrip();
-            LoadData();
+            RefreshTaskSurface();
         }
 
         private void DateStrip_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -775,6 +801,8 @@ namespace ME.Views
                             QuantitativeMode = task.QuantitativeMode, QuantitativeStart = task.QuantitativeStart,
                             QuantitativeTarget = task.QuantitativeTarget, QuantitativeCurrent = task.QuantitativeCurrent,
                             QuantitativeUnit = task.QuantitativeUnit, QuantitativeDailyMin = task.QuantitativeDailyMin,
+                            QuantSnapDate = task.QuantSnapDate, QuantSnapValue = task.QuantSnapValue,
+                            TimeTagId = task.TimeTagId,
                             CountTowardsParent = task.CountTowardsParent,
                             SortOrder = task.SortOrder
                         };
@@ -801,6 +829,14 @@ namespace ME.Views
                         showByDate = true;
 
                     if (!showByDate && task.GoalId.HasValue && todayGoalIds.Contains(task.GoalId.Value))
+                        showByDate = true;
+
+                    // 已永久完成的任务在任意查看日期都保留；完成日仅决定今日/过去分组。
+                    bool permanentlyCompleted = task.IsCompleted ||
+                        (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue &&
+                         task.QuantitativeTarget.Value > 0 &&
+                         (task.QuantitativeCurrent ?? 0) >= task.QuantitativeTarget.Value);
+                    if (!showByDate && permanentlyCompleted)
                         showByDate = true;
 
                     if (!showByDate) continue;
@@ -834,11 +870,21 @@ namespace ME.Views
                 return cmp != 0 ? cmp : a.SortOrder.CompareTo(b.SortOrder);
             });
 
-            // Build task sections: active + completed
+            // Build task sections: active + done-today + past-done
             TasksPanel.Children.Clear();
 
-            var activeTasks = mainTasks.Where(t => !t.IsCompleted).ToList();
-            var doneTasks = mainTasks.Where(t => t.IsCompleted).ToList();
+            var activeTasks = new List<TaskItem>();
+            var doneTasks = new List<TaskItem>();
+            var pastDoneTasks = new List<TaskItem>();
+            foreach (var t in mainTasks)
+            {
+                if (TryGetCompletionDate(t, out var compDate) && compDate < _selectedDate.Date)
+                    pastDoneTasks.Add(t);
+                else if (IsDoneOnSelectedDate(t))
+                    doneTasks.Add(t);
+                else
+                    activeTasks.Add(t);
+            }
 
             if (activeTasks.Count > 0)
             {
@@ -856,7 +902,7 @@ namespace ME.Views
             {
                 TasksPanel.Children.Add(new TextBlock
                 {
-                    Text = $"今日已完成 ({doneTasks.Count})",
+                    Text = _selectedDate.Date == DateTime.Today ? $"今日已完成 ({doneTasks.Count})" : $"已完成 ({doneTasks.Count})",
                     FontSize = 13, FontWeight = FontWeights.SemiBold,
                     Foreground = (SolidColorBrush)FindResource("AccentGreenBrush"),
                     Margin = new Thickness(0, 12, 0, 8)
@@ -864,7 +910,19 @@ namespace ME.Views
                 BuildTaskTree(TasksPanel, doneTasks, subtasksMap, tagColorMap, true, allTimeTags);
             }
 
-            if (activeTasks.Count == 0 && doneTasks.Count == 0)
+            if (pastDoneTasks.Count > 0)
+            {
+                TasksPanel.Children.Add(new TextBlock
+                {
+                    Text = $"过去完成 ({pastDoneTasks.Count})",
+                    FontSize = 13, FontWeight = FontWeights.SemiBold,
+                    Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush"),
+                    Margin = new Thickness(0, 12, 0, 8)
+                });
+                BuildTaskTree(TasksPanel, pastDoneTasks, subtasksMap, tagColorMap, true, allTimeTags);
+            }
+
+            if (activeTasks.Count == 0 && doneTasks.Count == 0 && pastDoneTasks.Count == 0)
             {
                 TasksPanel.Children.Add(new TextBlock
                 {
@@ -877,6 +935,66 @@ namespace ME.Views
             }
 
             LoadTodayGoals(subtasksMap, tagColorMap);
+        }
+
+        // ============ HELPER: 完成日期与当日完成判定 ============
+        /// <summary>
+        /// 一次性/周期/纯量化任务"永久完成"的日期（循环类按天打卡，无永久完成日）。
+        /// </summary>
+        private bool TryGetCompletionDate(TaskItem t, out DateTime completionDate)
+        {
+            completionDate = default;
+            bool isCombined = t.Type == TaskType.Quantitative && t.RecurringPattern.HasValue;
+            if (t.Type == TaskType.Recurring || isCombined) return false;
+            if (t.Type == TaskType.Quantitative)
+            {
+                bool reached = t.QuantitativeTarget.HasValue && t.QuantitativeTarget > 0
+                    && (t.QuantitativeCurrent ?? 0) >= t.QuantitativeTarget.Value;
+                if (reached && t.CompletedAt.HasValue) { completionDate = t.CompletedAt.Value.Date; return true; }
+                return false;
+            }
+            if (t.IsCompleted)
+            {
+                completionDate = (t.CompletedAt ?? t.LastCompletedDate ?? t.StartDate ?? t.CreatedAt).Date;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>任务在选中日期是否处于"已完成"状态（按日判定，供分组用）。</summary>
+        private bool IsDoneOnSelectedDate(TaskItem t)
+        {
+            bool isCombined = t.Type == TaskType.Quantitative && t.RecurringPattern.HasValue;
+            if (t.Type == TaskType.Recurring || isCombined)
+                return t.IsCompleted; // 循环/组合任务加载时已按当日判定写入 IsCompleted
+            if (t.Type == TaskType.Quantitative)
+            {
+                if (t.QuantitativeTarget.HasValue && t.QuantitativeTarget > 0
+                    && (t.QuantitativeCurrent ?? 0) >= t.QuantitativeTarget.Value)
+                    return true;
+                return new TaskService().IsTaskCompletedForDisplay(t, _selectedDate);
+            }
+            if (t.IsCompleted)
+            {
+                TryGetCompletionDate(t, out var cd);
+                return cd == _selectedDate.Date;
+            }
+            return false;
+        }
+
+        /// <summary>量化任务设了每日目标时，给出「今日还需 +N」的口径提示（已达标返回空）。</summary>
+        private static string QuantDailyHint(TaskItem task)
+        {
+            if (task.Type != TaskType.Quantitative) return "";
+            double dailyMin = task.QuantitativeDailyMin ?? 0;
+            if (dailyMin <= 0) return "";
+            double cur = task.QuantitativeCurrent ?? 0;
+            double baseLine = task.QuantSnapDate.HasValue && task.QuantSnapDate.Value.Date == DateTime.Today
+                ? (task.QuantSnapValue ?? cur) : cur;
+            double remain = Math.Max(0, dailyMin - (cur - baseLine));
+            return remain <= 0
+                ? $"今日已达每日目标 +{dailyMin:0.#}"
+                : $"今日还需 +{remain:0.#}（每日目标 {dailyMin:0.#}）";
         }
 
         // ============ HELPER: Get tag color for a task ============
@@ -1066,6 +1184,17 @@ namespace ME.Views
             });
             textPanel.Children.Add(namePanel);
 
+            // 过去完成的任务显示完成日期
+            if (TryGetCompletionDate(task, out var pastDoneDate) && pastDoneDate < _selectedDate.Date)
+            {
+                textPanel.Children.Add(new TextBlock
+                {
+                    Text = $"完成于 {pastDoneDate:yyyy-MM-dd}", FontSize = 10,
+                    Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush"),
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
+
             // Expired label
             bool isExpired = !isCompleted && task.EndDate.HasValue && task.EndDate.Value.Date < DateTime.Today;
             if (isExpired)
@@ -1108,6 +1237,14 @@ namespace ME.Views
                         Text = $"{task.QuantitativeCurrent ?? 0:F0}/{task.QuantitativeTarget.Value:F0}",
                         FontSize = 10, Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush")
                     });
+                    // 量化每日目标口径提示：今日还需比上一日最终值多 N
+                    var dailyHint = QuantDailyHint(task);
+                    if (!string.IsNullOrEmpty(dailyHint))
+                        infoPanel.Children.Add(new TextBlock
+                        {
+                            Text = " " + dailyHint, FontSize = 10,
+                            Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush")
+                        });
                 }
                 else if (isCustomRecurring)
                 {
@@ -1186,7 +1323,7 @@ namespace ME.Views
                 {
                     Value = 0, Maximum = 100, Height = 8,
                     Margin = new Thickness(0, 5, 0, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor
                 };
                 pb.Loaded += (s, e) =>
@@ -1288,7 +1425,7 @@ namespace ME.Views
                 {
                     Maximum = 100, Height = 4,
                     Margin = new Thickness(0, 4, 120, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor,
                     Value = 0
                 };
@@ -1325,7 +1462,7 @@ namespace ME.Views
                 {
                     Maximum = 100, Height = 4,
                     Margin = new Thickness(0, 4, 120, 0),
-                    Background = (SolidColorBrush)FindResource("BackgroundBrush"),
+                    Background = ME.Services.ThemeService.Solid("BackgroundBrush"),
                     Foreground = progressColor,
                     Value = 0
                 };
@@ -1685,10 +1822,12 @@ namespace ME.Views
             if (task.Type == TaskType.Quantitative && task.QuantitativeTarget.HasValue && task.QuantitativeTarget > 0)
             {
                 double current = task.QuantitativeCurrent ?? 0;
-                if (current >= task.QuantitativeTarget.Value) return true;
+                if (current >= task.QuantitativeTarget.Value)
+                    return task.CompletedAt.HasValue && task.CompletedAt.Value.Date == date.Date;
+                // 未达标：每日目标按当日记录/基线口径判定
                 double dailyMin = task.QuantitativeDailyMin ?? 0;
-                if (dailyMin > 0 && current >= dailyMin) return true;
-                return false;
+                if (dailyMin <= 0) return false;
+                return ts.IsTaskCompletedForDisplay(task, date);
             }
             if (task.Type == TaskType.Recurring && task.RecurringPattern.HasValue)
             {
@@ -1697,6 +1836,46 @@ namespace ME.Views
                 return ts.IsRecurringTaskCompletedOnDate(task, date);
             }
             return task.IsCompleted;
+        }
+
+        /// <summary>
+        /// 今日目标区域的任务过滤：只显示该日期存在的任务；量化任务须设置了每日目标，
+        /// 且已达标（完成日早于该日期）的量化任务不再出现。
+        /// </summary>
+        private bool TaskOccursForGoals(TaskItem t, DateTime date)
+        {
+            if (t.IsDeleted || t.ParentTaskId.HasValue) return false;
+
+            bool isCycle = t.Type == TaskType.Recurring || (t.Type == TaskType.Quantitative && t.RecurringPattern.HasValue);
+
+            // 量化任务：未设置每日目标的不计入统计；已达总目标的只算到达标当天
+            if (t.Type == TaskType.Quantitative)
+            {
+                if (!t.QuantitativeDailyMin.HasValue || t.QuantitativeDailyMin.Value <= 0) return false;
+                if (t.QuantitativeTarget.HasValue && t.QuantitativeTarget > 0
+                    && (t.QuantitativeCurrent ?? 0) >= t.QuantitativeTarget.Value
+                    && (!t.CompletedAt.HasValue || t.CompletedAt.Value.Date < date.Date))
+                    return false;
+            }
+
+            // 非循环类的永久完成项（单次任务 / 纯量化达标）：只在完成当日出现，
+            // 其余日期已归入任务列表的「过去完成」，今日目标里不再展示历史完成项
+            if (!isCycle && t.IsCompleted)
+            {
+                var cd = (t.CompletedAt ?? t.LastCompletedDate ?? t.StartDate ?? t.CreatedAt).Date;
+                if (cd != date.Date) return false;
+            }
+
+            if (isCycle)
+                return new TaskService().ShouldShowRecurringTaskOnDate(t, date);
+
+            if (t.StartDate.HasValue && t.EndDate.HasValue)
+                return t.StartDate.Value.Date <= date.Date && t.EndDate.Value.Date >= date.Date;
+            if (t.StartDate.HasValue)
+                return t.StartDate.Value.Date == date.Date;
+            // 无日期任务：量化从创建日起每天计；其余只算创建当天
+            if (t.Type == TaskType.Quantitative) return date.Date >= t.CreatedAt.Date;
+            return date.Date == t.CreatedAt.Date;
         }
 
         private void LoadTodayGoals(Dictionary<int, List<TaskItem>> subtasksMap, Dictionary<int, string> tagColorMap)
@@ -1714,9 +1893,9 @@ namespace ME.Views
                 if (goal.IsArchived || goal.IsDeleted) continue;
                 bool show = false;
                 if (goal.StartDate.HasValue && goal.EndDate.HasValue)
-                    show = goal.StartDate.Value.Date <= DateTime.Today && goal.EndDate.Value.Date >= DateTime.Today;
+                    show = goal.StartDate.Value.Date <= _selectedDate.Date && goal.EndDate.Value.Date >= _selectedDate.Date;
                 else if (goal.StartDate.HasValue)
-                    show = goal.StartDate.Value.Date == DateTime.Today;
+                    show = goal.StartDate.Value.Date == _selectedDate.Date;
                 if (show)
                 {
                     if (goal.TagId.HasValue)
@@ -1752,8 +1931,8 @@ namespace ME.Views
                 });
                 goalWrapper.Children.Add(goalHeader);
 
-                // Tasks under this goal
-                var goalTasks = allTasks.FindAll(t => t.GoalId == goal.Id && !t.IsDeleted && !t.ParentTaskId.HasValue);
+                // Tasks under this goal（只显示该日期存在的任务；量化须设每日目标）
+                var goalTasks = allTasks.FindAll(t => t.GoalId == goal.Id && TaskOccursForGoals(t, _selectedDate));
                 if (goalTasks.Count > 0)
                 {
                     foreach (var task in goalTasks)
@@ -1761,7 +1940,7 @@ namespace ME.Views
                         var taskPanel = new StackPanel { Margin = new Thickness(16, 0, 0, 4) };
 
                         // Task row
-                        bool taskDone = IsTaskDisplayCompleted(task, DateTime.Today);
+                        bool taskDone = IsTaskDisplayCompleted(task, _selectedDate);
                         var taskRow = new StackPanel { Orientation = Orientation.Horizontal };
                         taskRow.Children.Add(new TextBlock
                         {
@@ -1782,7 +1961,7 @@ namespace ME.Views
                         {
                             foreach (var sub in subtasksMap[task.Id])
                             {
-                                bool subDone = IsTaskDisplayCompleted(sub, DateTime.Today);
+                                bool subDone = IsTaskDisplayCompleted(sub, _selectedDate);
                                 var subRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 2, 0, 0) };
                                 subRow.Children.Add(new TextBlock
                                 {
@@ -1861,7 +2040,10 @@ namespace ME.Views
                 if (dialog.ShowDialog() == true)
                 {
                     var repo = new TaskRepository();
+                    var tsq = new TaskService();
                     var oldValue = task.QuantitativeCurrent ?? 0;
+                    // 先落今日基线（以修改前的值为准），再应用新值，否则首次操作会把本次增量算进基线
+                    tsq.EnsureQuantBaseline(task);
                     task.QuantitativeCurrent = dialog.NewValue;
                     bool reachedTarget = task.QuantitativeTarget.HasValue && task.QuantitativeCurrent >= task.QuantitativeTarget.Value;
                     bool isCombined = task.RecurringPattern.HasValue;
@@ -1875,28 +2057,16 @@ namespace ME.Views
                         // Combined: don't fully complete on daily min alone - let it reappear tomorrow
                         task.IsCompleted = false;
                         task.CompletedAt = null;
-                        var ts = new TaskService();
-                        double dailyMin = task.QuantitativeDailyMin ?? 0;
-                        if (dailyMin > 0 && (task.QuantitativeCurrent ?? 0) >= dailyMin)
-                            ts.RecordCombinedTaskCompletion(task, _selectedDate);
-                        else
-                            ts.RemoveCombinedTaskCompletion(task, _selectedDate);
                     }
                     else
                     {
                         task.IsCompleted = false;
                         task.CompletedAt = null;
                     }
-                    // 纯量化（无周期）且设了每日目标：当日增量达到每日目标时记一条当日完成记录，供盘点统计与打卡图按天计
-                    if (!isCombined && !reachedTarget && task.QuantitativeDailyMin.HasValue && task.QuantitativeDailyMin.Value > 0)
+                    // 设了每日目标：按"当前值-今日基线 >= 每日目标"统一重算当日完成记录（组合/纯量化一致）
+                    if (!reachedTarget && task.QuantitativeDailyMin.HasValue && task.QuantitativeDailyMin.Value > 0)
                     {
-                        double delta = task.QuantitativeCurrent.Value - oldValue;
-                        bool dayMet = task.QuantitativeMode == QuantitativeMode.Update
-                            ? task.QuantitativeCurrent.Value >= task.QuantitativeDailyMin.Value
-                            : delta >= task.QuantitativeDailyMin.Value;
-                        var tsq = new TaskService();
-                        if (dayMet) tsq.RecordCompletion(task.Id, _selectedDate);
-                        else tsq.RemoveCompletion(task.Id, _selectedDate);
+                        tsq.EvalQuantitativeDaily(task, _selectedDate);
                     }
                     repo.UpdateTask(task);
 
@@ -1911,7 +2081,7 @@ namespace ME.Views
 
                     SoundService.PlayCompletionSound();
                     EventAggregator.Instance.Publish("TaskCompleted");
-                    LoadData();
+                    RefreshTaskSurface();
                 }
                 return;
             }
@@ -1960,7 +2130,7 @@ namespace ME.Views
 
             SoundService.PlayCompletionSound();
             EventAggregator.Instance.Publish("TaskCompleted");
-            LoadData();
+            RefreshTaskSurface();
         }
 
         private void SyncParentTaskProgress(int parentTaskId, double delta, TaskRepository repo)

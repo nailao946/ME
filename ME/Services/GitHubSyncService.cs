@@ -40,8 +40,15 @@ namespace ME.Services
             public bool AutoSyncOnStartup { get; set; } = true; // 启动软件时自动同步
             // 每个文件上次同步后的云端 sha，用于检测「云端比本地新」，避免覆盖其它设备的更新
             public Dictionary<string, string> FileShas { get; set; } = new Dictionary<string, string>();
+            // 旧版单后端基线（迁移来源，读取时自动搬到 ProviderShas）
+            // 多云端基线：云端名 → 文件名 → 版本标识（GitHub/Gitee 的 blob sha 与 WebDAV 的内容哈希互不相同）
+            public Dictionary<string, Dictionary<string, string>> ProviderShas { get; set; } = new Dictionary<string, Dictionary<string, string>>();
+            // 各云端使用的分支（GitHub=main，Gitee=master，WebDAV 不用）
+            public Dictionary<string, string> ProviderBranches { get; set; } = new Dictionary<string, string>();
             // 每个文件上次同步后的本地内容哈希，用于检测「本地比云端新」
             public Dictionary<string, string> FileHashes { get; set; } = new Dictionary<string, string>();
+            /// <summary>待处理的同步冲突（格式：云端键|文件名）。上传时"双方都改过且无法自动合并"的文件会记在这里，等用户决定用本机还是云端</summary>
+            public List<string> PendingConflicts { get; set; } = new List<string>();
         }
 
         /// <summary>设备码授权会话（GitHub Device Flow，用户只需在网页登录后输入代码点允许）</summary>
@@ -189,7 +196,7 @@ namespace ME.Services
             return $"{account}/{name}";
         }
 
-        /// <summary>当前同步方式缺少凭据时返回提示文案，否则 null</summary>
+        /// <summary>当前同步方式缺少凭据时返回提示文案，否则 null（多云端同步时用 ProviderConfigured 判断）</summary>
         private static string CredentialsMissing(SyncConfig c)
         {
             if (c.Provider == "gitee")
@@ -203,6 +210,235 @@ namespace ME.Services
         private static ICloudStore StoreFor(SyncConfig c) =>
             c.Provider == "gitee" ? new GiteeStore() :
             c.Provider == "webdav" ? new WebDavStore() : new GitHubStore();
+
+        /// <summary>三种云端的固定键名顺序（展示/遍历用）</summary>
+        public static readonly string[] ProviderKeys = { "github", "gitee", "webdav" };
+
+        public static string ProviderLabel(string key) =>
+            key == "gitee" ? "Gitee" : key == "webdav" ? "WebDAV" : "GitHub";
+
+        /// <summary>该云端是否已配置凭据</summary>
+        public static bool ProviderConfigured(SyncConfig c, string key)
+        {
+            switch (key)
+            {
+                case "gitee":
+                    return !string.IsNullOrWhiteSpace(c.EncryptedGiteeToken);
+                case "webdav":
+                    return !string.IsNullOrWhiteSpace(c.WebDavUser) && !string.IsNullOrWhiteSpace(c.EncryptedWebDavPass);
+                default:
+                    return !string.IsNullOrWhiteSpace(c.EncryptedToken);
+            }
+        }
+
+        /// <summary>当前已配置凭据的全部云端</summary>
+        private static List<string> ActiveProviders(SyncConfig c) =>
+            ProviderKeys.Where(k => ProviderConfigured(c, k)).ToList();
+
+        private static ICloudStore StoreForKey(SyncConfig c, string key) =>
+            key == "gitee" ? new GiteeStore() : key == "webdav" ? new WebDavStore() : new GitHubStore();
+
+        /// <summary>按云端取基线表（云端 sha），不存在时建空表</summary>
+        private static Dictionary<string, string> Baselines(SyncConfig c, string key)
+        {
+            if (!c.ProviderShas.TryGetValue(key, out var map))
+            {
+                map = new Dictionary<string, string>();
+                c.ProviderShas[key] = map;
+            }
+            return map;
+        }
+
+        private static string ProviderBranch(SyncConfig c, string key)
+        {
+            if (c.ProviderBranches.TryGetValue(key, out var b) && !string.IsNullOrWhiteSpace(b)) return b;
+            return key == "gitee" ? "master" : "main";
+        }
+
+        /// <summary>追加型数据文件：双端冲突时按条目合并（Uid 去重），而不是跳过</summary>
+        private static readonly HashSet<string> AppendOnlyFiles = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "time_records", "focus_sessions", "task_completions", "health_records", "water_containers"
+        };
+
+        /// <summary>单云端一次同步的结果</summary>
+        private class ProviderResult
+        {
+            public string Key;
+            public bool Configured;
+            public bool Ok;
+            public string Error;
+            public int Up, Down, Same, Conflict, Merged;
+            /// <summary>本地有未上传的修改，下载时主动跳过（避免未上传数据被云端覆盖）</summary>
+            public int KeptLocal;
+
+            public string Line
+            {
+                get
+                {
+                    if (!Configured) return $"{ProviderLabel(Key)} 未配置，跳过";
+                    if (Up == 0 && Down == 0 && Merged == 0 && Conflict == 0 && KeptLocal == 0 && !string.IsNullOrEmpty(Error))
+                        return $"{ProviderLabel(Key)} ✗（{Error}）";
+                    var s = $"{ProviderLabel(Key)} ✓ 上传 {Up} · 下载 {Down}";
+                    if (Merged > 0) s += $" · 合并 {Merged} 条";
+                    if (KeptLocal > 0) s += $" · 保留本地未上传 {KeptLocal}";
+                    if (Conflict > 0) s += $" · 冲突跳过 {Conflict}";
+                    if (!string.IsNullOrEmpty(Error)) s += $" · 未成功：{Error}";
+                    if (Up == 0 && Down == 0 && Merged == 0 && Conflict == 0 && KeptLocal == 0) return $"{ProviderLabel(Key)} ✓ 无变化";
+                    return s;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 「最新版本」判定（不依赖任何文件时间）：以内容哈希 + 上次同步基线双向比较。
+        /// 只有云端内容确实与本地不同时才动手；本地自上次同步后改过而云端没变 → 保留本地（等待上传），
+        /// 两边都变过 → 追加型文件按条目合并，其余文件跳过并提示冲突，绝不覆盖任何一端的数据。
+        /// </summary>
+        private static bool LocalChangedSinceSync(SyncConfig c, string name, string localPath)
+        {
+            if (!File.Exists(localPath)) return false;
+            if (!c.FileHashes.TryGetValue(name, out var known) || known == null) return false;
+            return known != HashFile(localPath);
+        }
+
+        private static string Str(JsonElement el, string name)
+        {
+            if (el.ValueKind != JsonValueKind.Object) return null;
+            foreach (var p in el.EnumerateObject())
+                if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (p.Value.ValueKind == JsonValueKind.String) return p.Value.GetString();
+                    if (p.Value.ValueKind == JsonValueKind.Number || p.Value.ValueKind == JsonValueKind.True || p.Value.ValueKind == JsonValueKind.False)
+                        return p.Value.ToString();
+                    return null;
+                }
+            return null;
+        }
+
+        private static JsonElement SetProperty(JsonElement el, string prop, JsonElement value)
+        {
+            var dict = new Dictionary<string, JsonElement>();
+            foreach (var p in el.EnumerateObject())
+                if (!string.Equals(p.Name, prop, StringComparison.OrdinalIgnoreCase)) dict[p.Name] = p.Value;
+            dict[prop] = value;
+            return JsonSerializer.SerializeToElement(dict);
+        }
+
+        /// <summary>无 Uid 时的兜底去重键：打卡按任务+日期、健康按类型+日期、容器按名称、其余按原始内容完全相同</summary>
+        private static string MergeKey(JsonElement el, string file)
+        {
+            switch (file)
+            {
+                case "task_completions":
+                {
+                    var t = Str(el, "TaskId"); var d = Str(el, "Date");
+                    return t != null && d != null ? $"t|{t}|{d}" : el.GetRawText();
+                }
+                case "health_records":
+                {
+                    var t = Str(el, "Type"); var d = Str(el, "Date");
+                    return t != null && d != null ? $"h|{t}|{d}" : el.GetRawText();
+                }
+                case "water_containers":
+                {
+                    var n = Str(el, "Name");
+                    return n != null ? "w|" + n : el.GetRawText();
+                }
+                default:
+                    return el.GetRawText();
+            }
+        }
+
+        /// <summary>
+        /// 合并两个追加型 JSON 数组（按 Uid 去重，无 Uid 走兜底键；旧条目自动补 Uid）。
+        /// 返回合并后的文本；added 为新增条目数；uidMigrated 表示本地旧条目被补了 Uid。
+        /// </summary>
+        private static string MergeJsonArray(string localJson, string remoteJson, string file, out int added, out bool uidMigrated)
+        {
+            added = 0; uidMigrated = false;
+            try
+            {
+                var local = JsonSerializer.Deserialize<List<JsonElement>>(localJson) ?? new List<JsonElement>();
+                var remote = JsonSerializer.Deserialize<List<JsonElement>>(remoteJson) ?? new List<JsonElement>();
+                if (local.Count == 0 && remote.Count == 0) return localJson;
+                if (local.Count == 0) { added = remote.Count; return remoteJson; }
+                if (remote.Count == 0)
+                {
+                    // 仅给本地旧条目补 Uid，保持文件稳定
+                    if (BackfillUids(local)) return SerializeArray(local);
+                    return localJson;
+                }
+
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var legacySeen = new HashSet<string>(StringComparer.Ordinal);
+                int maxId = 0;
+                foreach (var el in local)
+                {
+                    var uid = Str(el, "Uid");
+                    if (!string.IsNullOrEmpty(uid)) seen.Add("u|" + uid);
+                    else legacySeen.Add(MergeKey(el, file));
+                    if (el.TryGetProperty("Id", out var idEl) && idEl.TryGetInt32(out var id) && id > maxId) maxId = id;
+                }
+                if (BackfillUids(local)) uidMigrated = true;
+                // 补完 Uid 后重建 seen，同时保留旧条目的兜底键，避免过渡期重复导入
+                seen.Clear(); maxId = 0;
+                foreach (var el in local)
+                {
+                    var uid = Str(el, "Uid");
+                    if (!string.IsNullOrEmpty(uid)) seen.Add("u|" + uid);
+                    legacySeen.Add(MergeKey(el, file));
+                    if (el.TryGetProperty("Id", out var idEl) && idEl.TryGetInt32(out var id) && id > maxId) maxId = id;
+                }
+
+                var result = new List<JsonElement>(local);
+                foreach (var rel in remote)
+                {
+                    var uid = Str(rel, "Uid");
+                    string key = !string.IsNullOrEmpty(uid) ? "u|" + uid : MergeKey(rel, file);
+                    if (seen.Contains(key) || (string.IsNullOrEmpty(uid) && legacySeen.Contains(key))) continue;
+                    var clone = rel.Clone();
+                    if (string.IsNullOrEmpty(Str(clone, "Uid")))
+                        clone = SetProperty(clone, "Uid", JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("N")));
+                    // Id 仅本地展示用：与本地冲突时重新分配，避免重复
+                    if (clone.TryGetProperty("Id", out var cidEl) && cidEl.TryGetInt32(out var cid))
+                    {
+                        if (cid <= maxId)
+                        {
+                            clone = SetProperty(clone, "Id", JsonSerializer.SerializeToElement(maxId + 1));
+                            maxId++;
+                        }
+                        else
+                        {
+                            maxId = cid;
+                        }
+                    }
+                    seen.Add("u|" + Str(clone, "Uid"));
+                    result.Add(clone);
+                    added++;
+                }
+                if (added > 0 || uidMigrated) return SerializeArray(result);
+                return localJson;
+            }
+            catch { return localJson; }
+        }
+
+        private static bool BackfillUids(List<JsonElement> list)
+        {
+            bool changed = false;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (string.IsNullOrEmpty(Str(list[i], "Uid")))
+                {
+                    list[i] = SetProperty(list[i], "Uid", JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("N")));
+                    changed = true;
+                }
+            }
+            return changed;
+        }
+
+        private static string SerializeArray(List<JsonElement> list) =>
+            JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
 
         /// <summary>把用户填的仓库名解析成 owner/name：只填 ME-Data 时自动补当前账号前缀</summary>
         private static async Task<string> ResolveRepoAsync(SyncConfig c)
@@ -712,11 +948,25 @@ namespace ME.Services
                 if (File.Exists(ConfigPath))
                 {
                     var c = JsonSerializer.Deserialize<SyncConfig>(File.ReadAllText(ConfigPath)) ?? new SyncConfig();
+                    c.Provider = string.IsNullOrWhiteSpace(c.Provider) ? "github" : c.Provider;
+                    c.FileShas ??= new Dictionary<string, string>();
+                    c.FileHashes ??= new Dictionary<string, string>();
+                    c.ProviderShas ??= new Dictionary<string, Dictionary<string, string>>();
+                    c.ProviderBranches ??= new Dictionary<string, string>();
                     // 数据仓库由 ME-OKR 更名为 ME-Data：旧配置自动迁移，避免两端同步中断
                     if (c.Repo == "ME-OKR" || c.Repo.EndsWith("/ME-OKR"))
                     {
                         c.Repo = c.Repo.Contains('/') ? c.Repo.Substring(0, c.Repo.IndexOf('/') + 1) + "ME-Data" : "ME-Data";
                         Save(c);
+                    }
+                    // 旧版单云端基线迁移到多云端结构（按原 Provider 归属）
+                    if (c.ProviderShas.Count == 0 && c.FileShas.Count > 0)
+                    {
+                        var oldKey = string.IsNullOrWhiteSpace(c.Provider) ? "github" : c.Provider;
+                        if (oldKey != "gitee" && oldKey != "webdav") oldKey = "github";
+                        c.ProviderShas[oldKey] = new Dictionary<string, string>(c.FileShas);
+                        if (!string.IsNullOrWhiteSpace(c.Branch))
+                            c.ProviderBranches[oldKey] = c.Branch;
                     }
                     return c;
                 }
@@ -845,125 +1095,13 @@ namespace ME.Services
         /// <summary>最近一次启动自动同步的结果（设置页显示用）</summary>
         public static string LastAutoSyncResult { get; private set; } = "";
 
-        /// <summary>
-        /// 智能同步：逐文件比较本地与云端，谁新用谁——
-        /// 云端较新→下载到本地；本地较新→上传到云端；两边都改过→跳过并提示；无变化→跳过。
-        /// 启动自动同步与设置页都可调用。
-        /// </summary>
-        /// <summary>
-        /// 智能同步入口（带状态球登记）：toast=true 时完成后弹左下角轻提示（状态球/触发式同步用）。
-        /// 启动自动同步与设置页调用时 toast=false，不弹提示。
-        /// </summary>
-        public static async Task<string> SyncAsync(bool toast = false)
-        {
-            SyncStatusService.SetRunning();
-            string r;
-            try { r = await SyncCoreAsync().ConfigureAwait(false); }
-            catch (Exception ex) { r = "✗ 同步失败：" + ex.Message; }
-            SyncStatusService.Report(r, toast);
-            return r;
-        }
-
-        private static async Task<string> SyncCoreAsync()
-        {
-            var c = Load();
-            var missing = CredentialsMissing(c);
-            if (missing != null) return "✗ " + missing;
-            if (string.IsNullOrWhiteSpace(c.Repo))
-            {
-                try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
-                catch (Exception ex) { return "✗ " + ex.Message; }
-            }
-            Directory.CreateDirectory(DataDir);
-            var store = StoreFor(c);
-
-            // 云端文件清单 name -> 版本标识
-            var remote = new Dictionary<string, string>();
-            try { remote = await store.ListAsync(c).ConfigureAwait(false); }
-            catch (Exception ex) when (ex.Message.Contains("404")) { /* 云端还没有 data 目录，当作空 */ }
-
-            var localNames = Directory.Exists(DataDir)
-                ? Directory.GetFiles(DataDir, "*.json").Select(Path.GetFileName).ToList()
-                : new List<string>();
-
-            int up = 0, down = 0, conflict = 0, same = 0; string lastErr = null;
-            var newShas = new Dictionary<string, string>(c.FileShas);
-            var newHashes = new Dictionary<string, string>(c.FileHashes);
-
-            foreach (var name in remote.Keys.Union(localNames).Distinct().ToList())
-            {
-                try
-                {
-                    var localPath = Path.Combine(DataDir, name);
-                    bool localExists = File.Exists(localPath);
-                    string localHash = localExists ? HashFile(localPath) : null;
-                    bool remoteExists = remote.TryGetValue(name, out var rsha);
-                    c.FileShas.TryGetValue(name, out var knownSha);
-                    c.FileHashes.TryGetValue(name, out var knownHash);
-
-                    bool wantUpload, wantDownload;
-                    if (!remoteExists && localExists) { wantUpload = true; wantDownload = false; }
-                    else if (remoteExists && !localExists) { wantDownload = true; wantUpload = false; }
-                    else if (!remoteExists) continue;
-                    else
-                    {
-                        bool remoteChanged = knownSha != null && knownSha != rsha;
-                        bool localChanged = knownHash != null && knownHash != localHash;
-                        if (!remoteChanged && !localChanged)
-                        {
-                            same++;
-                            newShas[name] = rsha;
-                            newHashes[name] = localHash;
-                            continue;
-                        }
-                        wantDownload = remoteChanged && !localChanged;
-                        wantUpload = localChanged && !remoteChanged;
-                        if (!wantDownload && !wantUpload) { conflict++; continue; } // 两边都改过
-                    }
-
-                    if (wantUpload)
-                    {
-                        var content = File.ReadAllText(localPath);
-                        var newRev = await store.WriteAsync(c, name, content, remoteExists ? rsha : null).ConfigureAwait(false);
-                        if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
-                        newHashes[name] = localHash;
-                        up++;
-                    }
-                    else
-                    {
-                        var text = await store.ReadAsync(c, name).ConfigureAwait(false);
-                        if (text == null) throw new Exception("文件内容为空");
-                        File.WriteAllText(localPath, text);
-                        JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
-                        newShas[name] = string.IsNullOrEmpty(rsha) ? HashText(text) : rsha;
-                        newHashes[name] = HashFile(localPath);
-                        down++;
-                    }
-                }
-                catch (Exception ex) { lastErr = ex.Message; }
-            }
-
-            c.FileShas = newShas;
-            c.FileHashes = newHashes;
-            if (up + down > 0)
-            {
-                c.LastSyncAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                Save(c);
-            }
-            var msg = $"✓ 同步完成：上传 {up} 个，下载 {down} 个，无变化 {same} 个";
-            if (conflict > 0) msg += $"；{conflict} 个文件本地与云端都有修改已跳过（可分别用上传/下载处理）";
-            if (lastErr != null) msg += $"；错误：{lastErr}";
-            EventAggregator.Instance.Publish("SyncStatusChanged");
-            return msg;
-        }
-
         /// <summary>启动时自动同步：已登录且开启「启动软件时自动同步」才执行（后台运行，不阻塞启动）</summary>
         public static async Task AutoSyncOnStartupAsync()
         {
             try
             {
                 var c = Load();
-                if (!c.AutoSyncOnStartup || CredentialsMissing(c) != null) return;
+                if (!c.AutoSyncOnStartup || ActiveProviders(c).Count == 0) return;
                 LastAutoSyncResult = await SyncAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -972,7 +1110,7 @@ namespace ME.Services
             }
         }
 
-        /// <summary>上传入口（带状态球登记）：结果同步反映到左下角状态球</summary>
+        /// <summary>上传入口（带状态球登记）：推送所有已配置云端，结果同步反映到左下角状态球</summary>
         public static async Task<string> PushAsync()
         {
             SyncStatusService.SetRunning();
@@ -986,57 +1124,99 @@ namespace ME.Services
         private static async Task<string> PushCoreAsync()
         {
             var c = Load();
-            var missing = CredentialsMissing(c);
-            if (missing != null) return "✗ " + missing;
-            if (string.IsNullOrWhiteSpace(c.Repo))
+            var active = ActiveProviders(c);
+            if (active.Count == 0) return "✗ 请先在「设置 → 数据与备份」配置至少一个云同步账号";
+            if (!Directory.Exists(DataDir) || Directory.GetFiles(DataDir, "*.json").Length == 0)
+                return "✗ 没有可上传的数据";
+
+            var results = new List<ProviderResult>();
+            foreach (var key in active)
             {
-                try { await EnsureDefaultRepoAsync().ConfigureAwait(false); c = Load(); }
-                catch (Exception ex) { return "✗ " + ex.Message; }
-            }
-            if (!Directory.Exists(DataDir)) return "✗ 没有可上传的数据";
-            var files = Directory.GetFiles(DataDir, "*.json");
-            if (files.Length == 0) return "✗ 没有可上传的数据";
-            var store = StoreFor(c);
-            int ok = 0; int skipped = 0; string lastErr = null;
-            var newShas = new Dictionary<string, string>(c.FileShas);
-            var newHashes = new Dictionary<string, string>(c.FileHashes);
-            foreach (var f in files)
-            {
+                var res = new ProviderResult { Key = key, Configured = true };
                 try
                 {
-                    var name = Path.GetFileName(f);
-                    var rev = await store.RevOfAsync(c, name).ConfigureAwait(false);
-
-                    // 云端被其它设备更新过而本地没有先下载 → 跳过，避免覆盖
-                    if (c.FileShas.TryGetValue(name, out var known) && rev != null && known != rev)
+                    c.Branch = ProviderBranch(c, key);
+                    var store = StoreForKey(c, key);
+                    await store.EnsureReadyAsync(c).ConfigureAwait(false);
+                    c.ProviderBranches[key] = string.IsNullOrWhiteSpace(c.Branch) ? ProviderBranch(c, key) : c.Branch;
+                    var baselines = Baselines(c, key);
+                    var newShas = new Dictionary<string, string>(baselines);
+                    var newHashes = new Dictionary<string, string>(c.FileHashes);
+                    foreach (var f in Directory.GetFiles(DataDir, "*.json"))
                     {
-                        skipped++;
-                        continue;
-                    }
+                        try
+                        {
+                            var name = Path.GetFileName(f);
+                            var rev = await store.RevOfAsync(c, name).ConfigureAwait(false);
+                            var baseName = Path.GetFileNameWithoutExtension(name);
 
-                    var newRev = await store.WriteAsync(c, name, File.ReadAllText(f), rev).ConfigureAwait(false);
-                    if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
-                    newHashes[name] = HashFile(f);
-                    ok++;
+                            // 云端被其它设备更新过而本地没有先下载：
+                            // 追加型文件自动合并后上传，其余跳过避免覆盖。
+                            // 没有基线（首次上传到该云端）时也不盲写：先比对云端与本地的内容哈希，
+                            // 两者不同说明云端可能有别的设备留下的、本机没下载过的数据 → 同样按上述规则处理。
+                            bool hasBaseline = baselines.TryGetValue(name, out var known);
+                            bool remoteNewer = hasBaseline && rev != null && known != rev;
+                            if (!hasBaseline && rev != null)
+                            {
+                                // 本机没有该云端的基线（首次上传到这个云端）：读回云端内容比对哈希，
+                                // 内容不同说明云端有别的设备留下、本机没下载过的数据 → 不能盲写覆盖
+                                var probe = await store.ReadAsync(c, name).ConfigureAwait(false);
+                                if (probe != null && HashText(probe) != HashFile(f)) remoteNewer = true;
+                            }
+                            else if (remoteNewer)
+                            {
+                                // 版本标识记账不准（云端返回的 sha 缺失/格式差异）也会造成基线不匹配，
+                                // 用内容哈希复核一次：内容其实一致就正常上传并刷新基线，避免永远卡在「云端较新」
+                                var probe = await store.ReadAsync(c, name).ConfigureAwait(false);
+                                if (probe != null && HashText(probe) == HashFile(f)) remoteNewer = false;
+                            }
+                            if (remoteNewer)
+                            {
+                                if (AppendOnlyFiles.Contains(baseName))
+                                {
+                                    var localText = File.ReadAllText(f);
+                                    var remoteText = await store.ReadAsync(c, name).ConfigureAwait(false);
+                                    if (remoteText == null) continue;
+                                    var merged = MergeJsonArray(localText, remoteText, baseName, out int add, out bool migrated);
+                                    if (merged != localText)
+                                    {
+                                        File.WriteAllText(f, merged);
+                                        JsonStore.InvalidateCache(baseName);
+                                    }
+                                    var newRev = await store.WriteAsync(c, name, merged, rev).ConfigureAwait(false);
+                                    if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
+                                    newHashes[name] = HashFile(f);
+                                    res.Up++; res.Merged += add;
+                                    continue;
+                                }
+                                res.Conflict++;
+                                RecordConflict(c, key, name);
+                                continue;
+                            }
+
+                            var nrev = await store.WriteAsync(c, name, File.ReadAllText(f), rev).ConfigureAwait(false);
+                            if (!string.IsNullOrEmpty(nrev)) newShas[name] = nrev;
+                            newHashes[name] = HashFile(f);
+                            res.Up++;
+                            c.PendingConflicts.Remove(key + "|" + name);
+                        }
+                        catch (Exception ex) { res.Error = FirstError(res.Error, ex.Message); }
+                    }
+                    baselines.Clear();
+                    foreach (var kv in newShas) baselines[kv.Key] = kv.Value;
+                    c.FileHashes = newHashes;
+                    res.Ok = string.IsNullOrEmpty(res.Error) || res.Up > 0 || res.Down > 0;
+                    if (res.Ok) c.LastPushAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 }
-                catch (Exception ex) { lastErr = ex.Message; }
+                catch (Exception ex) { res.Error = ex.Message; }
+                results.Add(res);
             }
-            if (ok > 0)
-            {
-                c.FileShas = newShas;
-                c.FileHashes = newHashes;
-                c.LastPushAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                Save(c);
-            }
-            var baseMsg = ok == files.Length
-                ? $"✓ 已上传 {ok} 个文件"
-                : $"已上传 {ok}/{files.Length} 个" + (lastErr != null ? "，错误：" + lastErr : "");
-            if (skipped > 0)
-                baseMsg += $"；云端有 {skipped} 个文件比本地新，已跳过（请先「下载数据」再上传）";
-            return baseMsg;
+            if (results.Any(r => r.Up > 0)) Save(c);
+            EventAggregator.Instance.Publish("SyncStatusChanged");
+            return BuildSummary("上传", results);
         }
 
-        /// <summary>下载入口（带状态球登记）：结果同步反映到左下角状态球</summary>
+        /// <summary>下载入口（带状态球登记）：从所有已配置云端拉取（追加型文件自动合并），结果同步反映到状态球</summary>
         public static async Task<string> PullAsync()
         {
             SyncStatusService.SetRunning();
@@ -1050,19 +1230,10 @@ namespace ME.Services
         private static async Task<string> PullCoreAsync()
         {
             var c = Load();
-            var missing = CredentialsMissing(c);
-            if (missing != null) return "✗ " + missing;
-            var store = StoreFor(c);
-            Dictionary<string, string> remote;
-            try { remote = await store.ListAsync(c).ConfigureAwait(false); }
-            catch (Exception ex) when (ex.Message.Contains("404"))
-            {
-                return "同步目录为空，没有可下载的数据";
-            }
-            if (remote.Count == 0)
-                return "同步目录为空，没有可下载的数据";
+            var active = ActiveProviders(c);
+            if (active.Count == 0) return "✗ 请先在「设置 → 数据与备份」配置至少一个云同步账号";
 
-            // 本地备份
+            // 下载前备份本地数据（所有云端共用一次备份）
             if (Directory.Exists(DataDir))
             {
                 var backup = DataDir + $"_backup_{DateTime.Now:yyyyMMdd_HHmmss}";
@@ -1072,36 +1243,424 @@ namespace ME.Services
             }
             Directory.CreateDirectory(DataDir);
 
-            int n = 0; int total = 0; string lastErr = null;
-            var newShas = new Dictionary<string, string>(c.FileShas);
-            var newHashes = new Dictionary<string, string>(c.FileHashes);
-            foreach (var kv in remote)
+            var results = new List<ProviderResult>();
+            foreach (var key in active)
             {
-                var name = kv.Key;
-                if (string.IsNullOrEmpty(name) || !name.EndsWith(".json")) continue;
-                total++;
+                var res = new ProviderResult { Key = key, Configured = true };
                 try
                 {
-                    var text = await store.ReadAsync(c, name).ConfigureAwait(false);
-                    if (text == null) throw new Exception("文件内容为空");
-                    var localPath = Path.Combine(DataDir, name);
-                    File.WriteAllText(localPath, text);
-                    JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
-                    newShas[name] = string.IsNullOrEmpty(kv.Value) ? HashText(text) : kv.Value;
-                    newHashes[name] = HashFile(localPath);
-                    n++;
+                    c.Branch = ProviderBranch(c, key);
+                    var store = StoreForKey(c, key);
+                    await store.EnsureReadyAsync(c).ConfigureAwait(false);
+                    c.ProviderBranches[key] = string.IsNullOrWhiteSpace(c.Branch) ? ProviderBranch(c, key) : c.Branch;
+                    Dictionary<string, string> remote;
+                    try { remote = await store.ListAsync(c).ConfigureAwait(false); }
+                    catch (Exception ex) when (ex.Message.Contains("404")) { remote = new Dictionary<string, string>(); }
+                    if (remote.Count == 0) { res.Ok = true; results.Add(res); continue; }
+
+                    var baselines = Baselines(c, key);
+                    var newShas = new Dictionary<string, string>(baselines);
+                    var newHashes = new Dictionary<string, string>(c.FileHashes);
+                    foreach (var kv in remote)
+                    {
+                        var name = kv.Key;
+                        if (string.IsNullOrEmpty(name) || !name.EndsWith(".json")) continue;
+                        try
+                        {
+                            var localPath = Path.Combine(DataDir, name);
+                            var baseName = Path.GetFileNameWithoutExtension(name);
+                            var text = await store.ReadAsync(c, name).ConfigureAwait(false);
+                            if (text == null) throw new Exception("文件内容为空");
+
+                            bool localExists = File.Exists(localPath);
+
+                            // 追加型文件：始终按条目合并，任何一端都不会丢数据
+                            if (AppendOnlyFiles.Contains(baseName) && localExists)
+                            {
+                                var localText = File.ReadAllText(localPath);
+                                var merged = MergeJsonArray(localText, text, baseName, out int add, out _);
+                                if (merged != localText)
+                                {
+                                    File.WriteAllText(localPath, merged);
+                                    JsonStore.InvalidateCache(baseName);
+                                    res.Merged += add;
+                                }
+                                res.Down++;
+                                newShas[name] = string.IsNullOrEmpty(kv.Value) ? HashText(text) : kv.Value;
+                                newHashes[name] = HashFile(localPath);
+                                continue;
+                            }
+
+                            // 其余文件：以「内容哈希」判定最新版本，不使用文件时间。
+                            // 云端内容与本地一致 → 无需动作；
+                            // 本地自上次同步后改过但云端没变 → 保留本地（等下次上传），绝不覆盖未上传的数据。
+                            if (localExists)
+                            {
+                                var localHash = HashFile(localPath);
+                                if (HashText(text) == localHash)
+                                {
+                                    res.Same++;
+                                    newShas[name] = string.IsNullOrEmpty(kv.Value) ? HashText(text) : kv.Value;
+                                    newHashes[name] = localHash;
+                                    continue;
+                                }
+                                if (LocalChangedSinceSync(c, name, localPath))
+                                {
+                                    res.KeptLocal++;
+                                    continue;
+                                }
+                            }
+
+                            File.WriteAllText(localPath, text);
+                            JsonStore.InvalidateCache(baseName);
+                            res.Down++;
+                            newShas[name] = string.IsNullOrEmpty(kv.Value) ? HashText(text) : kv.Value;
+                            newHashes[name] = HashFile(localPath);
+                        }
+                        catch (Exception ex) { res.Error = FirstError(res.Error, ex.Message); }
+                    }
+                    baselines.Clear();
+                    foreach (var kvv in newShas) baselines[kvv.Key] = kvv.Value;
+                    c.FileHashes = newHashes;
+                    res.Ok = string.IsNullOrEmpty(res.Error) || res.Up > 0 || res.Down > 0;
+                    if (res.Ok && res.Down > 0) c.LastPullAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 }
-                catch (Exception ex) { lastErr = ex.Message; }
+                catch (Exception ex) { res.Error = ex.Message; }
+                results.Add(res);
             }
-            if (n > 0)
+            if (results.Any(r => r.Down > 0)) Save(c);
+            EventAggregator.Instance.Publish("SyncStatusChanged");
+            return BuildSummary("下载", results);
+        }
+
+        /// <summary>登记一条待用户处理的同步冲突（去重）</summary>
+        private static void RecordConflict(SyncConfig c, string key, string name)
+        {
+            var entry = key + "|" + name;
+            if (!c.PendingConflicts.Contains(entry)) c.PendingConflicts.Add(entry);
+        }
+
+        /// <summary>当前待处理的冲突条目（只读副本）</summary>
+        public static List<string> PendingConflicts()
+        {
+            var c = Load();
+            return c.PendingConflicts.ToList();
+        }
+
+        /// <summary>处理同步冲突：逐个由用户决定「用云端覆盖本机」或「用本机覆盖云端」。
+        /// file/provider 传 null 表示处理全部；处理完的条目从待处理清单移除并刷新基线，避免下一次同步又报冲突。</summary>
+        public static async Task<string> ResolveConflictsAsync(bool preferCloud, string file = null, string provider = null)
+        {
+            var c = Load();
+            var items = c.PendingConflicts.Where(e =>
+                (provider == null || e.Substring(0, e.IndexOf('|')) == provider) &&
+                (file == null || e.Substring(e.IndexOf('|') + 1) == file)).ToList();
+            if (items.Count == 0) return "没有待处理的冲突";
+
+            int ok = 0;
+            var errors = new List<string>();
+            foreach (var item in items)
             {
-                c.FileShas = newShas;
-                c.FileHashes = newHashes;
-                c.LastPullAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                Save(c);
+                var sep = item.IndexOf('|');
+                if (sep <= 0) { c.PendingConflicts.Remove(item); continue; }
+                var key = item.Substring(0, sep);
+                var name = item.Substring(sep + 1);
+                if (!ProviderConfigured(c, key)) { errors.Add($"{name}（{ProviderLabel(key)}）：该云端未配置"); continue; }
+                try
+                {
+                    c.Branch = ProviderBranch(c, key);
+                    var store = StoreForKey(c, key);
+                    await store.EnsureReadyAsync(c).ConfigureAwait(false);
+                    var localPath = Path.Combine(DataDir, name);
+                    var baselines = Baselines(c, key);
+
+                    if (preferCloud)
+                    {
+                        var rev = await store.RevOfAsync(c, name).ConfigureAwait(false);
+                        if (rev == null) throw new Exception("云端已没有这个文件");
+                        var text = await store.ReadAsync(c, name).ConfigureAwait(false);
+                        if (text == null) throw new Exception("云端文件内容为空");
+                        Directory.CreateDirectory(DataDir);
+                        File.WriteAllText(localPath, text);
+                        JsonStore.InvalidateCache(Path.GetFileNameWithoutExtension(name));
+                        baselines[name] = rev;
+                        c.FileHashes[name] = HashFile(localPath);
+                    }
+                    else
+                    {
+                        if (!File.Exists(localPath)) throw new Exception("本机已没有这个文件");
+                        var content = File.ReadAllText(localPath);
+                        var nrev = await store.WriteAsync(c, name, content, await store.RevOfAsync(c, name).ConfigureAwait(false)).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(nrev)) baselines[name] = nrev;
+                        c.FileHashes[name] = HashFile(localPath);
+                    }
+                    c.PendingConflicts.Remove(item);
+                    ok++;
+                }
+                catch (Exception ex) { errors.Add($"{name}（{ProviderLabel(key)}）：{ex.Message}"); }
             }
-            if (n == total && n > 0) return $"✓ 已下载 {n} 个文件（原数据已备份）";
-            return $"已下载 {n}/{total} 个" + (lastErr != null ? "，错误：" + lastErr : "");
+            if (ok > 0) Save(c);
+            EventAggregator.Instance.Publish("SyncStatusChanged");
+            var head = $"已处理 {ok}/{items.Count} 个冲突（{(preferCloud ? "采用云端" : "采用本机")}）";
+            return errors.Count > 0 ? head + "；失败：" + string.Join("；", errors) : head;
+        }
+
+        /// <summary>某个云端的展示目标（账号/仓库名 或 WebDAV 完整路径），诊断结果用</summary>
+        private static string DescribeTarget(SyncConfig c, string key)
+        {
+            var repo = string.IsNullOrWhiteSpace(c.Repo) ? "ME-Data" : c.Repo;
+            var name = repo.Contains('/') ? repo.Substring(repo.IndexOf('/') + 1) : repo;
+            if (key == "webdav")
+            {
+                var baseUrl = string.IsNullOrWhiteSpace(c.WebDavUrl) ? "https://dav.jianguoyun.com/dav/" : c.WebDavUrl.Trim();
+                return baseUrl.TrimEnd('/') + "/" + name;
+            }
+            var account = key == "gitee" ? c.GiteeAccountName : c.AccountName;
+            return $"{account}/{name}";
+        }
+
+        /// <summary>
+        /// 连接诊断：逐个云端走「连接 → 列目录 → 读第一个文件」，给出每步状态与耗时。
+        /// 上传/下载失败时先跑一遍这个，能把「令牌失效 / 仓库不存在 / 限流 / 网络」区分开。
+        /// </summary>
+        public static async Task<string> DiagnoseAsync()
+        {
+            var c = Load();
+            var lines = new List<string> { "诊断结果：" };
+            foreach (var key in ProviderKeys)
+            {
+                if (!ProviderConfigured(c, key)) { lines.Add($"• {ProviderLabel(key)}：未配置，跳过"); continue; }
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    c.Branch = ProviderBranch(c, key);
+                    var store = StoreForKey(c, key);
+                    await store.EnsureReadyAsync(c).ConfigureAwait(false);
+                    var t1 = sw.ElapsedMilliseconds;
+                    var list = await store.ListAsync(c).ConfigureAwait(false);
+                    var t2 = sw.ElapsedMilliseconds;
+                    if (list.Count == 0)
+                    {
+                        lines.Add($"✓ {ProviderLabel(key)}：{DescribeTarget(c, key)}｜连接 {t1}ms｜列目录 {t2 - t1}ms｜云端还没有数据目录");
+                    }
+                    else
+                    {
+                        var firstName = list.Keys.First();
+                        var text = await store.ReadAsync(c, firstName).ConfigureAwait(false);
+                        var t3 = sw.ElapsedMilliseconds;
+                        lines.Add($"✓ {ProviderLabel(key)}：{DescribeTarget(c, key)}｜连接 {t1}ms｜列目录 {t2 - t1}ms（{list.Count} 个文件）｜读 {firstName} {t3 - t2}ms");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lines.Add($"✗ {ProviderLabel(key)}：{ex.Message}（耗时 {sw.ElapsedMilliseconds}ms）");
+                }
+            }
+            if (c.PendingConflicts.Count > 0)
+                lines.Add($"⚠ 有 {c.PendingConflicts.Count} 个冲突等待处理（点「处理冲突」选择用本机还是云端）");
+            return string.Join("\n", lines);
+        }
+
+        private static string FirstError(string current, string next) =>
+            string.IsNullOrEmpty(current) ? next : current;
+
+        /// <summary>组装多云端明细反馈：✓ 开头表示至少一个云端成功；全部失败以 ✗ 开头</summary>
+        private static string BuildSummary(string action, List<ProviderResult> results)
+        {
+            int okCount = results.Count(r => r.Ok && r.Configured);
+            string head = okCount == 0
+                ? $"✗ {action}失败：所有云端均未成功"
+                : okCount == results.Count
+                    ? $"✓ {action}完成"
+                    : $"✓ {action}完成（部分云端未成功）";
+            var lines = new List<string> { head };
+            // 先明确列出「哪些平台成功 / 哪些平台没成功」，再给每个平台的明细
+            var okNames = results.Where(r => r.Configured && r.Ok).Select(r => ProviderLabel(r.Key)).ToList();
+            var badNames = results.Where(r => r.Configured && !r.Ok).Select(r => ProviderLabel(r.Key)).ToList();
+            if (okNames.Count > 0) lines.Add($"已{action}：{string.Join("、", okNames)}");
+            if (badNames.Count > 0) lines.Add($"未成功：{string.Join("、", badNames)}");
+            foreach (var r in results) lines.Add(r.Line);
+            // 失败的详细原因集中展示一次
+            var fails = results.Where(r => r.Configured && !r.Ok && !string.IsNullOrEmpty(r.Error)).ToList();
+            if (fails.Count > 0)
+                lines.Add("失败原因：" + string.Join("；", fails.Select(f => $"{ProviderLabel(f.Key)}（{f.Error}）")));
+            return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// 智能同步：对所有已配置云端逐文件比较本地与云端，谁新用谁——
+        /// 云端较新→下载到本地；本地较新→上传到云端；两边都改过→追加型文件自动合并、其余跳过并提示。
+        /// </summary>
+        private static async Task<List<ProviderResult>> SyncAllProvidersAsync(SyncConfig c)
+        {
+            var active = ActiveProviders(c);
+            var results = new List<ProviderResult>();
+            foreach (var key in active)
+            {
+                var res = new ProviderResult { Key = key, Configured = true };
+                try
+                {
+                    c.Branch = ProviderBranch(c, key);
+                    var store = StoreForKey(c, key);
+                    await store.EnsureReadyAsync(c).ConfigureAwait(false);
+                    c.ProviderBranches[key] = string.IsNullOrWhiteSpace(c.Branch) ? ProviderBranch(c, key) : c.Branch;
+                    res = await SyncProviderAsync(c, key, store).ConfigureAwait(false);
+                }
+                catch (Exception ex) { res.Error = ex.Message; }
+                results.Add(res);
+            }
+            return results;
+        }
+
+        private static async Task<ProviderResult> SyncProviderAsync(SyncConfig c, string key, ICloudStore store)
+        {
+            var res = new ProviderResult { Key = key, Configured = true };
+
+            // 云端文件清单 name -> 版本标识
+            var remote = new Dictionary<string, string>();
+            try { remote = await store.ListAsync(c).ConfigureAwait(false); }
+            catch (Exception ex) when (ex.Message.Contains("404")) { /* 云端还没有 data 目录，当作空 */ }
+
+            var localNames = Directory.Exists(DataDir)
+                ? Directory.GetFiles(DataDir, "*.json").Select(Path.GetFileName).ToList()
+                : new List<string>();
+
+            var baselines = Baselines(c, key);
+            var newShas = new Dictionary<string, string>(baselines);
+            var newHashes = new Dictionary<string, string>(c.FileHashes);
+
+            foreach (var name in remote.Keys.Union(localNames).Distinct().ToList())
+            {
+                try
+                {
+                    var localPath = Path.Combine(DataDir, name);
+                    bool localExists = File.Exists(localPath);
+                    string localHash = localExists ? HashFile(localPath) : null;
+                    bool remoteExists = remote.TryGetValue(name, out var rsha);
+                    baselines.TryGetValue(name, out var knownSha);
+                    c.FileHashes.TryGetValue(name, out var knownHash);
+                    var baseName = Path.GetFileNameWithoutExtension(name);
+
+                    bool wantUpload, wantDownload;
+                    if (!remoteExists && localExists) { wantUpload = true; wantDownload = false; }
+                    else if (remoteExists && !localExists) { wantDownload = true; wantUpload = false; }
+                    else if (!remoteExists) continue;
+                    else
+                    {
+                        bool remoteChanged = knownSha != null && knownSha != rsha;
+                        bool localChanged = knownHash != null && knownHash != localHash;
+                        if (!remoteChanged && !localChanged)
+                        {
+                            res.Same++;
+                            newShas[name] = rsha;
+                            newHashes[name] = localHash;
+                            continue;
+                        }
+                        wantDownload = remoteChanged && !localChanged;
+                        wantUpload = localChanged && !remoteChanged;
+                        if (!wantDownload && !wantUpload)
+                        {
+                            // 两边都改过：追加型文件按条目合并，其余跳过
+                            if (AppendOnlyFiles.Contains(baseName))
+                            {
+                                var localText = File.ReadAllText(localPath);
+                                var remoteText = await store.ReadAsync(c, name).ConfigureAwait(false);
+                                if (remoteText == null) throw new Exception("云端文件内容为空");
+                                var merged = MergeJsonArray(localText, remoteText, baseName, out int add, out _);
+                                if (merged != localText)
+                                {
+                                    File.WriteAllText(localPath, merged);
+                                    JsonStore.InvalidateCache(baseName);
+                                }
+                                var newRev = await store.WriteAsync(c, name, merged, rsha).ConfigureAwait(false);
+                                if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
+                                newHashes[name] = HashFile(localPath);
+                                res.Up++; res.Merged += add;
+                            }
+                            else
+                            {
+                                res.Conflict++;
+                            }
+                            continue;
+                        }
+                    }
+
+                    if (wantUpload)
+                    {
+                        var content = File.ReadAllText(localPath);
+                        var newRev = await store.WriteAsync(c, name, content, remoteExists ? rsha : null).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(newRev)) newShas[name] = newRev;
+                        newHashes[name] = localHash;
+                        res.Up++;
+                    }
+                    else
+                    {
+                        var text = await store.ReadAsync(c, name).ConfigureAwait(false);
+                        if (text == null) throw new Exception("文件内容为空");
+                        if (AppendOnlyFiles.Contains(baseName) && localExists)
+                        {
+                            var localText = File.ReadAllText(localPath);
+                            var merged = MergeJsonArray(localText, text, baseName, out int add, out _);
+                            if (merged != localText)
+                            {
+                                File.WriteAllText(localPath, merged);
+                                JsonStore.InvalidateCache(baseName);
+                            }
+                            res.Merged += add;
+                        }
+                        else
+                        {
+                            File.WriteAllText(localPath, text);
+                            JsonStore.InvalidateCache(baseName);
+                        }
+                        newShas[name] = string.IsNullOrEmpty(rsha) ? HashText(text) : rsha;
+                        newHashes[name] = HashFile(localPath);
+                        res.Down++;
+                    }
+                }
+                catch (Exception ex) { res.Error = FirstError(res.Error, $"{name}：{ex.Message}"); }
+            }
+
+            baselines.Clear();
+            foreach (var kv in newShas) baselines[kv.Key] = kv.Value;
+            c.FileHashes = newHashes;
+            res.Ok = string.IsNullOrEmpty(res.Error);
+            return res;
+        }
+
+        /// <summary>智能同步入口（带状态球登记）：toast=true 时完成后弹左下角轻提示（状态球/触发式同步用）。</summary>
+        public static async Task<string> SyncAsync(bool toast = false)
+        {
+            SyncStatusService.SetRunning();
+            string r;
+            try
+            {
+                var c = Load();
+                var active = ActiveProviders(c);
+                if (active.Count == 0)
+                {
+                    r = "✗ 请先在「设置 → 数据与备份」配置至少一个云同步账号";
+                }
+                else
+                {
+                    Directory.CreateDirectory(DataDir);
+                    foreach (var key in active)
+                    {
+                        if (string.IsNullOrWhiteSpace(c.Repo)) { c.Repo = "ME-Data"; Save(c); }
+                    }
+                    var results = await SyncAllProvidersAsync(c).ConfigureAwait(false);
+                    if (results.Any(rr => rr.Up > 0 || rr.Down > 0))
+                    {
+                        c.LastSyncAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                        Save(c);
+                    }
+                    EventAggregator.Instance.Publish("SyncStatusChanged");
+                    r = BuildSummary("同步", results);
+                }
+            }
+            catch (Exception ex) { r = "✗ 同步失败：" + ex.Message; }
+            SyncStatusService.Report(r, toast);
+            return r;
         }
     }
 }
