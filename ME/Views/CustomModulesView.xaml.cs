@@ -939,6 +939,8 @@ namespace ME.Views
                     Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center,
                     Child = new TextBlock { Text = "0 条", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(c) }
                 });
+                // 徽标必须显式放第 2 列：WPF 默认第 0 列，不设就会叠在图标上
+                Grid.SetColumn(head.Children[head.Children.Count - 1], 2);
                 previewCard.Child = head;
             }
 
