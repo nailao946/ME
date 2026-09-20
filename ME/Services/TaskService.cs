@@ -76,9 +76,14 @@ namespace ME.Services
                 // 先落今日基线，再应用本次变更，确保本次增量计入今天而不是基线
                 EnsureQuantBaseline(task);
                 if (task.QuantitativeMode.Value == QuantitativeMode.Accumulate)
+                {
                     task.QuantitativeCurrent = (task.QuantitativeCurrent ?? 0) + value;
+                    AppendQuantLog(task, DateTime.Today, value);
+                }
                 else
+                {
                     task.QuantitativeCurrent = value;
+                }
 
                 _repo.UpdateTask(task);
                 if ((task.QuantitativeDailyMin ?? 0) > 0)
@@ -363,23 +368,107 @@ namespace ME.Services
                 || !task.QuantitativeDailyMin.HasValue || task.QuantitativeDailyMin.Value <= 0)
                 return false;
 
-            if (date.Date != DateTime.Today)
-                return _completionRepo.IsCompletedOnDate(task.Id, date.ToString("yyyy-MM-dd"));
-
-            EnsureQuantBaseline(task);
             double dailyMin = task.QuantitativeDailyMin.Value;
-            double cur = task.QuantitativeCurrent ?? 0;
-            // 缺少基线时以「当前值」为基线（与安卓端一致），避免把历史累计量误算成今日增量
-            double snap = task.QuantSnapValue ?? cur;
-            // 累加模式：当日进度必须比上一日最终值（今日基线）增加 N 才算完成；
-            // 更新模式：当前值达到每日目标即算完成
-            bool dayMet = task.QuantitativeMode == QuantitativeMode.Update
-                ? cur >= dailyMin
-                : cur - snap >= dailyMin;
+            var dateStr = date.ToString("yyyy-MM-dd");
+
+            // 优先用进度日志（仅累加模式；补记历史日期也据此判定）。
+            // 更新模式的"当日值"语义与增量日志不同口径，仍走原逻辑。
+            var isAccumulate = task.QuantitativeMode != QuantitativeMode.Update;
+            var dayLog = task.QuantLog?.Where(e => e.Date == dateStr).Sum(e => e.Delta) ?? 0;
+            bool hasLog = isAccumulate && task.QuantLog?.Any(e => e.Date == dateStr) == true;
+
+            if (date.Date != DateTime.Today)
+            {
+                if (hasLog)
+                {
+                    bool pastMet = dayLog >= dailyMin;
+                    if (pastMet) RecordCompletion(task.Id, date);
+                    else RemoveCompletion(task.Id, date);
+                    return pastMet;
+                }
+                return _completionRepo.IsCompletedOnDate(task.Id, dateStr);
+            }
+
+            bool dayMet;
+            if (hasLog)
+            {
+                // 今天有日志：直接按日志合计，基线不再参与（补记不污染今日增量）
+                dayMet = dayLog >= dailyMin;
+            }
+            else
+            {
+                EnsureQuantBaseline(task);
+                double cur = task.QuantitativeCurrent ?? 0;
+                // 缺少基线时以「当前值」为基线（与安卓端一致），避免把历史累计量误算成今日增量
+                double snap = task.QuantSnapValue ?? cur;
+                // 累加模式：当日进度必须比上一日最终值（今日基线）增加 N 才算完成；
+                // 更新模式：当前值达到每日目标即算完成
+                dayMet = task.QuantitativeMode == QuantitativeMode.Update
+                    ? cur >= dailyMin
+                    : cur - snap >= dailyMin;
+            }
 
             if (dayMet) RecordCompletion(task.Id, date);
             else RemoveCompletion(task.Id, date);
             return dayMet;
+        }
+
+        /// <summary>向进度日志追加一条当日增量（不落库，调用方负责 UpdateTask）</summary>
+        public static void AppendQuantLog(TaskItem task, DateTime date, double delta)
+        {
+            if (task == null || Math.Abs(delta) < 1e-9) return;
+            task.QuantLog.Add(new QuantEntry { Date = date.ToString("yyyy-MM-dd"), Delta = delta });
+        }
+
+        /// <summary>
+        /// 量化补记：把增量记到指定日期（允许过去 30 天）。累加模式会同步累加总进度；
+        /// 更新模式"当日值"语义不支持补记，返回 false。
+        /// </summary>
+        public bool RecordQuantProgress(TaskItem task, DateTime date, double delta)
+        {
+            if (task == null || task.Type != TaskType.Quantitative) return false;
+            if (task.QuantitativeMode == QuantitativeMode.Update) return false;
+            var d = date.Date;
+            if (d > DateTime.Today || d < DateTime.Today.AddDays(-30)) return false;
+            if (delta == 0) return false;
+
+            EnsureQuantBaseline(task);
+            // 累加模式：总进度累加（历史日期补记也算进总量），同时写当日日志
+            task.QuantitativeCurrent = (task.QuantitativeCurrent ?? 0) + delta;
+            AppendQuantLog(task, d, delta);
+
+            _repo.UpdateTask(task);
+            if ((task.QuantitativeDailyMin ?? 0) > 0)
+                EvalQuantitativeDaily(task, d);
+            if (task.GoalId.HasValue)
+                RecalcGoalProgress(task.GoalId.Value);
+            return true;
+        }
+
+        /// <summary>
+        /// 返回第一个未完成的前置任务（依赖未满足时任务锁定）；无依赖或全部完成返回 null。
+        /// </summary>
+        public TaskItem BlockingPredecessor(TaskItem task, List<TaskItem> allTasks)
+        {
+            if (task?.BlockedBy == null || task.BlockedBy.Count == 0 || allTasks == null) return null;
+            foreach (var uid in task.BlockedBy)
+            {
+                var pre = allTasks.FirstOrDefault(t => t.Uid == uid);
+                if (pre == null) continue;
+                if (pre.Type == TaskType.OneTime)
+                {
+                    if (!pre.IsCompleted) return pre;
+                }
+                else if (pre.Type == TaskType.Quantitative)
+                {
+                    if (!EvalQuantitativeDaily(pre, DateTime.Today)) return pre;
+                }
+                else
+                {
+                    if (!IsTaskCompletedForDisplay(pre, DateTime.Today)) return pre;
+                }
+            }
+            return null;
         }
 
         /// <summary>

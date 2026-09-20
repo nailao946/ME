@@ -506,6 +506,30 @@ namespace ME.Views
                     });
                 }
 
+                // 里程碑进度（有里程碑才显示）
+                var ms = goal.Milestones;
+                if (ms != null && ms.Count > 0)
+                {
+                    int doneCnt = ms.Count(m => m.Done);
+                    var msPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+                    msPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"🚩 里程碑 {doneCnt}/{ms.Count}", FontSize = 10.5, FontWeight = FontWeights.SemiBold,
+                        Foreground = doneCnt >= ms.Count ? (SolidColorBrush)FindResource("AccentGreenBrush") : (SolidColorBrush)FindResource("SecondaryTextBrush")
+                    });
+                    // 未完成的显示前 3 条节点名
+                    foreach (var m in ms.Where(m => !m.Done).Take(3))
+                    {
+                        msPanel.Children.Add(new TextBlock
+                        {
+                            Text = $" · {m.Title}", FontSize = 10,
+                            Foreground = (SolidColorBrush)FindResource("SecondaryTextBrush"),
+                            TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 130
+                        });
+                    }
+                    textPanel.Children.Add(msPanel);
+                }
+
                 if (!string.IsNullOrEmpty(goal.Description))
                 {
                     textPanel.Children.Add(new TextBlock

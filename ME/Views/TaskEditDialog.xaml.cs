@@ -19,6 +19,12 @@ namespace ME.Views
         private int _editTaskId;
         private int? _editParentTaskId;
         private int? _editGoalId;
+        private string _selfUid;
+        private List<string> _blockedByUids = new List<string>();
+        private Dictionary<string, string> _blockedByName = new Dictionary<string, string>();
+        private StackPanel _blockedBySection;
+        private ComboBox _prereqCombo;
+        private WrapPanel _blockedByChips;
 
         public new string Title
         {
@@ -39,6 +45,9 @@ namespace ME.Views
 
             // Load time tags
             LoadTimeTags();
+
+            // Prerequisite (blocked-by) section
+            BuildBlockedBySection();
         }
 
         private void LoadTimeTags()
@@ -289,6 +298,24 @@ namespace ME.Views
                         }
                     }
                 }
+
+                // Load blocked-by prerequisites
+                if (!string.IsNullOrEmpty(existingTask.Uid)) _selfUid = existingTask.Uid;
+                var blocked = existingTask.BlockedBy ?? new List<string>();
+                if (blocked.Any())
+                {
+                    var repo = new TaskRepository();
+                    var all = repo.GetAllTasks();
+                    foreach (var uid in blocked)
+                    {
+                        if (string.IsNullOrEmpty(uid)) continue;
+                        _blockedByUids.Add(uid);
+                        var t = all.Find(x => x.Uid == uid);
+                        _blockedByName[uid] = t != null ? (t.Title ?? "(未命名)") : uid;
+                    }
+                    RenderBlockedChips();
+                }
+                LoadPrereqPicker();
             }
         }
 
@@ -479,6 +506,9 @@ namespace ME.Views
             else
                 ResultTask.TimeTagId = null;
 
+            // Prerequisites (blocked-by)
+            ResultTask.BlockedBy = new List<string>(_blockedByUids);
+
             DialogResult = true;
             Close();
         }
@@ -556,5 +586,151 @@ namespace ME.Views
             DialogResult = false;
             Close();
         }
+
+        #region 前置依赖 (BlockedBy)
+
+        private void BuildBlockedBySection()
+        {
+            _blockedBySection = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            _blockedBySection.Children.Add(new TextBlock
+            {
+                Text = "前置依赖",
+                FontSize = 12,
+                Foreground = GetBrush("SecondaryTextBrush"),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            var addBtn = new Button
+            {
+                Content = "＋ 添加前置",
+                Style = (Style)FindResource("SecondaryButtonStyle"),
+                Padding = new Thickness(10, 4, 10, 4),
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            addBtn.Click += AddPrereq_Click;
+            _blockedBySection.Children.Add(addBtn);
+
+            _prereqCombo = new ComboBox
+            {
+                Height = 36,
+                FontSize = 13,
+                Style = (Style)FindResource("MacComboBoxStyle"),
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            _prereqCombo.SelectionChanged += PrereqCombo_SelectionChanged;
+            _blockedBySection.Children.Add(_prereqCombo);
+
+            _blockedByChips = new WrapPanel();
+            _blockedBySection.Children.Add(_blockedByChips);
+
+            var content = ContentScroller.Content as StackPanel;
+            var dateGrid = FindDateRangeGrid();
+            int idx = dateGrid != null ? content.Children.IndexOf(dateGrid) : content.Children.Count - 1;
+            content.Children.Insert(idx + 1, _blockedBySection);
+
+            LoadPrereqPicker();
+        }
+
+        private FrameworkElement FindDateRangeGrid()
+        {
+            var content = ContentScroller.Content as StackPanel;
+            if (content == null) return null;
+            foreach (var child in content.Children)
+            {
+                if (child is Grid g &&
+                    g.Children.OfType<StackPanel>().Any(sp => sp.Children.Contains(StartDatePicker)))
+                    return g;
+            }
+            return null;
+        }
+
+        private void LoadPrereqPicker()
+        {
+            if (_prereqCombo == null) return;
+            _prereqCombo.Items.Clear();
+            _prereqCombo.Items.Add(new ComboBoxItem { Content = "选择前置任务…", Tag = (TaskItem)null, IsSelected = true });
+
+            var repo = new TaskRepository();
+            foreach (var t in repo.GetAllTasks())
+            {
+                if (t.IsDeleted) continue;
+                if (string.IsNullOrEmpty(t.Uid)) continue;                       // (无Uid) 跳过
+                if (!string.IsNullOrEmpty(_selfUid) && t.Uid == _selfUid) continue;
+                if (_blockedByUids.Contains(t.Uid)) continue;
+                _prereqCombo.Items.Add(new ComboBoxItem { Content = t.Title ?? "(未命名)", Tag = t });
+            }
+        }
+
+        private void AddPrereq_Click(object sender, RoutedEventArgs e)
+        {
+            if (_prereqCombo != null) _prereqCombo.IsDropDownOpen = true;
+        }
+
+        private void PrereqCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_prereqCombo?.SelectedItem is ComboBoxItem item && item.Tag is TaskItem sel)
+            {
+                if (!string.IsNullOrEmpty(sel.Uid) && !_blockedByUids.Contains(sel.Uid))
+                {
+                    _blockedByUids.Add(sel.Uid);
+                    if (!_blockedByName.ContainsKey(sel.Uid))
+                        _blockedByName[sel.Uid] = sel.Title ?? "(未命名)";
+                    RenderBlockedChips();
+                    LoadPrereqPicker();
+                }
+                _prereqCombo.SelectedIndex = 0;
+            }
+        }
+
+        private void RenderBlockedChips()
+        {
+            if (_blockedByChips == null) return;
+            _blockedByChips.Children.Clear();
+            foreach (var uid in _blockedByUids)
+            {
+                var name = _blockedByName.ContainsKey(uid) ? _blockedByName[uid] : uid;
+                var chip = new Border
+                {
+                    CornerRadius = new CornerRadius(12),
+                    Background = GetBrush("CardBrush"),
+                    BorderBrush = GetBrush("BorderBrush"),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(8, 4, 8, 4),
+                    Margin = new Thickness(0, 0, 6, 6)
+                };
+                var sp = new StackPanel { Orientation = Orientation.Horizontal };
+                sp.Children.Add(new TextBlock
+                {
+                    Text = name,
+                    FontSize = 12,
+                    Foreground = GetBrush("TextBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                var x = new Button
+                {
+                    Content = "✕",
+                    Style = (Style)FindResource("SecondaryButtonStyle"),
+                    Padding = new Thickness(6, 0, 6, 0),
+                    FontSize = 10,
+                    Margin = new Thickness(6, 0, 0, 0)
+                };
+                var localUid = uid;
+                x.Click += (s, ev) =>
+                {
+                    _blockedByUids.Remove(localUid);
+                    _blockedByName.Remove(localUid);
+                    RenderBlockedChips();
+                    LoadPrereqPicker();
+                };
+                sp.Children.Add(x);
+                chip.Child = sp;
+                _blockedByChips.Children.Add(chip);
+            }
+        }
+
+        #endregion
+
+        private Brush GetBrush(string key) => (Brush)FindResource(key);
     }
 }

@@ -328,6 +328,34 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- 数据导入 -->
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="导入" FontSize="16" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,12" />
+
+                            <TextBlock Text="自定义模块记录导入" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ComboBox x:Name="ImportModuleCombo" Width="180" Margin="0,0,8,0"
+                                          Style="{StaticResource MacComboBoxStyle}" />
+                                <Button x:Name="ImportModuleCsvBtn" Content="选择 CSV…" Click="ImportModuleCsv_Click"
+                                        Style="{StaticResource PrimaryButtonStyle}" FontSize="12"
+                                        Padding="14,6,14,6" Cursor="Hand" />
+                            </StackPanel>
+                            <TextBlock Text="第一行为表头：Date（或 日期）必填，其余列按模块字段 Label 匹配；数值字段转换失败则该字段跳过。" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
+
+                            <TextBlock Text="滴答清单任务导入" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                            <Button x:Name="ImportDidaCsvBtn" Content="选择 CSV（滴答清单导出）…" Click="ImportDidaCsv_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" FontSize="12"
+                                    Padding="14,6,14,6" HorizontalAlignment="Left" Cursor="Hand" />
+                            <TextBlock Text="标题/名称 列必填；日期/开始时间/截止时间 取 yyyy-MM-dd；优先级映射 高→2 中→1 低→0（或滴答 高/中/低/无）。" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- 云同步 (PC ↔ Android)：GitHub / Gitee / WebDAV -->
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>

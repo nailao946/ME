@@ -28,6 +28,7 @@ namespace ME
         private CustomModulesView _customModulesView;
         private TimeTrackView _timeTrackView;
         private HealthView _healthView;
+        private Views.ExpensesView _expensesView;
         private UserControl _currentView;
         private Forms.NotifyIcon _notifyIcon;
         private bool _isDarkTheme;
@@ -670,6 +671,7 @@ namespace ME
             Quick("任务列表", 0);
             Quick("日历视图", 2);
             Quick("自定义模块", 6);
+            Quick("记账", 8);
             Quick("设置", 7);
 
             menu.Items.Add(new Forms.ToolStripSeparator());

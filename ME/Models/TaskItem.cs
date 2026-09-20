@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -149,5 +150,24 @@ namespace ME.Models
 
         private int? _timeTagId;
         public int? TimeTagId { get => _timeTagId; set { _timeTagId = value; OnPropertyChanged(); } }
+
+        // 跨设备唯一标识（与安卓端对齐：任务依赖按 Uid 引用；旧数据在保存/同步时自动补）
+        private string _uid;
+        public string Uid { get => _uid; set { _uid = value; OnPropertyChanged(); } }
+
+        // 前置任务依赖：存前置任务的 Uid；存在未完成前置时本任务锁定无法打卡
+        private List<string> _blockedBy = new List<string>();
+        public List<string> BlockedBy { get => _blockedBy; set { _blockedBy = value ?? new List<string>(); OnPropertyChanged(); } }
+
+        // 量化进度日志（补记用）：某日进度 = 该日 Delta 合计；无日志时退回旧基线逻辑（与安卓端同口径）
+        private List<QuantEntry> _quantLog = new List<QuantEntry>();
+        public List<QuantEntry> QuantLog { get => _quantLog; set { _quantLog = value ?? new List<QuantEntry>(); OnPropertyChanged(); } }
+    }
+
+    /// <summary>量化某日增量（补记历史日期用；Date=yyyy-MM-dd）</summary>
+    public class QuantEntry
+    {
+        public string Date { get; set; } = "";
+        public double Delta { get; set; }
     }
 }

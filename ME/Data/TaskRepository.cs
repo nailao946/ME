@@ -53,6 +53,9 @@ namespace ME.Data
             task.Id = maxId + 1;
             task.CreatedAt = task.CreatedAt == default ? DateTime.Now : task.CreatedAt;
             task.UpdatedAt = DateTime.Now;
+            // 跨设备唯一标识：任务依赖按 Uid 引用，老数据/漏填时补
+            if (string.IsNullOrWhiteSpace(task.Uid))
+                task.Uid = Guid.NewGuid().ToString("N");
             tasks.Add(task);
             JsonStore.Save(FileName, tasks);
             return task.Id;

@@ -17,6 +17,9 @@ namespace ME.Views
         private int? _selectedTagId;
         private List<GoalTag> _allTags;
         private int _editGoalId;
+        private StackPanel _milestoneSection;
+        private StackPanel _milestoneRows;
+        private List<MilestoneRow> _milestoneList = new List<MilestoneRow>();
 
         public GoalEditDialog()
         {
@@ -25,6 +28,7 @@ namespace ME.Views
             EndDatePicker.SelectedDate = DateTime.Today.AddYears(1);
             SubtaskList.ItemsSource = Subtasks;
             LoadTags();
+            BuildMilestoneSection();
         }
 
         public GoalEditDialog(Goal existingGoal) : this()
@@ -56,6 +60,10 @@ namespace ME.Views
                 var childTasks = taskRepo.GetTasksByGoalId(existingGoal.Id);
                 foreach (var t in childTasks)
                     Subtasks.Add(t);
+
+                // Load milestones
+                var milestones = existingGoal.Milestones ?? new List<GoalMilestone>();
+                foreach (var m in milestones) AddMilestoneRow(m);
             }
         }
 
@@ -260,9 +268,117 @@ namespace ME.Views
                     ResultGoal.Color = MapHexToGoalColor(tag.Color);
             }
 
+            // Milestones
+            var ms = new List<GoalMilestone>();
+            foreach (var mr in _milestoneList)
+            {
+                var title = (mr.TitleBox.Text ?? "").Trim();
+                if (string.IsNullOrEmpty(title)) continue;
+                ms.Add(new GoalMilestone
+                {
+                    Title = title,
+                    Done = mr.DoneBox.IsChecked == true,
+                    CreatedAt = mr.CreatedAt
+                });
+            }
+            ResultGoal.Milestones = ms;
+
             DialogResult = true;
             Close();
         }
+
+        #region 里程碑 (Milestones)
+
+        private class MilestoneRow
+        {
+            public CheckBox DoneBox;
+            public TextBox TitleBox;
+            public string CreatedAt;
+        }
+
+        private void BuildMilestoneSection()
+        {
+            _milestoneSection = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+
+            var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "里程碑",
+                FontSize = 12,
+                Foreground = GetBrush("SecondaryTextBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var addBtn = new Button
+            {
+                Content = "＋ 添加里程碑",
+                Style = (Style)FindResource("SecondaryButtonStyle"),
+                Padding = new Thickness(10, 2, 10, 2),
+                FontSize = 12,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            addBtn.Click += AddMilestone_Click;
+            header.Children.Add(addBtn);
+            _milestoneSection.Children.Add(header);
+
+            _milestoneRows = new StackPanel();
+            _milestoneSection.Children.Add(_milestoneRows);
+
+            var content = ContentScroller.Content as StackPanel;
+            content.Children.Add(_milestoneSection);
+        }
+
+        private void AddMilestone_Click(object sender, RoutedEventArgs e)
+        {
+            AddMilestoneRow(new GoalMilestone
+            {
+                Title = "",
+                Done = false,
+                CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            });
+        }
+
+        private void AddMilestoneRow(GoalMilestone m)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            var cb = new CheckBox
+            {
+                IsChecked = m.Done,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var tb = new TextBox
+            {
+                Text = m.Title ?? "",
+                Style = (Style)FindResource("InputTextBoxStyle"),
+                Height = 34,
+                FontSize = 13,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 320
+            };
+            var del = new Button
+            {
+                Content = "✕",
+                Style = (Style)FindResource("SecondaryButtonStyle"),
+                Padding = new Thickness(8, 2, 8, 2),
+                FontSize = 12,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            var mr = new MilestoneRow { DoneBox = cb, TitleBox = tb, CreatedAt = m.CreatedAt };
+            del.Click += (s, ev) =>
+            {
+                _milestoneRows.Children.Remove(row);
+                _milestoneList.Remove(mr);
+            };
+            row.Children.Add(cb);
+            row.Children.Add(tb);
+            row.Children.Add(del);
+            _milestoneRows.Children.Add(row);
+            _milestoneList.Add(mr);
+        }
+
+        #endregion
+
+        private Brush GetBrush(string key) => (Brush)FindResource(key);
 
         public void PersistSubtasks()
         {

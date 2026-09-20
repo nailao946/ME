@@ -1,0 +1,84 @@
+<UserControl x:Class="ME.Views.ExpensesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Loaded="ExpensesView_Loaded">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="Root" MaxWidth="720" HorizontalAlignment="Stretch" Margin="20,16,20,20">
+
+            <!-- 月份导航 -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="PrevMonthBtn" Grid.Column="0" Content="◀" Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="12,4,12,4" FontSize="13" Cursor="Hand" Click="PrevMonth_Click" />
+                    <TextBlock x:Name="MonthLabel" Grid.Column="1" Text="------" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Button x:Name="NextMonthBtn" Grid.Column="2" Content="▶" Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="12,4,12,4" FontSize="13" Cursor="Hand" Click="NextMonth_Click" />
+                </Grid>
+            </Border>
+
+            <!-- 三张统计卡 -->
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,8,0" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="收入合计" FontSize="12.5" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <TextBlock x:Name="IncomeText" Text="0.00" FontSize="22" FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentGreenBrush}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="4,0,4,0" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="支出合计" FontSize="12.5" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <TextBlock x:Name="ExpenseText" Text="0.00" FontSize="22" FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentRedBrush}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="8,0,0,0" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="结余" FontSize="12.5" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <TextBlock x:Name="BalanceText" Text="0.00" FontSize="22" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryBrush}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 分类汇总 -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="本月分类支出" FontSize="15" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" />
+                    <StackPanel x:Name="CategoryPanel" />
+                    <TextBlock x:Name="CategoryEmpty" Text="本月暂无支出" FontSize="12"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <!-- 记录列表 -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="本月记录" FontSize="15" FontWeight="Bold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" />
+                    <StackPanel x:Name="RecordsPanel" />
+                    <TextBlock x:Name="EmptyText" Text="本月还没有记账，点下方「＋ 记一笔」开始吧～"
+                               FontSize="12.5" Foreground="{DynamicResource SecondaryTextBrush}"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <!-- 主按钮 -->
+            <Button x:Name="AddBtn" Content="＋ 记一笔" Style="{StaticResource PrimaryButtonStyle}"
+                    FontSize="14" Padding="20,10" HorizontalAlignment="Stretch" Cursor="Hand" Click="Add_Click" />
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

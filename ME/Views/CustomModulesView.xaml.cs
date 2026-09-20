@@ -391,7 +391,39 @@ namespace ME.Views
                 "recent" => BuildWidgetRecentBody(m, w, color),
                 _ => BuildWidgetStatBody(m, w, color)
             };
-            card.Child = body;
+
+            // 左上角 ‹ › 微调排序（拖拽与"点击编辑"冲突，用按钮最稳）；排序随 custom_dashboards.json 云同步
+            var reorder = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, -4, 0)
+            };
+            void MoveBtn(string glyph, string tip, int dir)
+            {
+                var b = new Button
+                {
+                    Content = glyph, FontSize = 10, Width = 20, Height = 18, Padding = new Thickness(0),
+                    Style = (Style)FindResource("SecondaryButtonStyle"), Cursor = Cursors.Hand, ToolTip = tip, Opacity = 0.65
+                };
+                b.Click += (s, e) =>
+                {
+                    var list = CustomDashboardRepository.GetFor(m.Id);
+                    int i = list.FindIndex(x => x.Id == w.Id);
+                    int j = i + dir;
+                    if (i < 0 || j < 0 || j >= list.Count) return;
+                    (list[i], list[j]) = (list[j], list[i]);
+                    CustomDashboardRepository.SaveFor(m.Id, list);
+                    Reload();
+                };
+                reorder.Children.Add(b);
+            }
+            MoveBtn("‹", "前移", -1);
+            MoveBtn("›", "后移", 1);
+
+            var host = new Grid();
+            host.Children.Add(body);
+            host.Children.Add(reorder);
+            card.Child = host;
             return card;
         }
 

@@ -126,5 +126,17 @@ namespace ME.Models
 
         private int _sortOrder;
         public int SortOrder { get => _sortOrder; set { _sortOrder = value; OnPropertyChanged(); } }
+
+        // 目标里程碑（与安卓端 Milestone {Title, Done, CreatedAt} 对齐）
+        private System.Collections.Generic.List<GoalMilestone> _milestones = new System.Collections.Generic.List<GoalMilestone>();
+        public System.Collections.Generic.List<GoalMilestone> Milestones { get => _milestones; set { _milestones = value ?? new System.Collections.Generic.List<GoalMilestone>(); OnPropertyChanged(); } }
+    }
+
+    /// <summary>目标里程碑：关键节点，勾选即达成</summary>
+    public class GoalMilestone
+    {
+        public string Title { get; set; } = "";
+        public bool Done { get; set; }
+        public string CreatedAt { get; set; } = "";
     }
 }

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -65,6 +67,7 @@ namespace ME.Views
             catch { }
             LoadSyncConfig();
             ApplySettingsCategory(SettingsNav.SelectedIndex);
+            LoadImportModules();
         }
 
         // ========== 分类导航（微信设置式：左侧大类 → 右侧一页） ==========
@@ -1355,6 +1358,254 @@ namespace ME.Views
             {
                 ConfirmDialog.Show(Window.GetWindow(this), "导入失败", ex.Message, "确定");
             }
+        }
+
+        // ========== 数据导入（自定义模块记录 / 滴答清单任务） ==========
+
+        private void LoadImportModules()
+        {
+            if (ImportModuleCombo == null) return;
+            ImportModuleCombo.Items.Clear();
+            foreach (var m in CustomModuleRepository.GetAll())
+                ImportModuleCombo.Items.Add(new ComboBoxItem { Content = m.Name, Tag = m.Id });
+        }
+
+        private void ImportModuleCsv_Click(object sender, RoutedEventArgs e)
+        {
+            if (ImportModuleCombo.SelectedItem is not ComboBoxItem sel || sel.Tag is not int moduleId)
+            {
+                MessageBox.Show("请先在下拉框选择一个自定义模块。", "模块记录导入", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var dlg = new OpenFileDialog
+            {
+                Title = "选择自定义模块记录 CSV",
+                Filter = "CSV 文件|*.csv|所有文件|*.*"
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+
+            try
+            {
+                var module = CustomModuleRepository.GetAll().FirstOrDefault(m => m.Id == moduleId);
+                if (module == null) { MessageBox.Show("模块不存在。", "错误"); return; }
+
+                var rows = ParseCsv(dlg.FileName);
+                if (rows.Count < 2) { MessageBox.Show("CSV 没有数据行。", "模块记录导入"); return; }
+
+                var header = rows[0].Select(h => h.Trim()).ToArray();
+                var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < header.Length; i++)
+                    if (!colMap.ContainsKey(header[i])) colMap[header[i]] = i;
+
+                if (!colMap.TryGetValue("Date", out var dateIdx) && !colMap.TryGetValue("日期", out dateIdx))
+                {
+                    MessageBox.Show("表头缺少 Date（或 日期）列，无法导入。", "模块记录导入", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // 字段按 Label 匹配（忽略大小写/空白）
+                var fieldByLabel = module.Fields
+                    .Where(f => !string.IsNullOrWhiteSpace(f.Label))
+                    .ToDictionary(f => f.Label.Trim(), f => f, StringComparer.OrdinalIgnoreCase);
+
+                int success = 0, skip = 0;
+                for (int r = 1; r < rows.Count; r++)
+                {
+                    var row = rows[r];
+                    var dateVal = dateIdx < row.Length ? row[dateIdx].Trim() : "";
+                    var date = NormalizeImportDate(dateVal);
+                    if (date == null) { skip++; continue; }
+
+                    var values = new Dictionary<string, string>();
+                    for (int c = 0; c < header.Length; c++)
+                    {
+                        if (c == dateIdx) continue;
+                        var lbl = header[c];
+                        if (!fieldByLabel.TryGetValue(lbl, out var f)) continue;
+                        var v = c < row.Length ? row[c].Trim() : "";
+                        if (string.IsNullOrWhiteSpace(v)) continue;
+                        // 数值字段类型转换失败则跳过该字段
+                        if (f.Type == "number" &&
+                            !double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out _))
+                            continue;
+                        values[f.Key] = v;
+                    }
+
+                    CustomModuleRepository.AddRecord(module.Id, new CustomModuleRecord
+                    {
+                        Date = date,
+                        Time = "12:00",
+                        Values = values,
+                        Note = null
+                    });
+                    success++;
+                }
+
+                MessageBox.Show(
+                    $"导入完成：成功 {success} 条，跳过 {skip} 条（缺日期或日期无法解析）。",
+                    "模块记录导入", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("导入失败：" + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ImportDidaCsv_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "选择滴答清单导出 CSV",
+                Filter = "CSV 文件|*.csv|所有文件|*.*"
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+
+            try
+            {
+                var rows = ParseCsv(dlg.FileName);
+                if (rows.Count < 2) { MessageBox.Show("CSV 没有数据行。", "滴答导入"); return; }
+
+                var header = rows[0].Select(h => h.Trim()).ToArray();
+                var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < header.Length; i++)
+                    if (!colMap.ContainsKey(header[i])) colMap[header[i]] = i;
+
+                int titleIdx = FindAnyCol(colMap, "标题", "名称", "主题", "title", "name", "subject");
+                if (titleIdx < 0)
+                {
+                    MessageBox.Show("表头缺少标题/名称列，无法导入。", "滴答导入", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                int dateIdx = FindAnyCol(colMap, "日期", "开始时间", "截止时间", "开始日期", "结束时间", "start", "due", "end", "date");
+                int prioIdx = FindAnyCol(colMap, "优先级", "priority");
+                int descIdx = FindAnyCol(colMap, "描述", "备注", "内容", "desc", "note", "content");
+
+                var repo = new TaskRepository();
+                int success = 0, skip = 0;
+                for (int r = 1; r < rows.Count; r++)
+                {
+                    var row = rows[r];
+                    var title = titleIdx < row.Length ? row[titleIdx].Trim() : "";
+                    if (string.IsNullOrWhiteSpace(title)) { skip++; continue; }
+
+                    DateTime? date = null;
+                    if (dateIdx >= 0 && dateIdx < row.Length)
+                    {
+                        var d = NormalizeImportDate(row[dateIdx].Trim());
+                        if (d != null && DateTime.TryParse(d, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                            date = dt;
+                    }
+                    int prio = prioIdx >= 0 && prioIdx < row.Length ? MapDidaPriority(row[prioIdx].Trim()) : 0;
+                    var desc = descIdx >= 0 && descIdx < row.Length ? row[descIdx].Trim() : "";
+
+                    // 一律建为一次性任务，DueOn = 日期
+                    var task = new TaskItem
+                    {
+                        Title = title,
+                        Type = TaskType.OneTime,
+                        Priority = prio,
+                        Description = desc,
+                        StartDate = date,
+                        EndDate = date,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    };
+                    repo.InsertTask(task);
+                    success++;
+                }
+
+                MessageBox.Show(
+                    $"导入完成：成功 {success} 条，跳过 {skip} 条（无标题）。",
+                    "滴答导入", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("导入失败：" + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // —— CSV 解析辅助 ——
+
+        private static List<string[]> ParseCsv(string path)
+        {
+            var lines = File.ReadAllLines(path, Encoding.UTF8);
+            var nonEmpty = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+            if (nonEmpty.Count == 0) return new List<string[]>();
+            char delim = nonEmpty[0].Contains('\t') ? '\t' : ',';
+            return nonEmpty.Select(l => SplitCsvLine(l, delim)).ToList();
+        }
+
+        private static string[] SplitCsvLine(string line, char delim)
+        {
+            var result = new List<string>();
+            var cur = new System.Text.StringBuilder();
+            bool inQ = false;
+            for (int i = 0; i < line.Length; i++)
+            {
+                var c = line[i];
+                if (inQ)
+                {
+                    if (c == '"')
+                    {
+                        if (i + 1 < line.Length && line[i + 1] == '"') { cur.Append('"'); i++; }
+                        else inQ = false;
+                    }
+                    else cur.Append(c);
+                }
+                else
+                {
+                    if (c == '"') inQ = true;
+                    else if (c == delim) { result.Add(cur.ToString()); cur.Clear(); }
+                    else cur.Append(c);
+                }
+            }
+            result.Add(cur.ToString());
+            return result.ToArray();
+        }
+
+        private static int FindAnyCol(Dictionary<string, int> map, params string[] names)
+        {
+            foreach (var n in names)
+                if (map.TryGetValue(n, out var i)) return i;
+            return -1;
+        }
+
+        /// <summary>把各种日期写法规整成 yyyy-MM-dd；解析失败返回 null</summary>
+        private static string NormalizeImportDate(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var s = raw.Trim().Replace('/', '-');
+            if (s.Length >= 10 && DateTime.TryParse(s.Substring(0, 10), CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+                return d.ToString("yyyy-MM-dd");
+            if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d2))
+                return d2.ToString("yyyy-MM-dd");
+            return null;
+        }
+
+        /// <summary>滴答优先级映射：高→2 中→1 低→0（无/其它→0）；兼容数字 5/3/1/2</summary>
+        private static int MapDidaPriority(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return 0;
+            var s = raw.Trim();
+            switch (s)
+            {
+                case "高": return 2;
+                case "中": return 1;
+                case "低": return 0;
+                case "无": case "无优先级": return 0;
+            }
+            if (int.TryParse(s, out var n))
+            {
+                return n switch
+                {
+                    5 => 2,
+                    3 => 1,
+                    2 => 1,
+                    1 => 0,
+                    _ => 0
+                };
+            }
+            return 0;
         }
 
         private class ColorBallDef

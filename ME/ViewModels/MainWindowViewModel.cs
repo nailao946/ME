@@ -39,6 +39,7 @@ namespace ME.ViewModels
                 new NavItem { Name = Properties.Resources.NavHealth, Icon = "❤️", ViewIndex = 5 },
                 new NavItem { Name = Properties.Resources.NavModules, Icon = "🧩", ViewIndex = 6 },
                 new NavItem { Name = Properties.Resources.NavSettings, Icon = "⚙️", ViewIndex = 7 },
+                new NavItem { Name = "💰 记账", Icon = "💰", ViewIndex = 8 },
             };
 
             _currentViewTitle = Properties.Resources.NavTasks;

@@ -1,6 +1,8 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using ME.Models;
 
 namespace ME.Views
@@ -9,6 +11,8 @@ namespace ME.Views
     {
         public double NewValue { get; private set; }
         private readonly TaskItem _task;
+        private DatePicker _datePicker;
+        public DateTime? SelectedDate { get; internal set; }
 
         public QuantitativeInputDialog(TaskItem task)
         {
@@ -41,6 +45,7 @@ namespace ME.Views
             ProgressText.Text = $"{progress:F1}%";
 
             ValueInput.Focus();
+            BuildDateRow();
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -50,6 +55,14 @@ namespace ME.Views
 
         private void Confirm_Click(object sender, RoutedEventArgs e)
         {
+            if (_datePicker == null || _datePicker.SelectedDate == null ||
+                _datePicker.SelectedDate.Value.Date > DateTime.Today ||
+                _datePicker.SelectedDate.Value.Date < DateTime.Today.AddDays(-30))
+            {
+                ConfirmDialog.Show(this, "提示", "请选择今天或过去 30 天内的日期", "确定");
+                return;
+            }
+
             if (!double.TryParse(ValueInput.Text, out double input))
             {
                 ConfirmDialog.Show(this, "提示", "请输入有效数值", "确定");
@@ -67,9 +80,57 @@ namespace ME.Views
                 NewValue = input;
             }
 
+            SelectedDate = _datePicker?.SelectedDate;
+
             DialogResult = true;
             Close();
         }
+
+        private void BuildDateRow()
+        {
+            var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "日期",
+                FontSize = 12,
+                Foreground = GetBrush("SecondaryTextBrush"),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            _datePicker = new DatePicker
+            {
+                SelectedDate = DateTime.Today,
+                DisplayDateStart = DateTime.Today.AddDays(-30),
+                DisplayDateEnd = DateTime.Today,
+                FontSize = 13,
+                Height = 36,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            _datePicker.Background = GetBrush("CardBrush");
+            _datePicker.Foreground = GetBrush("TextBrush");
+            _datePicker.BorderBrush = GetBrush("BorderBrush");
+            panel.Children.Add(_datePicker);
+
+            var sv = FindContentScroller();
+            if (sv?.Content is StackPanel sp)
+            {
+                int idx = sp.Children.IndexOf(InputLabel);
+                if (idx < 0) idx = sp.Children.Count;
+                sp.Children.Insert(idx, panel);
+            }
+        }
+
+        private ScrollViewer FindContentScroller()
+        {
+            if (this.Content is Border border && border.Child is Grid grid)
+            {
+                foreach (var c in grid.Children)
+                    if (c is ScrollViewer sv) return sv;
+            }
+            return null;
+        }
+
+        private Brush GetBrush(string key) => (Brush)FindResource(key);
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
