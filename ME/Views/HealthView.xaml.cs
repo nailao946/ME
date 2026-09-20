@@ -2094,27 +2094,16 @@ namespace ME.Views
                 var emojiText = new TextBlock
                 {
                     Text = emoji,
-                    FontSize = 18,
+                    FontSize = 19,
+                    Width = pw,
+                    TextAlignment = TextAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
                     IsHitTestVisible = false
                 };
-                Canvas.SetLeft(emojiText, x + pw / 2 - 9);
-                Canvas.SetTop(emojiText, y + ph / 2 - 16);
+                Canvas.SetLeft(emojiText, x);
+                Canvas.SetTop(emojiText, y + ph / 2 - 14);
                 BodyCanvas.Children.Add(emojiText);
-
-                var lbl = new TextBlock
-                {
-                    Text = label,
-                    FontSize = 10,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("TextBrush"),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    IsHitTestVisible = false
-                };
-                Canvas.SetLeft(lbl, x + pw / 2 - 22);
-                Canvas.SetTop(lbl, y + ph / 2 + 3);
-                BodyCanvas.Children.Add(lbl);
+                // 部位名称不画在图上（用户要求：明面上只有图标），解释放悬浮提示与下方详情
             }
 
             // 头（睡眠/心情）
