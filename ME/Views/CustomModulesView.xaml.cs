@@ -38,6 +38,15 @@ namespace ME.Views
         {
             InitializeComponent();
             Loaded += (s, e) => Reload();
+            // 主题切换立即重绘：页面是缓存复用的，代码后台上过的颜色不会自己变
+            ThemeService.ThemeChanged += OnThemeChanged;
+            this.Unloaded += (s, e) => ThemeService.ThemeChanged -= OnThemeChanged;
+        }
+
+        private void OnThemeChanged(string theme)
+        {
+            if (!IsLoaded) return; // 尚未显示过就先不渲染，Loaded 时会 Reload
+            Dispatcher.BeginInvoke(Reload);
         }
 
         public void Reload()
