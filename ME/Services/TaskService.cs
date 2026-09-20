@@ -436,6 +436,12 @@ namespace ME.Services
             // 累加模式：总进度累加（历史日期补记也算进总量），同时写当日日志
             task.QuantitativeCurrent = (task.QuantitativeCurrent ?? 0) + delta;
             AppendQuantLog(task, d, delta);
+            if (d != DateTime.Today)
+            {
+                // 非今日补记：同步抬高今日基线，避免把历史补记量误算成"今日增量"
+                // （今日完成判定兜底口径是 Current - Snap，两边同时加 delta 后差值不变）
+                task.QuantSnapValue = (task.QuantSnapValue ?? task.QuantitativeCurrent ?? 0) + delta;
+            }
 
             _repo.UpdateTask(task);
             if ((task.QuantitativeDailyMin ?? 0) > 0)
@@ -443,6 +449,31 @@ namespace ME.Services
             if (task.GoalId.HasValue)
                 RecalcGoalProgress(task.GoalId.Value);
             return true;
+        }
+
+        /// <summary>
+        /// 纯读取版"量化任务当日是否达标"：不写完成记录、不落基线，供依赖锁定等只读场景使用，
+        /// 判定口径与 EvalQuantitativeDaily 一致（日志优先，其次当日基线差值/当前值）。
+        /// </summary>
+        private bool IsQuantDayMetForDisplay(TaskItem task, DateTime date)
+        {
+            if (task == null) return false;
+            var dateStr = date.ToString("yyyy-MM-dd");
+            if ((task.QuantitativeDailyMin ?? 0) <= 0)
+                return _completionRepo.IsCompletedOnDate(task.Id, dateStr);
+
+            double dailyMin = task.QuantitativeDailyMin.Value;
+            var dayLog = task.QuantLog?.Where(e => e.Date == dateStr).Sum(e => e.Delta) ?? 0;
+            if (task.QuantLog?.Any(e => e.Date == dateStr) == true)
+                return dayLog >= dailyMin;
+            if (date.Date != DateTime.Today)
+                return _completionRepo.IsCompletedOnDate(task.Id, dateStr);
+
+            double cur = task.QuantitativeCurrent ?? 0;
+            double snap = task.QuantSnapValue ?? cur;
+            return task.QuantitativeMode == QuantitativeMode.Update
+                ? cur >= dailyMin
+                : cur - snap >= dailyMin;
         }
 
         /// <summary>
@@ -461,7 +492,7 @@ namespace ME.Services
                 }
                 else if (pre.Type == TaskType.Quantitative)
                 {
-                    if (!EvalQuantitativeDaily(pre, DateTime.Today)) return pre;
+                    if (!IsQuantDayMetForDisplay(pre, DateTime.Today)) return pre;
                 }
                 else
                 {

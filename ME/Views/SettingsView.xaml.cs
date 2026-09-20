@@ -1528,7 +1528,27 @@ namespace ME.Views
 
         private static List<string[]> ParseCsv(string path)
         {
-            var lines = File.ReadAllLines(path, Encoding.UTF8);
+            // 编码容错：先按严格 UTF-8 解码，失败则按 GB18030（滴答清单等 Windows 软件常导出 GBK）
+            var bytes = File.ReadAllBytes(path);
+            string text;
+            try
+            {
+                text = new UTF8Encoding(false, true).GetString(bytes);
+            }
+            catch (DecoderFallbackException)
+            {
+                try
+                {
+                    Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+                    text = Encoding.GetEncoding("GB18030").GetString(bytes);
+                }
+                catch
+                {
+                    text = Encoding.UTF8.GetString(bytes);
+                }
+            }
+            if (text.Length > 0 && text[0] == '\uFEFF') text = text.Substring(1); // BOM
+            var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
             var nonEmpty = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
             if (nonEmpty.Count == 0) return new List<string[]>();
             char delim = nonEmpty[0].Contains('\t') ? '\t' : ',';

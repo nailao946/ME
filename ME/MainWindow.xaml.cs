@@ -797,6 +797,7 @@ namespace ME
                 case 5: _healthView = null; break;
                 case 6: _customModulesView = null; break;
                 case 7: _settingsView = null; break;
+                case 8: _expensesView = null; break;
                 default: return;
             }
             if (_currentView != null)
