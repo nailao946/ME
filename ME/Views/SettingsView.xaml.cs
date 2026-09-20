@@ -889,13 +889,27 @@ namespace ME.Views
             }
         }
 
+        private System.Windows.Threading.DispatcherTimer _glassTimer;
+
         private void GlassOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (_suppressGlassSlider) return;
             var v = (int)e.NewValue;
             if (GlassOpacityText != null) GlassOpacityText.Text = v + "%";
-            _settingsRepo?.SetValue(ThemeService.Keys.GlassOpacity, v.ToString());
-            ThemeService.ApplyTheme();
+            // 防抖：拖动过程中只更新数字，停手 160ms 后才落盘 + 应用主题。
+            // 之前每格都全量重刷（7 次读盘 + 3 次写盘 + 全部资源字典重建），直接把界面拖卡。
+            if (_glassTimer == null)
+            {
+                _glassTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+                _glassTimer.Tick += (s2, e2) =>
+                {
+                    _glassTimer.Stop();
+                    _settingsRepo.SetValue(ThemeService.Keys.GlassOpacity, ((int)GlassOpacitySlider.Value).ToString());
+                    ThemeService.ApplyTheme();
+                };
+            }
+            _glassTimer.Stop();
+            _glassTimer.Start();
         }
 
         private void GlassImage_Click(object sender, RoutedEventArgs e)

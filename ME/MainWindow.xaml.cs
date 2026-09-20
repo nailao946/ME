@@ -46,6 +46,7 @@ namespace ME
                 _hwndSource = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
                 _hwndSource?.AddHook(WindowProc);
                 RegisterGlobalHotkey();
+                ApplyAcrylic(); // 启动即按当前主题开/关 DWM 亚克力模糊
             };
 
             _isDarkTheme = ThemeService.IsDarkMode();
@@ -68,9 +69,30 @@ namespace ME
                     _isDarkTheme = ThemeService.IsDarkMode();
                     UpdateThemeButton();
                     ApplyWindowBorderColor();
+                    ApplyAcrylic();
                     RebuildTrayMenu();
+                    // 缓存复用的页面里，代码后台上过色的元素不会自己变（DynamicResource 管不到它们），
+                    // 主题真正变化时把当前页按新主题重建一次，字体/配色立刻全对
+                    RefreshCurrentView();
                 });
             };
+        }
+
+        /// <summary>毛玻璃主题：开 DWM 亚克力模糊（Gradient/Transparent 最明显）；普通主题关闭</summary>
+        private void ApplyAcrylic()
+        {
+            bool on = ThemeService.IsGlass && ThemeService.GlassMode != "Image";
+            if (!on)
+            {
+                WindowAcrylic.Apply(this, false, default);
+                return;
+            }
+            bool dark = ThemeService.IsDarkMode();
+            double op = ThemeService.GlassOpacity / 100.0;
+            var tint = dark
+                ? System.Windows.Media.Color.FromArgb((byte)(op * 170), 0x14, 0x14, 0x16)
+                : System.Windows.Media.Color.FromArgb((byte)(op * 150), 0xF2, 0xF2, 0xF7);
+            WindowAcrylic.Apply(this, true, tint);
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -204,8 +226,10 @@ namespace ME
         // ========== CUSTOM CHROME ==========
         private void ThemeToggle_Click(object sender, RoutedEventArgs e)
         {
-            var newTheme = _isDarkTheme ? "Light" : "Dark";
-            ThemeService.ApplyTheme(newTheme);
+            // 只切深浅，保留当前风格（普通/毛玻璃）——之前传旧值会把毛玻璃打回普通
+            var target = ThemeService.IsDarkMode() ? "Light" : "Dark";
+            new SettingsRepository().SetValue(ThemeService.Keys.Tone, target);
+            ThemeService.ApplyTheme();
         }
 
         private void Minimize_Click(object sender, RoutedEventArgs e)
@@ -755,6 +779,32 @@ namespace ME
         }
 
         // ========== NAVIGATION ==========
+        private int _currentViewIndex;
+
+        /// <summary>主题变化后把当前页按新主题重建（丢弃缓存实例），代码后台上色的元素立刻换色</summary>
+        private void RefreshCurrentView()
+        {
+            var idx = _currentViewIndex;
+            switch (idx)
+            {
+                case 0: _tasksView = null; break;
+                case 1: _goalsView = null; break;
+                case 2: _calendarView = null; break;
+                case 3: _reviewView = null; break;
+                case 4: _timeTrackView = null; break;
+                case 5: _healthView = null; break;
+                case 6: _customModulesView = null; break;
+                case 7: _settingsView = null; break;
+                default: return;
+            }
+            if (_currentView != null)
+            {
+                ContentGrid.Children.Remove(_currentView);
+                _currentView = null;
+            }
+            UpdateView(idx);
+        }
+
         private void NavList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (NavList.SelectedIndex >= 0)
@@ -765,6 +815,7 @@ namespace ME
 
         private void UpdateView(int index)
         {
+            _currentViewIndex = index;
             if (_currentView != null)
                 _currentView.Visibility = Visibility.Collapsed;
 

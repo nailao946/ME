@@ -96,12 +96,25 @@ namespace ME.Services
 
         public static void Initialize() => ApplyTheme();
 
+        // 上一次实际应用的参数签名：一样就整体跳过（连续点击 / 滑杆防抖后的冗余调用不再重刷）
+        private static string _lastSig;
+
+        private static string Signature(bool isGlass, bool isDark)
+        {
+            return isGlass
+                ? $"G|{isDark}|{GlassMode}|{GlassOpacity}|{GlassGradientIndex}|{GlassImagePath}"
+                : $"N|{isDark}";
+        }
+
         /// <summary>按当前设置（ThemeStyle + ThemeTone + 毛玻璃子项）应用主题</summary>
         public static void ApplyTheme()
         {
             bool isGlass = IsGlass;
             string tone = Tone;
             bool isDark = tone == "Dark" || (tone == "System" && IsSystemDark());
+            var sig = Signature(isGlass, isDark);
+            if (sig == _lastSig) return;
+            _lastSig = sig;
             ApplyCore(isGlass, isDark);
             PersistLegacyKey(isGlass, isDark);
         }
@@ -111,6 +124,9 @@ namespace ME.Services
         {
             bool isGlass = theme == "Glass";
             bool isDark = theme == "Dark" || ((theme == "System" || isGlass) && IsSystemDark());
+            var sig = Signature(isGlass, isDark);
+            if (sig == _lastSig) return;
+            _lastSig = sig;
             ApplyCore(isGlass, isDark);
             PersistLegacyKey(isGlass, isDark);
         }
@@ -153,6 +169,8 @@ namespace ME.Services
             {
                 if (dict.Source == null || !dict.Source.OriginalString.Contains("Styles.xaml")) continue;
                 ApplyPalette(dict, isDark);
+                // 普通主题：卡片背景与 CardBrush 一致；毛玻璃会覆盖成渐变（玻璃拟态）
+                dict["CardBackgroundBrush"] = dict["CardBrush"];
                 if (isGlass) ApplyGlass(dict, isDark);
                 else
                 {
@@ -293,7 +311,10 @@ namespace ME.Services
             dict["WindowBackgroundBrush"] = shell;
             dict["WindowBackgroundColor"] = isDark ? ColorFromString("#1C1C1E") : ColorFromString("#F2F2F7");
 
-            // 毛玻璃下的卡片：半透明白 / 半透明深色，窗口底透出来
+            // 毛玻璃卡片：上亮下沉的纵向渐变（玻璃拟态的关键——纯半透明没有"体积感"）
+            dict["CardBackgroundBrush"] = GlassCardBrush(isDark);
+
+            // 毛玻璃下的卡片基色（保持 SolidColorBrush，供 ThemeService.Solid / 旧强转兜底）
             dict["CardBrush"] = new SolidColorBrush(isDark
                 ? Color.FromArgb(0xA6, 0x22, 0x2A, 0x3D)
                 : Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF));
@@ -306,6 +327,27 @@ namespace ME.Services
             dict["NavHoverBrush"] = new SolidColorBrush(isDark
                 ? Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF)
                 : Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
+        }
+
+        /// <summary>玻璃拟态卡片画笔：上缘更亮、下缘更透，模拟受光面</summary>
+        private static Brush GlassCardBrush(bool isDark)
+        {
+            var brush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(0, 1),
+                GradientStops = new GradientStopCollection
+                {
+                    isDark
+                        ? new GradientStop(Color.FromArgb(0xD0, 0x2E, 0x36, 0x4C), 0)
+                        : new GradientStop(Color.FromArgb(0xDB, 0xFF, 0xFF, 0xFF), 0),
+                    isDark
+                        ? new GradientStop(Color.FromArgb(0x92, 0x20, 0x28, 0x3B), 1)
+                        : new GradientStop(Color.FromArgb(0x8F, 0xFF, 0xFF, 0xFF), 1),
+                }
+            };
+            brush.Freeze();
+            return brush;
         }
 
         private static Brush BuildGradientShell(int index, double opacity, bool isDark)
