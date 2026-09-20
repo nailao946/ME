@@ -1738,6 +1738,10 @@ namespace ME.Views
 
         // ============ 总览 ============
         private string _overviewPart = "睡眠";
+        // 快捷记录输入件：AddQuickEntry 的 buildInputs 与 trySave 之间共享（闭包捕获字段最简单可靠）
+        private TextBox _quickBox1;
+        private TextBox _quickBox2;
+        private ComboBox _quickCombo;
 
         private void LoadOverview()
         {
@@ -1957,6 +1961,21 @@ namespace ME.Views
                     var (text, brush) = ClassifyUric(rec.Value, lower, upper);
                     return (key, $"{rec.Value:F0}", text, brush);
                 }
+                case "血压":
+                {
+                    var bp = _repo.GetByType("blood_pressure").OrderByDescending(r => r.Date).ThenByDescending(r => r.CreatedAt).FirstOrDefault();
+                    if (bp == null) return (key, "--", "未记录，点左臂可记", "SecondaryTextBrush");
+                    double.TryParse(bp.Detail, out var dia);
+                    var (text, brush) = ClassifyBp(bp.Value, dia);
+                    return (key, $"{bp.Value:F0}/{dia:F0}", $"{bp.Date} {text}", brush);
+                }
+                case "心率":
+                {
+                    var hr = _repo.GetByTypeAndDate("heart_rate", todayStr);
+                    if (hr == null) return (key, "--", "今日未记录", "SecondaryTextBrush");
+                    var (text, brush) = ClassifyHeartRate(hr.Value);
+                    return (key, $"{hr.Value:F0} bpm", text, brush);
+                }
                 case "用药":
                 {
                     var meds = _medRepo.GetActive();
@@ -1970,12 +1989,13 @@ namespace ME.Views
         private void BuildOverviewCards()
         {
             OverviewCardsPanel.Children.Clear();
-            foreach (var key in new[] { "睡眠", "体重", "喝水", "心情", "尿酸", "用药" })
+            foreach (var key in new[] { "睡眠", "血压", "心率", "体重", "喝水", "心情", "尿酸", "用药" })
             {
                 var (title, value, sub, brushKey) = GetOverviewCardData(key);
                 var emoji = key switch
                 {
-                    "睡眠" => "😴", "体重" => "⚖️", "喝水" => "💧", "心情" => "😊", "尿酸" => "💉", _ => "💊"
+                    "睡眠" => "😴", "体重" => "⚖️", "喝水" => "💧", "心情" => "😊",
+                    "尿酸" => "💉", "用药" => "💊", "血压" => "🩸", "心率" => "❤️", _ => "💊"
                 };
                 // 强调色低透明度做图标底
                 Brush iconBg = new SolidColorBrush(Color.FromArgb(30, 128, 140, 170));
@@ -2098,17 +2118,19 @@ namespace ME.Views
             }
 
             // 头（睡眠/心情）
-            AddPart("🧠", "睡眠/心情", cx - 26, 4, 52, 52, 26, "头部", "头部：睡眠 / 心情");
-            // 躯干（体重）
-            AddPart("🩺", "体重", cx - 38, 66, 76, 130, 22, "躯干", "躯干：体重（尿酸在腿部）");
-            // 左臂（喝水）
-            AddPart("💧", "喝水", cx - 76, 82, 32, 100, 16, "喝水", "左臂：喝水");
+            AddPart("🧠", "睡眠/心情", cx - 24, 4, 48, 48, 24, "头部", "头部：睡眠 / 心情");
+            // 心胸（静息心率）
+            AddPart("❤️", "心率", cx - 34, 60, 68, 56, 18, "心胸", "心胸：静息心率");
+            // 腹（血糖 / 体重）
+            AddPart("🍬", "血糖/体重", cx - 34, 122, 68, 58, 14, "腹部", "腹部：血糖 / 体重");
+            // 左臂（血压——血压计袖带绑的位置）
+            AddPart("💪", "血压", cx - 74, 76, 30, 104, 15, "左臂", "左臂：血压");
             // 右臂（用药）
-            AddPart("💊", "用药", cx + 44, 82, 32, 100, 16, "用药", "右臂：用药");
-            // 左腿（尿酸）
-            AddPart("💉", "尿酸", cx - 38, 204, 32, 100, 16, "尿酸", "左腿：尿酸");
-            // 右腿（体重）
-            AddPart("⚖️", "体重", cx + 6, 204, 32, 100, 16, "体重", "右腿：体重");
+            AddPart("💊", "用药", cx + 44, 76, 30, 104, 15, "右臂", "右臂：用药");
+            // 左腿（尿酸——痛风常发于下肢关节）
+            AddPart("🦵", "尿酸", cx - 34, 188, 30, 116, 15, "左腿", "左腿：尿酸");
+            // 右腿（运动 / 久坐）
+            AddPart("🏃", "运动/久坐", cx + 4, 188, 30, 116, 15, "右腿", "右腿：运动 / 久坐");
         }
 
         private void ShowBodyPartDetail(string part)
@@ -2149,12 +2171,45 @@ namespace ME.Views
 
             OverviewDetailPanel.Children.Add(new TextBlock
             {
-                Text = part,
+                Text = PartTitle(part),
                 FontSize = 14,
                 FontWeight = FontWeights.Bold,
                 Foreground = (Brush)FindResource("TextBrush"),
                 Margin = new Thickness(0, 0, 0, 8)
             });
+
+            // —— 快捷记录组件：部位详情里直接记一笔，记完原地刷新 ——
+            TextBox MiniBox() => new TextBox
+            {
+                Width = 64, FontSize = 12, Height = 28, Padding = new Thickness(7, 3, 7, 3),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+
+            void AddQuickEntry(string tip, Func<StackPanel> buildInputs, Func<bool> trySave)
+            {
+                var card = new Border
+                {
+                    Style = (Style)FindResource("CardStyle"),
+                    Padding = new Thickness(12, 8, 12, 8),
+                    Margin = new Thickness(0, 0, 0, 6)
+                };
+                var sp = new StackPanel();
+                sp.Children.Add(new TextBlock { Text = tip, FontSize = 10.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 0, 0, 5) });
+                var row = buildInputs();
+                var saveBtn = new Button { Content = "记录", Style = (Style)FindResource("PrimaryButtonStyle"), FontSize = 11.5, Padding = new Thickness(13, 4, 13, 4), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand };
+                saveBtn.Click += (s, e) =>
+                {
+                    if (trySave())
+                    {
+                        BuildOverviewCards();
+                        ShowBodyPartDetail(_overviewPart);
+                    }
+                };
+                row.Children.Add(saveBtn);
+                sp.Children.Add(row);
+                card.Child = sp;
+                OverviewDetailPanel.Children.Add(card);
+            }
 
             switch (part)
             {
@@ -2168,45 +2223,172 @@ namespace ME.Views
                     AddRow("今日心情", mi >= 0 && mi < 4 ? $"{MoodEmojis[mi]} {MoodNames[mi]}" : "未记录", mi >= 0 && mi <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush");
                     break;
                 }
-                case "心情":
+                case "心胸":
+                case "心率":
                 {
-                    var mood2 = _repo.GetByTypeAndDate("mood", todayStr);
-                    var mi2 = mood2 != null ? (int)mood2.Value : -1;
-                    AddRow("今日心情", mi2 >= 0 && mi2 < 4 ? $"{MoodEmojis[mi2]} {MoodNames[mi2]}" : "未记录", mi2 >= 0 && mi2 <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush");
-                    var allMoods = _repo.GetByType("mood");
-                    var weekMoods = allMoods.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
-                    if (weekMoods.Count > 0)
+                    var rec = _repo.GetByTypeAndDate("heart_rate", todayStr);
+                    if (rec != null)
                     {
-                        var avg = weekMoods.Average(r => r.Value);
-                        var idx = (int)Math.Round(avg);
-                        if (idx < 0 || idx > 3) idx = 1;
-                        AddRow("近 7 天平均", $"{MoodEmojis[idx]} {MoodNames[idx]}", "SecondaryTextBrush");
+                        var (text, brush) = ClassifyHeartRate(rec.Value);
+                        AddRow("今日静息心率", $"{rec.Value:F0} bpm", brush);
+                        AddRow("评估", text, brush);
                     }
+                    else AddRow("今日静息心率", "未记录", "SecondaryTextBrush");
+                    var week = _repo.GetByType("heart_rate").Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
+                    AddRow("近 7 天平均", week.Count > 0 ? $"{week.Average(r => r.Value):F0} bpm" : "暂无数据", "SecondaryTextBrush");
+                    AddRow("正常范围", "静息 60 ~ 100 bpm", "SecondaryTextBrush");
+
+                    AddQuickEntry("记录静息心率（静坐 5 分钟后测更准）", () =>
+                    {
+                        var hrBox = MiniBox();
+                        _quickBox1 = hrBox;
+                        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                        row.Children.Add(new TextBlock { Text = "心率", FontSize = 12, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+                        row.Children.Add(hrBox);
+                        row.Children.Add(new TextBlock { Text = "bpm", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) });
+                        return row;
+                    }, () =>
+                    {
+                        if (!double.TryParse(_quickBox1.Text.Trim(), out var bpm) || bpm < 30 || bpm > 220)
+                        {
+                            MessageBox.Show("请输入 30 ~ 220 之间的心率值"); return false;
+                        }
+                        var today = DateTime.Today.ToString("yyyy-MM-dd");
+                        var exist = _repo.GetByTypeAndDate("heart_rate", today);
+                        if (exist != null) { exist.Value = bpm; _repo.Upsert(exist); }
+                        else _repo.Insert(new HealthRecord { Type = "heart_rate", Date = today, Value = bpm });
+                        return true;
+                    });
                     break;
                 }
-                case "躯干":
+                case "腹部":
+                case "血糖":
                 case "体重":
-                case "右腿":
                 {
+                    // 血糖
+                    var sugar = _repo.GetByTypeAndDate("blood_sugar", todayStr);
+                    if (sugar != null)
+                    {
+                        var fasting = sugar.Detail != "post";
+                        var (text, brush) = ClassifyBloodSugar(sugar.Value, fasting);
+                        AddRow($"今日血糖（{(fasting ? "空腹" : "餐后")}）", $"{sugar.Value:F1} mmol/L", brush);
+                        AddRow("评估", text, brush);
+                    }
+                    else AddRow("今日血糖", "未记录", "SecondaryTextBrush");
+                    AddRow("参考范围", "空腹 3.9 ~ 6.1｜餐后 < 7.8", "SecondaryTextBrush");
+
+                    AddQuickEntry("记录血糖（测量的时间决定参考范围）", () =>
+                    {
+                        _quickBox1 = MiniBox();
+                        _quickCombo = new ComboBox { FontSize = 11, Height = 28, Margin = new Thickness(8, 0, 0, 0), MinWidth = 74, VerticalContentAlignment = VerticalAlignment.Center };
+                        _quickCombo.Items.Add("空腹"); _quickCombo.Items.Add("餐后"); _quickCombo.SelectedIndex = 0;
+                        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                        row.Children.Add(new TextBlock { Text = "血糖", FontSize = 12, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+                        row.Children.Add(_quickBox1);
+                        row.Children.Add(new TextBlock { Text = "mmol/L", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) });
+                        row.Children.Add(_quickCombo);
+                        return row;
+                    }, () =>
+                    {
+                        if (!double.TryParse(_quickBox1.Text.Trim(), out var mmol) || mmol < 1 || mmol > 35)
+                        {
+                            MessageBox.Show("请输入 1 ~ 35 之间的血糖值（mmol/L）"); return false;
+                        }
+                        var today = DateTime.Today.ToString("yyyy-MM-dd");
+                        var timing = _quickCombo.SelectedIndex == 1 ? "post" : "fasting";
+                        var exist = _repo.GetByTypeAndDate("blood_sugar", today);
+                        if (exist != null) { exist.Value = mmol; exist.Detail = timing; _repo.Upsert(exist); }
+                        else _repo.Insert(new HealthRecord { Type = "blood_sugar", Date = today, Value = mmol, Detail = timing });
+                        return true;
+                    });
+
+                    // 体重 / BMI
                     var all = _repo.GetByType("weight").OrderBy(r => r.Date).ToList();
                     var rec = all.LastOrDefault();
-                    if (rec == null) { AddRow("最新体重", "未记录", "SecondaryTextBrush"); break; }
-                    double h = 0; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthHeight), out h);
-                    AddRow("最新体重", $"{rec.Value:F1} kg", "PrimaryBrush");
-                    AddRow("记录日期", rec.Date, "SecondaryTextBrush");
-                    if (h > 0)
+                    if (rec == null) AddRow("最新体重", "未记录", "SecondaryTextBrush");
+                    else
                     {
-                        var bmi = CalcBmi(rec.Value, h);
-                        string g, brush;
-                        if (bmi < 18.5) { g = "偏瘦"; brush = "AccentBlueBrush"; }
-                        else if (bmi < 24) { g = "正常"; brush = "AccentGreenBrush"; }
-                        else if (bmi < 28) { g = "超重"; brush = "AccentYellowBrush"; }
-                        else { g = "肥胖"; brush = "AccentRedBrush"; }
-                        AddRow("BMI", $"{bmi:F1}（{g}）", brush);
+                        double h = 0; double.TryParse(_settingsRepo.GetValue(SettingsKeys.HealthHeight), out h);
+                        AddRow("最新体重", $"{rec.Value:F1} kg（{rec.Date}）", "PrimaryBrush");
+                        if (h > 0)
+                        {
+                            var bmi = CalcBmi(rec.Value, h);
+                            string g, brush;
+                            if (bmi < 18.5) { g = "偏瘦"; brush = "AccentBlueBrush"; }
+                            else if (bmi < 24) { g = "正常"; brush = "AccentGreenBrush"; }
+                            else if (bmi < 28) { g = "超重"; brush = "AccentYellowBrush"; }
+                            else { g = "肥胖"; brush = "AccentRedBrush"; }
+                            AddRow("BMI", $"{bmi:F1}（{g}）", brush);
+                        }
+
+                        AddQuickEntry("记录体重", () =>
+                        {
+                            _quickBox1 = MiniBox();
+                            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                            row.Children.Add(new TextBlock { Text = "体重", FontSize = 12, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+                            row.Children.Add(_quickBox1);
+                            row.Children.Add(new TextBlock { Text = "kg", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) });
+                            return row;
+                        }, () =>
+                        {
+                            if (!double.TryParse(_quickBox1.Text.Trim(), out var kg) || kg < 20 || kg > 300)
+                            {
+                                MessageBox.Show("请输入 20 ~ 300 之间的体重（kg）"); return false;
+                            }
+                            var today = DateTime.Today.ToString("yyyy-MM-dd");
+                            var exist = _repo.GetByTypeAndDate("weight", today);
+                            if (exist != null) { exist.Value = kg; _repo.Upsert(exist); }
+                            else _repo.Insert(new HealthRecord { Type = "weight", Date = today, Value = kg, Detail = _settingsRepo.GetValue(SettingsKeys.HealthHeight) });
+                            return true;
+                        });
                     }
                     break;
                 }
                 case "左臂":
+                case "血压":
+                {
+                    var bp = _repo.GetByType("blood_pressure").OrderByDescending(r => r.Date).ThenByDescending(r => r.CreatedAt).FirstOrDefault();
+                    if (bp != null)
+                    {
+                        double.TryParse(bp.Detail, out var dia);
+                        var (text, brush) = ClassifyBp(bp.Value, dia);
+                        AddRow($"血压（{bp.Date}）", $"{bp.Value:F0}/{dia:F0} mmHg", brush);
+                        AddRow("评估", text, brush);
+                        var week = _repo.GetByType("blood_pressure").Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
+                        if (week.Count > 1)
+                            AddRow("近 7 天平均", $"{week.Average(r => r.Value):F0}/{week.Average(r => { double.TryParse(r.Detail, out var d2); return d2; }):F0} mmHg", "SecondaryTextBrush");
+                    }
+                    else AddRow("血压", "未记录", "SecondaryTextBrush");
+                    AddRow("参考范围", "< 120/80 正常｜≥ 140/90 偏高", "SecondaryTextBrush");
+
+                    AddQuickEntry("记录血压（静坐 5 分钟后测，袖带与心脏同高）", () =>
+                    {
+                        _quickBox1 = MiniBox();
+                        _quickBox2 = MiniBox();
+                        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                        row.Children.Add(new TextBlock { Text = "收缩压", FontSize = 12, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+                        row.Children.Add(_quickBox1);
+                        row.Children.Add(new TextBlock { Text = "/", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) });
+                        row.Children.Add(new TextBlock { Text = "舒张压", FontSize = 12, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+                        row.Children.Add(_quickBox2);
+                        row.Children.Add(new TextBlock { Text = "mmHg", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0) });
+                        return row;
+                    }, () =>
+                    {
+                        var okSys = double.TryParse(_quickBox1.Text.Trim(), out var sys);
+                        var okDia = double.TryParse(_quickBox2.Text.Trim(), out var dia);
+                        if (!okSys || !okDia || sys < 60 || sys > 260 || dia < 40 || dia > 180 || dia >= sys)
+                        {
+                            MessageBox.Show("请输入合理的血压：收缩压 60~260，舒张压 40~180，且收缩压 > 舒张压"); return false;
+                        }
+                        var today = DateTime.Today.ToString("yyyy-MM-dd");
+                        var exist = _repo.GetByTypeAndDate("blood_pressure", today);
+                        if (exist != null) { exist.Value = sys; exist.Detail = dia.ToString("F0"); _repo.Upsert(exist); }
+                        else _repo.Insert(new HealthRecord { Type = "blood_pressure", Date = today, Value = sys, Detail = dia.ToString("F0") });
+                        return true;
+                    });
+                    break;
+                }
                 case "喝水":
                 {
                     var rec = _repo.GetByTypeAndDate("water", todayStr);
@@ -2239,10 +2421,84 @@ namespace ME.Views
                     AddRow("正常范围", $"{lower:F0} ~ {upper:F0}", "SecondaryTextBrush");
                     break;
                 }
+                case "右腿":
+                case "运动":
+                case "久坐":
+                {
+                    var sed = _repo.GetByTypeAndDate("sedentary", todayStr);
+                    AddRow("今日久坐记录", sed != null ? $"{sed.Value:F0} 次" : "0 次", sed != null && sed.Value >= 4 ? "AccentYellowBrush" : "AccentGreenBrush");
+                    AddRow("建议", "每坐 1 小时起身活动 3~5 分钟", "SecondaryTextBrush");
+                    AddRow("详细数据", "见「锻炼」标签页（运动/久坐）", "SecondaryTextBrush");
+                    break;
+                }
+                case "心情":
+                {
+                    var mood2 = _repo.GetByTypeAndDate("mood", todayStr);
+                    var mi2 = mood2 != null ? (int)mood2.Value : -1;
+                    AddRow("今日心情", mi2 >= 0 && mi2 < 4 ? $"{MoodEmojis[mi2]} {MoodNames[mi2]}" : "未记录", mi2 >= 0 && mi2 <= 1 ? "AccentGreenBrush" : "SecondaryTextBrush");
+                    var allMoods = _repo.GetByType("mood");
+                    var weekMoods = allMoods.Where(r => string.CompareOrdinal(r.Date, DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")) >= 0).ToList();
+                    if (weekMoods.Count > 0)
+                    {
+                        var avg = weekMoods.Average(r => r.Value);
+                        var idx = (int)Math.Round(avg);
+                        if (idx < 0 || idx > 3) idx = 1;
+                        AddRow("近 7 天平均", $"{MoodEmojis[idx]} {MoodNames[idx]}", "SecondaryTextBrush");
+                    }
+                    break;
+                }
                 default:
-                    AddRow("信息", "点击人体部位查看对应数据", "SecondaryTextBrush");
+                    AddRow("信息", "点击人体部位或上方卡片查看对应数据", "SecondaryTextBrush");
                     break;
             }
+        }
+
+        /// <summary>部位显示标题（带 emoji 与对应指标说明）</summary>
+        private static string PartTitle(string part) => part switch
+        {
+            "头部" => "🧠 头部 · 睡眠 / 心情",
+            "心胸" => "❤️ 心胸 · 静息心率",
+            "腹部" => "🍬 腹部 · 血糖 / 体重",
+            "左臂" => "💪 左臂 · 血压",
+            "右臂" => "💊 右臂 · 用药",
+            "左腿" => "🦵 左腿 · 尿酸",
+            "右腿" => "🏃 右腿 · 运动 / 久坐",
+            "睡眠" => "😴 睡眠", "体重" => "⚖️ 体重", "喝水" => "💧 喝水",
+            "心情" => "😊 心情", "尿酸" => "💉 尿酸", "用药" => "💊 用药",
+            "血压" => "💪 血压", "心率" => "❤️ 心率", "血糖" => "🍬 血糖", "运动" => "🏃 运动 / 久坐",
+            _ => part
+        };
+
+        /// <summary>血压分级：≥140/90 偏高，≥130/85 临界，<90/60 偏低</summary>
+        private static (string Text, string Brush) ClassifyBp(double sys, double dia)
+        {
+            if (sys >= 140 || dia >= 90) return ("偏高（建议关注）", "AccentRedBrush");
+            if (sys >= 130 || dia >= 85) return ("临界偏高", "AccentYellowBrush");
+            if (sys < 90 || dia < 60) return ("偏低", "AccentBlueBrush");
+            return ("正常", "AccentGreenBrush");
+        }
+
+        /// <summary>静息心率分级：60~100 正常</summary>
+        private static (string Text, string Brush) ClassifyHeartRate(double bpm)
+        {
+            if (bpm < 60) return ("偏缓（运动员可属正常）", "AccentBlueBrush");
+            if (bpm > 100) return ("偏快", "AccentYellowBrush");
+            return ("正常", "AccentGreenBrush");
+        }
+
+        /// <summary>血糖分级：空腹 3.9~6.1 正常；餐后 <7.8 正常</summary>
+        private static (string Text, string Brush) ClassifyBloodSugar(double mmol, bool fasting)
+        {
+            if (fasting)
+            {
+                if (mmol < 3.9) return ("偏低", "AccentBlueBrush");
+                if (mmol <= 6.1) return ("正常", "AccentGreenBrush");
+                if (mmol <= 7.0) return ("临界偏高", "AccentYellowBrush");
+                return ("偏高（建议关注）", "AccentRedBrush");
+            }
+            if (mmol < 7.8) return ("正常", "AccentGreenBrush");
+            if (mmol <= 11.1) return ("临界偏高", "AccentYellowBrush");
+            return ("偏高（建议关注）", "AccentRedBrush");
         }
 
         private void ExportReport_Click(object sender, RoutedEventArgs e)
@@ -2276,7 +2532,7 @@ namespace ME.Views
             sb.AppendLine($"<h1>健康报告</h1><p>生成时间：{DateTime.Now:yyyy-MM-dd HH:mm}</p>");
 
             sb.AppendLine("<div class=\"sec\">今日概况</div><table>");
-            foreach (var key in new[] { "睡眠", "体重", "喝水", "心情", "尿酸", "用药" })
+            foreach (var key in new[] { "睡眠", "血压", "心率", "体重", "喝水", "心情", "尿酸", "用药" })
             {
                 var (title, value, sub, brushKey) = GetOverviewCardData(key);
                 var cls = brushKey == "AccentGreenBrush" ? "ok" : brushKey == "AccentYellowBrush" ? "warn" : brushKey == "AccentRedBrush" ? "bad" : "";
